@@ -15,8 +15,7 @@ theme:
   palette:
     primary: white
     accent: indigo
-  icon:
-    logo: media/final_square_transparent.png
+  logo: media/final_square_transparent.png
   features:
     - navigation.tabs
     - navigation.instant
