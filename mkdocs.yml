@@ -1,3 +1,7 @@
 site_name: Tracking ML with Exa.trkX
 theme:
   name: material
+  palette:
+    primary: white
+    accent: indigo
+  icon: media/final_square_transparent.png
