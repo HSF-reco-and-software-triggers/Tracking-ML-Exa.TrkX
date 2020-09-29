@@ -1,7 +1,19 @@
 site_name: Tracking ML with Exa.trkX
+site_url: https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/
+site_author: Daniel Murnane on behalf of Exa.TrkX Collaboration
+
+
+nav:
+  - Intro: index.md
+  -
+
 theme:
   name: material
   palette:
     primary: white
     accent: indigo
-  icon: media/final_square_transparent.png
+  icon:
+    logo: media/final_square_transparent.png
+  features:
+    - navigation.tabs
+    - navigation.instant
