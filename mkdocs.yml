@@ -4,8 +4,11 @@ site_author: Daniel Murnane on behalf of Exa.TrkX Collaboration
 
 
 nav:
-  - Intro: index.md
-  -
+  - Home: index.md
+  - Pipelines:
+    - Overview: pipelines/overview.md
+  - Models:
+    - Overview: models/overview.md
 
 theme:
   name: material
