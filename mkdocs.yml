@@ -22,8 +22,8 @@ nav:
     - Use Cases: performance/usage.md
   - Tools:
     - Overview: tools/overview.md
-    - Sparse Methods: tools/sparse.md
-    - Clustering: tools/clustering.md
+    - Data Manipulation: tools/data.md
+    - Training & Inference: tools/ml.md
     - PyLightning & MLFlow: tools/frameworks.md
 
 
