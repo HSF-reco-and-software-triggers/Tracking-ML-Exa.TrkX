@@ -4,7 +4,7 @@ from torch.nn import Linear
 import sys
 
 
-class ResGNN_Model(LightningModule):
+class GNN_Base(LightningModule):
 
     def __init__(self, hparams):
         super().__init__()
