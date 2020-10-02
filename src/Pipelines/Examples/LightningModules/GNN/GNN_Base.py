@@ -14,9 +14,6 @@ class ResGNN_Model(LightningModule):
         # Assign hyperparameters
         self.hparams = hparams
 
-    def forward(self, x, edge_index):
-        pass
-
     def configure_optimizers(self):
         optimizer = [torch.optim.AdamW(self.parameters(), lr=(self.hparams["lr"]), betas=(0.9, 0.999), eps=1e-08, amsgrad=True)]
         scheduler = [
