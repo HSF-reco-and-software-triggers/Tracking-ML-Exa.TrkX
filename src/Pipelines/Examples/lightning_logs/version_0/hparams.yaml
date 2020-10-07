@@ -1,0 +1,31 @@
+adjacent: false
+emb_dim: 8
+emb_hidden: 512
+endcaps: false
+factor: 0.3
+in_channels: 12
+input_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/feature_store
+knn: 20
+layerless: true
+layerwise: false
+lr: 0.002
+margin: 1
+max_epochs: 100
+nb_layer: 6
+noise: false
+patience: 5
+project: EmbeddingStudy
+pt_min: 0
+r_train: 1
+r_val: 0.5
+randomisation: 2
+regime:
+- rp
+- hnm
+train_split:
+- 60
+- 20
+- 20
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
+warmup: 500
+weight: 4

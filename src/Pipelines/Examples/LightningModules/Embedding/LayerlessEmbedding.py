@@ -1,17 +1,21 @@
+# System imports
+import sys
+
+# 3rd party imports
 import pytorch_lightning as pl
 from .Embedding_Base import Embedding_Base
 from torch.nn import Linear
-import sys
+import torch.nn as nn
+
+# Local imports
 
 class LayerlessEmbedding(Embedding_Base):
 
     def __init__(self, hparams):
-        super().__init__()
+        super().__init__(hparams)
         '''
         Initialise the Lightning Module that can scan over different embedding training regimes
         '''
-        # Assign hyperparameters
-        self.hparams = hparams
 
         # Construct the MLP architecture
         layers = [Linear(hparams["in_channels"], hparams["emb_hidden"])]

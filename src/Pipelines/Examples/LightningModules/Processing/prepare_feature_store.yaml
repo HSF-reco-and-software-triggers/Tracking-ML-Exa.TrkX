@@ -1,0 +1,13 @@
+# Input/output configuration
+input_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/train_100_events
+output_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/feature_store
+n_files: 100
+n_tasks: 1
+n_workers: 1
+
+pt_min: 1
+endcaps: False
+noise: False
+adjacent: True
+layerless: True
+layerwise: True

@@ -1,7 +1,29 @@
+# System imports
+import sys
+import os
+
+# 3rd party imports
 import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
+import torch
 from torch.nn import Linear
-import sys
+from torch.utils.data import random_split
+from torch_geometric.data import DataLoader
+from torch_cluster import radius_graph
+import numpy as np
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+# Local imports
+from .utils import graph_intersection
+
+def load_datasets(input_dir, train_split, seed = 0):
+    all_events = os.listdir(input_dir)
+    all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+    loaded_events = [torch.load(event) for event in all_events[:sum(train_split)]]
+    train_events, val_events, test_events = random_split(loaded_events, train_split, generator=torch.Generator().manual_seed(seed))
+
+    return train_events, val_events, test_events
 
 class Embedding_Base(LightningModule):
 
@@ -13,23 +35,17 @@ class Embedding_Base(LightningModule):
         # Assign hyperparameters
         self.hparams = hparams
 
-        # Construct the MLP architecture
-        layers = [Linear(hparams["in_channels"], hparams["emb_hidden"])]
-        ln = [Linear(hparams["emb_hidden"], hparams["emb_hidden"]) for _ in range(hparams["nb_layer"]-1)]
-        layers.extend(ln)
-        self.layers = nn.ModuleList(layers)
-        self.emb_layer = nn.Linear(hparams["emb_hidden"], hparams["emb_dim"])
-        self.norm = nn.LayerNorm(hparams["emb_hidden"])
-        self.act = nn.Tanh()
+    def setup(self, step):
+        self.trainset, self.valset, self.testset = load_datasets(self.hparams["input_dir"], self.hparams["train_split"])
 
-    def forward(self, x):
-#         hits = self.normalize(hits)
-        for l in self.layers:
-            x = l(x)
-            x = self.act(x)
-#         x = self.norm(x) #Option of LayerNorm
-        x = self.emb_layer(x)
-        return x
+    def train_dataloader(self):
+        return DataLoader(self.trainset, batch_size=1)
+
+    def val_dataloader(self):
+        return DataLoader(self.valset, batch_size=1)
+
+    def test_dataloader(self):
+        return DataLoader(self.testset, batch_size=1)
 
     def configure_optimizers(self):
         optimizer = [torch.optim.AdamW(self.parameters(), lr=(self.hparams["lr"]), betas=(0.9, 0.999), eps=1e-08, amsgrad=True)]
@@ -62,7 +78,8 @@ class Embedding_Base(LightningModule):
             e_spatial = torch.cat([e_spatial, torch.randint(e_bidir.min(), e_bidir.max(), (2, n_random), device=self.device)], axis=-1)
 
         if 'hnm' in self.hparams["regime"]:
-            e_spatial = torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"], res)], axis=-1)
+            # e_spatial = torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"], res)], axis=-1)
+            e_spatial = torch.cat([e_spatial, radius_graph(spatial, r=self.hparams["r_train"], max_num_neighbors=self.hparams["knn"])], axis=-1)
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 
@@ -94,7 +111,8 @@ class Embedding_Base(LightningModule):
                                torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
 
         # Get random edge list
-        e_spatial = build_edges(spatial, self.hparams["r_val"], 1000, res)
+        # e_spatial = build_edges(spatial, self.hparams["r_val"], 1000, res)
+        e_spatial = radius_graph(spatial, r=self.hparams["r_val"], max_num_neighbors=1000)
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 

@@ -1,0 +1,34 @@
+# Input/output configuration
+input_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/feature_store
+project: EmbeddingStudy
+
+# Dataset parameters
+pt_min: 0
+train_split: [60, 20, 20] # Number of [training, validation, testing] examples
+endcaps: False
+layerwise: False
+layerless: True
+noise: False
+adjacent: False
+
+# Model parameters
+in_channels: 3
+emb_hidden: 512
+nb_layer: 6
+emb_dim: 8
+weight: 4
+randomisation: 2
+r_train: 1
+r_val: 0.5
+knn: 20
+warmup: 500
+margin: 1
+lr: 0.002
+factor: 0.3
+patience: 5
+regime:
+    - rp
+    - hnm
+    # - ci
+max_epochs: 100
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
