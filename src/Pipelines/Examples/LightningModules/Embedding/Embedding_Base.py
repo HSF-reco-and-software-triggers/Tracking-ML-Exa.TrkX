@@ -39,13 +39,13 @@ class Embedding_Base(LightningModule):
         self.trainset, self.valset, self.testset = load_datasets(self.hparams["input_dir"], self.hparams["train_split"])
 
     def train_dataloader(self):
-        return DataLoader(self.trainset, batch_size=1)
+        return DataLoader(self.trainset, batch_size=1, num_workers=4)
 
     def val_dataloader(self):
-        return DataLoader(self.valset, batch_size=1)
+        return DataLoader(self.valset, batch_size=1, num_workers=4)
 
     def test_dataloader(self):
-        return DataLoader(self.testset, batch_size=1)
+        return DataLoader(self.testset, batch_size=1, num_workers=4)
 
     def configure_optimizers(self):
         optimizer = [torch.optim.AdamW(self.parameters(), lr=(self.hparams["lr"]), betas=(0.9, 0.999), eps=1e-08, amsgrad=True)]
@@ -126,7 +126,7 @@ class Embedding_Base(LightningModule):
         val_loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
 
         result = pl.EvalResult(checkpoint_on=val_loss)
-        result.log('val_loss', val_loss)
+        result.log('val_loss', val_loss, prog_bar=False)
 
         cluster_true = 2*len(batch.layerless_true_edges[0])
         cluster_true_positive = y_cluster.sum()
