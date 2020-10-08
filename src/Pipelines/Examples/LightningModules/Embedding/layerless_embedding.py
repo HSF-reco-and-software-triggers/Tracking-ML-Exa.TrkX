@@ -53,6 +53,10 @@ class EmbeddingInferenceCallback(Callback):
         os.makedirs(self.output_dir, exist_ok=True)
         [os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True) for datatype in self.datatypes]
 
+        # Set overwrite setting if it is in config
+        if "overwrite" in pl_module.hparams:
+            self.overwrite = pl_module.hparams.overwrite
+
     def on_train_end(self, trainer, pl_module):
         print("Training finished, running inference to build graphs...")
 
@@ -90,10 +94,10 @@ class EmbeddingInferenceCallback(Callback):
         e_bidir = torch.cat([batch.layerless_true_edges,
                        torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
 
-        e_spatial = radius_graph(spatial, r=pl_module.hparams.r_val, max_num_neighbors=32) #This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
+        e_spatial = radius_graph(spatial, r=pl_module.hparams.r_val, max_num_neighbors=100) #This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 
-        batch.e_spatial = e_spatial
+        batch.e_radius = e_spatial
         batch.y = torch.from_numpy(y_cluster).float()
 
         return batch

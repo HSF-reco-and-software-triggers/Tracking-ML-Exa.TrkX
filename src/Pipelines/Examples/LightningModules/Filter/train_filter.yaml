@@ -13,7 +13,7 @@ noise: False
 adjacent: False
 
 # Model parameters
-in_channels: 3
+in_channels: 12
 hidden: 512
 nb_layer: 3
 emb_channels: 0
@@ -27,8 +27,8 @@ lr: 0.002
 factor: 0.3
 patience: 5
 regime:
-  - non_ci
-    # - ci
+  # - non_ci # This is to NOT include cell information. Switch comment with "ci" to include cell information
+  - ci
     # - pid
 max_epochs: 100
 wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

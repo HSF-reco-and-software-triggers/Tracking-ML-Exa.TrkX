@@ -20,7 +20,7 @@ class VanillaFilter(FilterBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         '''
-        Initialise the Lightning Module that can scan over different embedding training regimes
+        Initialise the Lightning Module that can scan over different filter training regimes
         '''
 
         # Construct the MLP architecture
@@ -86,10 +86,10 @@ class FilterInferenceCallback(Callback):
 
     def construct_downstream(self, batch, pl_module):
 
-        emb = (None if (self.hparams["emb_channels"] == 0)
+        emb = (None if (pl_module.hparams["emb_channels"] == 0)
                else batch.embedding)  # Does this work??
 
-        output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius, emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.e_radius, emb).squeeze()
+        output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius, emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.e_radius, emb).squeeze()
         y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
 
         batch.y_pid = y_pid

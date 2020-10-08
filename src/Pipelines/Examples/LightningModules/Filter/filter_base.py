@@ -7,6 +7,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 import torch
 from torch.nn import Linear
+import torch.nn.functional as F
 from torch.utils.data import random_split
 from torch_geometric.data import DataLoader
 from torch_cluster import radius_graph
@@ -29,7 +30,7 @@ class FilterBase(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         '''
-        Initialise the Lightning Module that can scan over different embedding training regimes
+        Initialise the Lightning Module that can scan over different filter training regimes
         '''
         # Assign hyperparameters
         self.hparams = hparams
@@ -77,7 +78,7 @@ class FilterBase(LightningModule):
 
         if self.hparams['ratio'] != 0:
             num_true, num_false = batch.y.bool().sum(), (~batch.y.bool()).sum()
-            fake_indices = torch.where(~batch.y.bool())[0][torch.randint(num_false, (num_true.item()*hparams['ratio'],))]
+            fake_indices = torch.where(~batch.y.bool())[0][torch.randint(num_false, (num_true.item()*self.hparams['ratio'],))]
             true_indices = torch.where(batch.y.bool())[0]
             combined_indices = torch.cat([true_indices, fake_indices])
             # Shuffle indices:

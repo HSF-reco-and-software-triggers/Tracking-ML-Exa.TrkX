@@ -17,6 +17,28 @@ from torch_geometric.data import Data
 from itertools import permutations
 import itertools
 
+# Locals
+from .cell_direction_utils.utils import get_one_event
+
+def get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise):
+
+    event_file = data.event_file
+    evtid = event_file[-4:]
+    print("Cell features for", evtid)
+
+    hits, truth = get_one_event(event_file,
+                  detector_orig,
+                  detector_proc,
+                  remove_endcaps= (not endcaps),
+                  remove_noise= (not noise),
+                  pt_cut=0)
+
+    hid = pd.DataFrame(data.hid.numpy(), columns = ["hit_id"])
+    cell_data = torch.from_numpy((hid.merge(hits, on="hit_id")[cell_features]).to_numpy()).float()
+    data.cell_data = cell_data
+
+    return data
+
 def select_hits(hits, truth, particles, pt_min=0, endcaps=False, noise=False):
     # Barrel volume and layer ids
     if endcaps:
@@ -92,7 +114,7 @@ def build_event(event_file, pt_min, feature_scale, adjacent=True, endcaps=False,
 
     return hits[['r', 'phi', 'z']].to_numpy() / feature_scale, hits.particle_id.to_numpy(), layers, layerless_true_edges, layerwise_true_edges, hits['hit_id'].to_numpy()
 
-def prepare_event(event_file, output_dir, pt_min=0, adjacent=True, endcaps=False, layerless=True, layerwise=True, noise=False, **kwargs):
+def prepare_event(event_file, detector_orig, detector_proc, cell_features, output_dir=None, pt_min=0, adjacent=True, endcaps=False, layerless=True, layerwise=True, noise=False, cell_information=True, **kwargs):
 
     evtid = int(event_file[-9:])
 
@@ -102,13 +124,14 @@ def prepare_event(event_file, output_dir, pt_min=0, adjacent=True, endcaps=False
 
     X, pid, layers, layerless_true_edges, layerwise_true_edges, hid = build_event(event_file, pt_min, feature_scale, adjacent=adjacent, endcaps=endcaps, layerless=layerless, layerwise=layerwise, noise=noise)
 
-    print("Building Data for", evtid)
-
     data = Data(x = torch.from_numpy(X).float(), pid = torch.from_numpy(pid), layers=torch.from_numpy(layers), event_file=event_file, hid = torch.from_numpy(hid))
     if layerless_true_edges is not None: data.layerless_true_edges = torch.from_numpy(layerless_true_edges)
     if layerwise_true_edges is not None: data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
 
+    if cell_information:
+        data = get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise)
+
+
     filename = os.path.join(output_dir, str(evtid))
-    print('Event', evtid, 'writing graphs to', filename)
     with open(filename, 'wb') as pickle_file:
         torch.save(data, pickle_file)

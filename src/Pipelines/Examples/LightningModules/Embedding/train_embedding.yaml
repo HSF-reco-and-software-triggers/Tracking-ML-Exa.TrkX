@@ -2,18 +2,19 @@
 input_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/feature_store
 output_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/embedding_output/run1
 project: EmbeddingStudy
+overwrite: True
 
 # Dataset parameters
 pt_min: 0
 train_split: [60, 20, 20] # Number of [training, validation, testing] examples
-endcaps: False
+endcaps: True
 layerwise: False
 layerless: True
 noise: False
 adjacent: False
 
 # Model parameters
-in_channels: 3
+in_channels: 12
 emb_hidden: 512
 nb_layer: 6
 emb_dim: 8
@@ -30,6 +31,6 @@ patience: 5
 regime:
     - rp # Random pairs: Trains with pairs in hinge loss selected randomly
     - hnm # Hard negative mining: Trains with
-    # - ci
+    - ci
 max_epochs: 100
 wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

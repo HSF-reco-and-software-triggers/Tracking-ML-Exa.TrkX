@@ -13,7 +13,7 @@ import torch.nn as nn
 
 # Local imports
 from .utils import prepare_event
-
+from .cell_direction_utils.utils import load_detector
 
 class FeatureStore(LightningDataModule):
 
@@ -23,6 +23,7 @@ class FeatureStore(LightningDataModule):
 
         self.input_dir = self.hparams['input_dir']
         self.output_dir = self.hparams['output_dir']
+        self.detector_path = self.hparams["detector_path"]
         self.n_files = self.hparams['n_files']
 
         self.n_tasks = self.hparams['n_tasks']
@@ -37,12 +38,23 @@ class FeatureStore(LightningDataModule):
         # Split the input files by number of tasks and select my chunk only
         all_events = np.array_split(all_events, self.n_tasks)[self.task]
 
+        # Define the cell features to be added to the dataset
+
+        cell_features = ['cell_count', 'cell_val', 'leta', 'lphi', 'lx', 'ly', 'lz', 'geta', 'gphi']
+        detector_orig, detector_proc = load_detector(self.detector_path)
+
         # Prepare output
         # output_dir = os.path.expandvars(self.output_dir) FIGURE OUT HOW TO USE THIS!
         os.makedirs(self.output_dir, exist_ok=True)
         print('Writing outputs to ' + self.output_dir)
 
         # Process input files with a worker pool
-        with mp.Pool(processes=self.n_workers) as pool:
-            process_func = partial(prepare_event, **self.hparams)
-            pool.map(process_func, all_events)
+        # with mp.Pool(processes=self.n_workers) as pool:
+        #     process_func = partial(prepare_event, detector_orig, detector_proc, **self.hparams)
+        #     pool.map(process_func, all_events)
+
+        # Process input files with a worker pool
+        process_func = partial(prepare_event, detector_orig=detector_orig, detector_proc=detector_proc, cell_features=cell_features, **self.hparams)
+        for event in all_events:
+            print(event)
+            process_func(event)
