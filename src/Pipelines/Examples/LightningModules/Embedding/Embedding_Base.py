@@ -135,13 +135,13 @@ class EmbeddingBase(LightningModule):
         val_loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
 
         result = pl.EvalResult(checkpoint_on=val_loss)
-        result.log('val_loss', val_loss, prog_bar=False)
+        result.log('val_loss', val_loss, prog_bar=True)
 
         cluster_true = 2*len(batch.layerless_true_edges[0])
         cluster_true_positive = y_cluster.sum()
         cluster_positive = len(e_spatial[0])
 
-        result.log_dict({'eff': torch.tensor(cluster_true_positive/cluster_true), 'pur': torch.tensor(cluster_true_positive/cluster_positive)})
+        result.log_dict({'eff': torch.tensor(cluster_true_positive/cluster_true), 'pur': torch.tensor(cluster_true_positive/cluster_positive)}, prog_bar=True)
 
         return result
 
