@@ -25,7 +25,7 @@ def load_datasets(input_dir, train_split, seed = 0):
 
     return train_events, val_events, test_events
 
-class Embedding_Base(LightningModule):
+class EmbeddingBase(LightningModule):
 
     def __init__(self, hparams):
         super().__init__()
@@ -39,13 +39,22 @@ class Embedding_Base(LightningModule):
         self.trainset, self.valset, self.testset = load_datasets(self.hparams["input_dir"], self.hparams["train_split"])
 
     def train_dataloader(self):
-        return DataLoader(self.trainset, batch_size=1, num_workers=4)
+        if len(self.trainset) > 0:
+            return DataLoader(self.trainset, batch_size=1, num_workers=4)
+        else:
+            return None
 
     def val_dataloader(self):
-        return DataLoader(self.valset, batch_size=1, num_workers=4)
+        if len(self.valset) > 0:
+            return DataLoader(self.valset, batch_size=1, num_workers=4)
+        else:
+            return None
 
     def test_dataloader(self):
-        return DataLoader(self.testset, batch_size=1, num_workers=4)
+        if len(self.testset):
+            return DataLoader(self.testset, batch_size=1, num_workers=4)
+        else:
+            return None
 
     def configure_optimizers(self):
         optimizer = [torch.optim.AdamW(self.parameters(), lr=(self.hparams["lr"]), betas=(0.9, 0.999), eps=1e-08, amsgrad=True)]

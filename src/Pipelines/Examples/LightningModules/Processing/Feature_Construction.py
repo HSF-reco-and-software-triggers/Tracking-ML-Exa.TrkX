@@ -15,7 +15,7 @@ import torch.nn as nn
 from .utils import prepare_event
 
 
-class Feature_Store(LightningDataModule):
+class FeatureStore(LightningDataModule):
 
     def __init__(self, hparams):
         super().__init__()
