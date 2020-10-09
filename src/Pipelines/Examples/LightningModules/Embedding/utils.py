@@ -1,5 +1,5 @@
-# import faiss
-# res = faiss.StandardGpuResources()
+import faiss
+res = faiss.StandardGpuResources()
 import torch
 import scipy as sp
 import numpy as np
