@@ -1,6 +1,6 @@
 # Input/output configuration
-input_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/feature_store
-output_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/embedding_output/run1
+input_dir: /global/home/users/dtmurnane/Exatrkx/trackml/feature_store
+output_dir: /global/home/users/dtmurnane/Exatrkx/trackml/embedding_output/run1
 project: EmbeddingStudy
 overwrite: True
 
