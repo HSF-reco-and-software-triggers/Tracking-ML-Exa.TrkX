@@ -38,7 +38,6 @@ def build_edges(spatial, r_max, k_max, res, return_indices=False):
     else:
         return edge_list
 
-
 def search_index_pytorch(index, x, k, D=None, I=None):
     """call the search function of an index with pytorch tensor I/O (CPU
     and GPU supported)"""
@@ -63,3 +62,15 @@ def search_index_pytorch(index, x, k, D=None, I=None):
                    k, Dptr, Iptr)
     torch.cuda.synchronize()
     return D, I
+
+def swig_ptr_from_FloatTensor(x):
+    assert x.is_contiguous()
+    assert x.dtype == torch.float32
+    return faiss.cast_integer_to_float_ptr(
+        x.storage().data_ptr() + x.storage_offset() * 4)
+
+def swig_ptr_from_LongTensor(x):
+    assert x.is_contiguous()
+    assert x.dtype == torch.int64, 'dtype=%s' % x.dtype
+    return faiss.cast_integer_to_long_ptr(
+        x.storage().data_ptr() + x.storage_offset() * 8)
