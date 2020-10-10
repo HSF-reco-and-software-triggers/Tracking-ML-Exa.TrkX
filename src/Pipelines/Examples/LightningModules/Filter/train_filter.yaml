@@ -2,6 +2,7 @@
 input_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/embedding_output/run1
 output_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/filter_output/run1
 project: FilteringStudy
+filter_cut: 0.5
 
 # Dataset parameters
 pt_min: 0

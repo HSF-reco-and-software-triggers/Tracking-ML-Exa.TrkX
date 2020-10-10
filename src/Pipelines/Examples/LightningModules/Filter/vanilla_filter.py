@@ -92,7 +92,10 @@ class FilterInferenceCallback(Callback):
         output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius, emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.e_radius, emb).squeeze()
         y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
 
-        batch.y_pid = y_pid
+        cut_indices = output > pl_module.hparams["filter_cut"]
+        batch.e_radius = batch.e_radius[:, cut_indices]
+        batch.y_pid = y_pid[cut_indices]
+        batch.y = batch.y[cut_indices]
 
         return batch
 
