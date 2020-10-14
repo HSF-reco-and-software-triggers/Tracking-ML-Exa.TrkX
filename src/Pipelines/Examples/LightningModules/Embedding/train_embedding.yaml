@@ -1,12 +1,12 @@
 # Input/output configuration
-input_dir: /global/home/users/dtmurnane/Exatrkx/trackml/feature_store
-output_dir: /global/home/users/dtmurnane/Exatrkx/trackml/embedding_output/run1
+input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/feature_store_endcaps
+output_dir: global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/embedding_processed/0_pt_cut_endcaps
 project: EmbeddingStudy
 overwrite: True
 
 # Dataset parameters
 pt_min: 0
-train_split: [60, 20, 20] # Number of [training, validation, testing] examples
+train_split: [900, 50, 50] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True

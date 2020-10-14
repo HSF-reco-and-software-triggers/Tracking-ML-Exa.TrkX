@@ -1,10 +1,10 @@
 # Input/output configuration
-input_dir: /global/home/users/dtmurnane/Exatrkx/trackml/train_100_events
-output_dir: /global/home/users/dtmurnane/Exatrkx/trackml/feature_store_endcaps
-detector_path: /global/home/users/dtmurnane/Exatrkx/trackml/detectors.csv
-n_files: 100
+input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/train_all
+output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/feature_store_endcaps
+detector_path: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/detectors.csv
+n_files: 2000
 n_tasks: 1
-n_workers: 1
+n_workers: 16
 
 pt_min: 0
 endcaps: True

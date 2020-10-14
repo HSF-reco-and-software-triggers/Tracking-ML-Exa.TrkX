@@ -49,12 +49,7 @@ class FeatureStore(LightningDataModule):
         print('Writing outputs to ' + self.output_dir)
 
         # Process input files with a worker pool
-        # with mp.Pool(processes=self.n_workers) as pool:
-        #     process_func = partial(prepare_event, detector_orig, detector_proc, **self.hparams)
-        #     pool.map(process_func, all_events)
+        with mp.Pool(processes=self.n_workers) as pool:
+            process_func = partial(prepare_event, detector_orig=detector_orig, detector_proc=detector_proc, cell_features=cell_features, **self.hparams)
+            pool.map(process_func, all_events)
 
-        # Process input files with a worker pool
-        process_func = partial(prepare_event, detector_orig=detector_orig, detector_proc=detector_proc, cell_features=cell_features, **self.hparams)
-        for event in all_events:
-            print(event)
-            process_func(event)

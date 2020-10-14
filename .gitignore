@@ -73,3 +73,7 @@ venv.bak/
 
 # Lightning
 *lightning_logs*
+*logs*
+
+# W&B
+*wandb*

@@ -63,3 +63,6 @@ def search_index_pytorch(index, x, k, D=None, I=None):
                    k, Dptr, Iptr)
     torch.cuda.synchronize()
     return D, I
+
+def stringlist_to_classes(stringlist):
+    return [getattr(sys.modules[__name__], class_string)() for class_string in stringlist]

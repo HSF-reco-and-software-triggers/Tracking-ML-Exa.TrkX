@@ -15,13 +15,18 @@ import numpy as np
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Local imports
-from .utils import graph_intersection, res
+from .utils import graph_intersection, build_edges, res
 
 def load_datasets(input_dir, train_split, seed = 0):
+    '''
+    Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
+    changed across final varied runs, but can be left as default for experimentation.
+    '''
+    torch.manual_seed(seed)
     all_events = os.listdir(input_dir)
     all_events = sorted([os.path.join(input_dir, event) for event in all_events])
     loaded_events = [torch.load(event) for event in all_events[:sum(train_split)]]
-    train_events, val_events, test_events = random_split(loaded_events, train_split, generator=torch.Generator().manual_seed(seed))
+    train_events, val_events, test_events = random_split(loaded_events, train_split)
 
     return train_events, val_events, test_events
 
@@ -34,25 +39,23 @@ class EmbeddingBase(LightningModule):
         '''
         # Assign hyperparameters
         self.hparams = hparams
-
-    def setup(self, step):
         self.trainset, self.valset, self.testset = load_datasets(self.hparams["input_dir"], self.hparams["train_split"])
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
-            return DataLoader(self.trainset, batch_size=1, num_workers=4)
+            return DataLoader(self.trainset, batch_size=1, num_workers=1)
         else:
             return None
 
     def val_dataloader(self):
         if len(self.valset) > 0:
-            return DataLoader(self.valset, batch_size=1, num_workers=4)
+            return DataLoader(self.valset, batch_size=1, num_workers=1)
         else:
             return None
 
     def test_dataloader(self):
         if len(self.testset):
-            return DataLoader(self.testset, batch_size=1, num_workers=4)
+            return DataLoader(self.testset, batch_size=1, num_workers=1)
         else:
             return None
 
@@ -120,7 +123,7 @@ class EmbeddingBase(LightningModule):
                                torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
 
         # Get random edge list
-        e_spatial = build_edges(spatial, self.hparams["r_val"], 1000, res)
+        e_spatial = build_edges(spatial, self.hparams["r_val"], 100, res)
         # e_spatial = radius_graph(spatial, r=self.hparams["r_val"], max_num_neighbors=1000)
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)

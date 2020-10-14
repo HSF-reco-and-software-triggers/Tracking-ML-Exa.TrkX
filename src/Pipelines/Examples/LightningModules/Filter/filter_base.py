@@ -18,10 +18,10 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # Local imports
 from .utils import graph_intersection
 
-def load_dataset(input_dir):
+def load_dataset(input_dir, num):
     all_events = os.listdir(input_dir)
     all_events = sorted([os.path.join(input_dir, event) for event in all_events])
-    loaded_events = [torch.load(event) for event in all_events]
+    loaded_events = [torch.load(event, map_location=torch.device('cpu')) for event in all_events[:num]]
 
     return loaded_events
 
@@ -34,27 +34,25 @@ class FilterBase(LightningModule):
         '''
         # Assign hyperparameters
         self.hparams = hparams
-
-    def setup(self, step):
         datatypes = ["train", "val", "test"]
         input_dirs = [os.path.join(self.hparams["input_dir"], datatype) for datatype in datatypes]
-        self.trainset, self.valset, self.testset = [load_dataset(input_dir) for input_dir in input_dirs]
+        self.trainset, self.valset, self.testset = [load_dataset(input_dir, hparams["train_split"][i]) for i, input_dir in enumerate(input_dirs)]
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
-            return DataLoader(self.trainset, batch_size=1, num_workers=4)
+            return DataLoader(self.trainset, batch_size=1, num_workers=1)
         else:
             return None
 
     def val_dataloader(self):
         if len(self.valset) > 0:
-            return DataLoader(self.valset, batch_size=1, num_workers=4)
+            return DataLoader(self.valset, batch_size=1, num_workers=1)
         else:
             return None
 
     def test_dataloader(self):
         if len(self.testset):
-            return DataLoader(self.testset, batch_size=1, num_workers=4)
+            return DataLoader(self.testset, batch_size=1, num_workers=1)
         else:
             return None
 
@@ -83,12 +81,13 @@ class FilterBase(LightningModule):
             combined_indices = torch.cat([true_indices, fake_indices])
             # Shuffle indices:
             combined_indices[torch.randperm(len(combined_indices))]
-            weight = torch.tensor(self.hparams['ratio'])
+            weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams) 
+                      else torch.tensor(self.hparams['ratio'])) 
 
         else:
             combined_indices = torch.range(batch.e_radius.shape[1])
-            weight = (torch.tensor((~batch.y.bool()).sum() / batch.y.sum()) if (self.hparams["weight"]==None)
-                      else torch.tensor(self.hparams["weight"]))
+            weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams) 
+                      else torch.tensor((~batch.y.bool()).sum() / batch.y.sum())) 
 
         output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:,combined_indices], emb).squeeze()
                   if ('ci' in self.hparams["regime"])

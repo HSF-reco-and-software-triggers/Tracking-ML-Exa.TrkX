@@ -1,9 +1,11 @@
+import os
+
 import faiss
-res = faiss.StandardGpuResources()
 import torch
 import scipy as sp
 import numpy as np
 
+res = faiss.StandardGpuResources()
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def graph_intersection(pred_graph, truth_graph):
@@ -21,16 +23,17 @@ def graph_intersection(pred_graph, truth_graph):
     return new_pred_graph, y
 
 def build_edges(spatial, r_max, k_max, res, return_indices=False):
-
+    
     index_flat = faiss.IndexFlatL2(spatial.shape[1])
     gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index_flat)
     spatial_np = spatial.cpu().detach().numpy()
     gpu_index_flat.add(spatial_np)
 
     D, I = search_index_pytorch(gpu_index_flat, spatial, k_max)
-
+    
     D, I = D[:,1:], I[:,1:]
     ind = torch.Tensor.repeat(torch.arange(I.shape[0]), (I.shape[1], 1), 1).T.to(device)
+    
     edge_list = torch.stack([ind[D <= r_max**2], I[D <= r_max**2]])
 
     if return_indices:
@@ -74,3 +77,14 @@ def swig_ptr_from_LongTensor(x):
     assert x.dtype == torch.int64, 'dtype=%s' % x.dtype
     return faiss.cast_integer_to_long_ptr(
         x.storage().data_ptr() + x.storage_offset() * 8)
+
+def get_best_run(run_label, wandb_save_dir):
+    for (root_dir, dirs, files) in os.walk(wandb_save_dir + "/wandb"):
+        if run_label in dirs:
+            run_root= root_dir
+        
+    best_run_base = os.path.join(run_root, run_label, "checkpoints")
+    best_run = os.listdir(best_run_base)
+    best_run_path = os.path.join(best_run_base, best_run[0])
+    
+    return best_run_path

@@ -1,13 +1,13 @@
 # Input/output configuration
-input_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/embedding_output/run1
-output_dir: /mnt/c/Users/Daniel/Dropbox/Research/Publications/ExaTrkX/trackml/filter_output/run1
+input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/embedding_processed/0_pt_cut_endcaps
+output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/filter_processed/0_pt_cut_endcaps
 project: FilteringStudy
 filter_cut: 0.5
 
 # Dataset parameters
 pt_min: 0
-train_split: [60, 20, 20] # Number of [training, validation, testing] examples
-endcaps: False
+train_split: [80, 10, 10] # Number of [training, validation, testing] examples
+endcaps: True
 layerwise: False
 layerless: True
 noise: False
@@ -18,18 +18,22 @@ in_channels: 12
 hidden: 512
 nb_layer: 3
 emb_channels: 0
-layernorm: False
-batchnorm: False
-weight: 8
-ratio: 8
+layernorm: True
+batchnorm: True
+ratio: 4
 val_subset: 0.1
-warmup: 100
+warmup: 200
 lr: 0.002
 factor: 0.3
 patience: 5
 regime:
   # - non_ci # This is to NOT include cell information. Switch comment with "ci" to include cell information
-  - ci
-    # - pid
+    - ci
+    - pid
 max_epochs: 100
+
+# Post-processing
+callbacks: [] #[FilterInferenceCallback]
+
+# Logging
 wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
