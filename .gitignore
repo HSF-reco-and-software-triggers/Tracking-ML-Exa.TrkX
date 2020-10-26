@@ -71,6 +71,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Development files
+*/dev/*
+
 # Lightning
 *lightning_logs*
 *logs*

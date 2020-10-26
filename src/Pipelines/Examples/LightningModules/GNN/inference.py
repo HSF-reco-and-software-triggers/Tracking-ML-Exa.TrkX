@@ -1,63 +1,26 @@
-# System imports
-import sys
-import os
+import sys, os
 
-# 3rd party imports
-import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
-from .filter_base import FilterBase, FilterBaseBalanced
-from torch.nn import Linear
-import torch.nn as nn
-from torch_cluster import radius_graph
+import torch.nn.functional as F
 import torch
-from torch_geometric.data import DataLoader
 
-# Local imports
-from .utils import graph_intersection
+'''
+Class-based Callback inference for integration with Lightning
+'''
 
-class VanillaFilter(FilterBaseBalanced):
-
-    def __init__(self, hparams):
-        super().__init__(hparams)
-        '''
-        Initialise the Lightning Module that can scan over different filter training regimes
-        '''
-
-        # Construct the MLP architecture
-        self.input_layer = Linear(hparams["in_channels"]*2 + hparams["emb_channels"]*2, hparams["hidden"])
-        layers = [Linear(hparams["hidden"], hparams["hidden"]) for _ in range(hparams["nb_layer"]-1)]
-        self.layers = nn.ModuleList(layers)
-        self.output_layer = nn.Linear(hparams["hidden"], 1)
-        self.layernorm = nn.LayerNorm(hparams["hidden"])
-        self.batchnorm = nn.BatchNorm1d(num_features=hparams["hidden"], track_running_stats=False)
-        self.act = nn.Tanh()
-
-    def forward(self, x, e, emb=None):
-        if emb is not None:
-            x = self.input_layer(torch.cat([x[e[0]], emb[e[0]], x[e[1]], emb[e[1]]], dim=-1))
-        else:
-            x = self.input_layer(torch.cat([x[e[0]], x[e[1]]], dim=-1))
-        for l in self.layers:
-            x = l(x)
-            x = self.act(x)
-            if self.hparams["layernorm"]: x = self.layernorm(x) #Option of LayerNorm
-            if self.hparams["batchnorm"]: x = self.batchnorm(x) #Option of Batch
-        x = self.output_layer(x)
-        return x
-
-class FilterInferenceCallback(Callback):
+class GNNInferenceCallback(Callback):
     def __init__(self):
         self.output_dir = None
         self.overwrite = False
 
-    def on_train_start(self, trainer, pl_module):
+    def on_test_start(self, trainer, pl_module):
         # Prep the directory to produce inference data to
         self.output_dir = pl_module.hparams.output_dir
         self.datatypes = ["train", "val", "test"]
         os.makedirs(self.output_dir, exist_ok=True)
         [os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True) for datatype in self.datatypes]
 
-    def on_train_end(self, trainer, pl_module):
+    def on_test_end(self, trainer, pl_module):
         print("Training finished, running inference to filter graphs...")
 
         # By default, the set of examples propagated through the pipeline will be train+val+test set
@@ -87,7 +50,7 @@ class FilterInferenceCallback(Callback):
         output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius, emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.e_radius, emb).squeeze()
         y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
 
-        cut_indices = output > pl_module.hparams["filter_cut"]
+        cut_indices = F.sigmoid(output) > pl_module.hparams["filter_cut"]
         batch.e_radius = batch.e_radius[:, cut_indices]
         batch.y_pid = y_pid[cut_indices]
         batch.y = batch.y[cut_indices]
@@ -98,3 +61,4 @@ class FilterInferenceCallback(Callback):
 
         with open(os.path.join(self.output_dir, datatype, batch.event_file[-4:]), 'wb') as pickle_file:
             torch.save(batch, pickle_file)
+            

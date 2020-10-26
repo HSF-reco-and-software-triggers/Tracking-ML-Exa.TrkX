@@ -1,14 +1,14 @@
 #!/bin/bash
 
-#SBATCH -J train-cgpu
+#SBATCH -J prep-embedding
 #SBATCH -N 1
 #SBATCH -C gpu
-#SBATCH -t 10:00:00
+#SBATCH -t 4:00:00
 #SBATCH -G 1
 #SBATCH -o logs/%x-%j.out
 #SBATCH -A m1759
 
-# SBATCH -q special
+#SBATCH -q special
 
 conda activate exatrkx-test
 
@@ -16,4 +16,4 @@ conda activate exatrkx-test
 # export NCCL_DEBUG=INFO
 # export PYTHONFAULTHANDLER=1
 
-python run_gnn.py
+python build_embedding.py

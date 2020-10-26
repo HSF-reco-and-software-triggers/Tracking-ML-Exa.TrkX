@@ -2,11 +2,11 @@
 input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/embedding_processed/0_pt_cut_endcaps
 output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/filter_processed/0_pt_cut_endcaps
 project: FilteringStudy
-filter_cut: 0.5
+filter_cut: 0.15
 
 # Dataset parameters
 pt_min: 0
-train_split: [80, 10, 10] # Number of [training, validation, testing] examples
+train_split: [180, 10, 10] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
@@ -14,22 +14,23 @@ noise: False
 adjacent: False
 
 # Model parameters
-in_channels: 12
-hidden: 512
+in_channels: 3
+hidden: 768
 nb_layer: 3
 emb_channels: 0
 layernorm: True
-batchnorm: True
-ratio: 4
+batchnorm: False
+ratio: 2
+weight: 4
 val_subset: 0.1
 warmup: 200
-lr: 0.002
+lr: 0.01
 factor: 0.3
-patience: 5
+patience: 8
 regime:
-  # - non_ci # This is to NOT include cell information. Switch comment with "ci" to include cell information
-    - ci
-    - pid
+  - non_ci # This is to NOT include cell information. Switch comment with "ci" to include cell information
+#     - ci
+#     - pid
 max_epochs: 100
 
 # Post-processing

@@ -1,10 +1,19 @@
-# import faiss
-# res = faiss.StandardGpuResources()
+import sys, os
+
 import torch
 import scipy as sp
 import numpy as np
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+def load_dataset(input_dir, num):
+    if input_dir is not None:
+        all_events = os.listdir(input_dir)
+        all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+        loaded_events = [torch.load(event, map_location=torch.device('cpu')) for event in all_events[:num]]
+        return loaded_events
+    else:
+        return None
 
 def graph_intersection(pred_graph, truth_graph):
     array_size = max(pred_graph.max().item(), truth_graph.max().item()) + 1

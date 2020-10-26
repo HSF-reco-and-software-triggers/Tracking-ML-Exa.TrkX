@@ -1,0 +1,40 @@
+# Input/output configuration
+input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/filter_processed/0_pt_cut_endcaps_connected
+output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/gnn_processed/0_pt_cut_endcaps_connected
+project: GNNStudy
+edge_cut: 0.5
+
+# Dataset parameters
+pt_min: 0
+train_split: [80, 10, 10] # Number of [training, validation, testing] examples
+endcaps: True
+layerwise: False
+layerless: True
+noise: False
+adjacent: False
+
+# Model parameters
+in_channels: 3
+hidden: 48
+n_graph_iters: 12
+nb_node_layer: 3
+nb_edge_layer: 3
+emb_channels: 0
+layernorm: True
+hidden_activation: Tanh
+weight: 4
+warmup: 500
+lr: 0.002
+factor: 0.3
+patience: 8
+regime:
+    - non_ci # This is to NOT include cell information. Switch comment with "ci" to include cell information
+#     - ci
+#     - pid
+max_epochs: 50
+
+# Post-processing
+callbacks: [] #[GNNInferenceCallback]
+
+# Logging
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

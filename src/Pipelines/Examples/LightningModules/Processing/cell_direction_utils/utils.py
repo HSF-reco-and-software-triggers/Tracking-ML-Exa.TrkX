@@ -206,7 +206,7 @@ def get_one_event(event_path,
     print("Loading event {} with a {} pT cut".format(event_path, pt_cut))
 
     hits, cells, particles, truth = trackml.dataset.load_event(event_path)
-    pt = np.sqrt(particles.px**2 + particles.py**2 + particles.pz**2)
+    pt = np.sqrt(particles.px**2 + particles.py**2)
     particles = particles.assign(pt=pt)
 
     if remove_noise:

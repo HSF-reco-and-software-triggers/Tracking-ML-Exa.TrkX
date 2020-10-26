@@ -1,8 +1,18 @@
+import sys
+
 import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
+from pytorch_lightning.callbacks import Callback
 import torch.nn as nn
 from torch.nn import Linear
-import sys
+import torch.nn.functional as F
+import torch
+from torch_scatter import scatter_add
+from torch_geometric.nn.conv import MessagePassing
+from torch.utils.checkpoint import checkpoint
+
+from ..gnn_base import GNNBase
+from ..utils import make_mlp
 
 class EdgeNetwork(nn.Module):
     """
@@ -50,11 +60,12 @@ class NodeNetwork(nn.Module):
         mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
         node_inputs = torch.cat([mi, mo, x], dim=1)
         return self.network(node_inputs)
-
-class ResAGNN(GNN_Base):
+       
+        
+class ResAGNN(GNNBase):
 
     def __init__(self, hparams):
-        super().__init__()
+        super().__init__(hparams)
         '''
         Initialise the Lightning Module that can scan over different GNN training regimes
         '''
@@ -62,13 +73,13 @@ class ResAGNN(GNN_Base):
         # Setup input network
         self.input_network = make_mlp(hparams["in_channels"], [hparams["hidden"]],
                                       output_activation=hparams["hidden_activation"],
-                                      layer_norm=hparams["layer_norm"])
+                                      layer_norm=hparams["layernorm"])
         # Setup the edge network
         self.edge_network = EdgeNetwork(hparams["in_channels"] + hparams["hidden"], hparams["in_channels"] + hparams["hidden"],
-                                        hparams["nb_layer"], hparams["hidden_activation"], hparams["layer_norm"])
+                                        hparams["nb_edge_layer"], hparams["hidden_activation"], hparams["layernorm"])
         # Setup the node layers
         self.node_network = NodeNetwork(hparams["in_channels"] + hparams["hidden"], hparams["hidden"],
-                                        hparams["nb_layer"], hparams["hidden_activation"], hparams["layer_norm"])
+                                        hparams["nb_node_layer"], hparams["hidden_activation"], hparams["layernorm"])
 
     def forward(self, x, edge_index):
         input_x = x

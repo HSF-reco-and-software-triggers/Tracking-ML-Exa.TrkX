@@ -117,21 +117,26 @@ def build_event(event_file, pt_min, feature_scale, adjacent=True, endcaps=False,
 def prepare_event(event_file, detector_orig, detector_proc, cell_features, output_dir=None, pt_min=0, adjacent=True, endcaps=False, layerless=True, layerwise=True, noise=False, cell_information=True, **kwargs):
 
     evtid = int(event_file[-9:])
-
-    print("Preparing", evtid)
-
-    feature_scale = [1000, np.pi, 1000]
-
-    X, pid, layers, layerless_true_edges, layerwise_true_edges, hid = build_event(event_file, pt_min, feature_scale, adjacent=adjacent, endcaps=endcaps, layerless=layerless, layerwise=layerwise, noise=noise)
-
-    data = Data(x = torch.from_numpy(X).float(), pid = torch.from_numpy(pid), layers=torch.from_numpy(layers), event_file=event_file, hid = torch.from_numpy(hid))
-    if layerless_true_edges is not None: data.layerless_true_edges = torch.from_numpy(layerless_true_edges)
-    if layerwise_true_edges is not None: data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
-
-    if cell_information:
-        data = get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise)
-
-
     filename = os.path.join(output_dir, str(evtid))
-    with open(filename, 'wb') as pickle_file:
-        torch.save(data, pickle_file)
+
+    if not os.path.exists(filename):
+    
+        print("Preparing", evtid)
+
+        feature_scale = [1000, np.pi, 1000]
+
+        X, pid, layers, layerless_true_edges, layerwise_true_edges, hid = build_event(event_file, pt_min, feature_scale, adjacent=adjacent, endcaps=endcaps, layerless=layerless, layerwise=layerwise, noise=noise)
+
+        data = Data(x = torch.from_numpy(X).float(), pid = torch.from_numpy(pid), layers=torch.from_numpy(layers), event_file=event_file, hid = torch.from_numpy(hid))
+        if layerless_true_edges is not None: data.layerless_true_edges = torch.from_numpy(layerless_true_edges)
+        if layerwise_true_edges is not None: data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
+
+        if cell_information:
+            data = get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise)
+
+        with open(filename, 'wb') as pickle_file:
+            torch.save(data, pickle_file)
+
+    else:
+        
+        print(evtid, "already exists")
