@@ -1,0 +1,7 @@
+model_list:
+    - {set: Filter, name: VanillaFilter, config: train_filter.yaml, resume_id: enm731r3, overwrite: 
+        {
+        output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/filter_processed/0_pt_cut_endcaps_test,
+        callbacks: [FilterInferenceCallback]
+        }
+    }

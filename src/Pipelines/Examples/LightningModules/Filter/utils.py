@@ -6,6 +6,28 @@ import numpy as np
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+def get_model(name):
+    """
+    Convert config model string to an import and return the class from the imported module
+    """
+    if name == 'agnn_original':
+        from .agnn_original import GNNSegmentClassifier
+        return GNNSegmentClassifier(**model_args)
+    elif name == 'agnn':
+        from .agnn import GNNSegmentClassifier
+        return GNNSegmentClassifier(**model_args)
+    elif name == 'mpnn':
+        from .mpnn import GNN
+        return GNN(**model_args)
+    elif name == 'resgnn':
+        from .resgnn import GNNSegmentClassifier
+        return GNNSegmentClassifier(**model_args)
+    elif name == 'tripgnn':
+        from .tripgnn import GNNSegmentClassifier
+        return GNNSegmentClassifier(**model_args)
+    else:
+        raise Exception('Model %s unknown' % name)
+
 def load_dataset(input_dir, num):
     if input_dir is not None:
         all_events = os.listdir(input_dir)

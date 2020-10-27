@@ -5,15 +5,16 @@ import os
 # 3rd party imports
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
-from .filter_base import FilterBase, FilterBaseBalanced
 from torch.nn import Linear
 import torch.nn as nn
+import torch.nn.functional as F
 from torch_cluster import radius_graph
 import torch
 from torch_geometric.data import DataLoader
 
 # Local imports
-from .utils import graph_intersection
+from ..utils import graph_intersection
+from ..filter_base import FilterBase, FilterBaseBalanced
 
 class VanillaFilter(FilterBaseBalanced):
 
@@ -58,6 +59,10 @@ class FilterInferenceCallback(Callback):
         [os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True) for datatype in self.datatypes]
 
     def on_train_end(self, trainer, pl_module):
+        '''
+        This method shouldn't need to change between stages
+        '''
+        
         print("Training finished, running inference to filter graphs...")
 
         # By default, the set of examples propagated through the pipeline will be train+val+test set
@@ -81,17 +86,30 @@ class FilterInferenceCallback(Callback):
 
     def construct_downstream(self, batch, pl_module):
 
+        '''
+        This contains the bulk of pipeline logic for this stage
+        '''
         emb = (None if (pl_module.hparams["emb_channels"] == 0)
                else batch.embedding)  # Does this work??
 
-        output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius, emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.e_radius, emb).squeeze()
+        sections = 8
+        cut_list = []
+        val_loss = torch.tensor(0).float()
+        for j in range(sections):
+            subset_ind = torch.chunk(torch.arange(batch.e_radius.shape[1]), sections)[j]
+            output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()
+            cut = F.sigmoid(output) > pl_module.hparams["filter_cut"]
+            cut_list.append(cut)
+            
+        cut_list = torch.cat(cut_list)
+            
+        if ('pid' not in pl_module.hparams['regime']):
+            batch.y = batch.y[cut_list]
+
         y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
-
-        cut_indices = output > pl_module.hparams["filter_cut"]
-        batch.e_radius = batch.e_radius[:, cut_indices]
-        batch.y_pid = y_pid[cut_indices]
-        batch.y = batch.y[cut_indices]
-
+        batch.y_pid = y_pid[cut_list]
+        batch.e_radius = batch.e_radius[:, cut_list]
+        
         return batch
 
     def save_downstream(self, batch, pl_module, datatype):

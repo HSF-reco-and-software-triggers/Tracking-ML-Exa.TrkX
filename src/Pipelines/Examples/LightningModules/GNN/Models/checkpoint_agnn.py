@@ -12,7 +12,7 @@ from torch_geometric.nn.conv import MessagePassing
 from torch.utils.checkpoint import checkpoint
 
 from ..gnn_base import GNNBase
-from .utils import make_mlp
+from ..utils import make_mlp
 
 class CheckpointedResAGNN(GNNBase):
 

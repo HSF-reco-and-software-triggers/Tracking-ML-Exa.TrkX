@@ -3,10 +3,12 @@ input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/embedding_pro
 output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/filter_processed/0_pt_cut_endcaps
 project: FilteringStudy
 filter_cut: 0.15
+resume_id: 
 
 # Dataset parameters
 pt_min: 0
-train_split: [180, 10, 10] # Number of [training, validation, testing] examples
+datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [10, 2, 2] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
@@ -31,7 +33,7 @@ regime:
   - non_ci # This is to NOT include cell information. Switch comment with "ci" to include cell information
 #     - ci
 #     - pid
-max_epochs: 100
+max_epochs: 10
 
 # Post-processing
 callbacks: [] #[FilterInferenceCallback]
