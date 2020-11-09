@@ -1,4 +1,7 @@
 class Bar:
+    """
+    A test class
+    """
     def __init__(self):
         self.hello = "Hi there"
 
