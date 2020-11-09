@@ -37,7 +37,7 @@ theme:
     - mkdocstrings:
         default_handler: python
         watch:
-          -src/Pipelines/Examples/LightningModules
+          - src/Pipelines/Examples/LightningModules
   # logo: media/favicon.png
   # favicon: media/favicon.ico
   features:
