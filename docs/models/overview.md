@@ -14,7 +14,13 @@
 
 ## Test Model
 
-::: src.Pipelines.Examples.LightningModules.GNN.gnn_base.GNNBase
+::: src.foo.Bar
+    handler: python
+    selection:
+      members:
+        - test_method
+
+<!-- ::: src.Pipelines.Examples.LightningModules.GNN.gnn_base.GNNBase -->
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.Models.interaction_gnn.InteractionGNN
     handler: python
