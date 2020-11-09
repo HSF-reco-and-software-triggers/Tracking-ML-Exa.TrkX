@@ -14,7 +14,7 @@
 
 ## Test Model
 
-::: src.foo.Bar
+::: src.FooFolder.foo.Bar
     handler: python
     selection:
       members:
