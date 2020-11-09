@@ -3,7 +3,7 @@ import sys
 import os
 
 # 3rd party imports
-# import pytorch_lightning as pl
+import pytorch_lightning as pl
 # from pytorch_lightning import LightningModule
 # import torch
 # from torch.nn import Linear
