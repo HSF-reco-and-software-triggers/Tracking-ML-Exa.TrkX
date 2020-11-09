@@ -12,10 +12,14 @@ from torch_geometric.data import DataLoader
 from torch_cluster import radius_graph
 import numpy as np
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Local imports
-from .utils import graph_intersection, build_edges, res
+# from .utils import graph_intersection
+# if torch.cuda.is_available():
+#     from .utils import build_edges, res
+#     device = 'cuda'
+# else:
+#     device = 'cpu'
 
 def load_datasets(input_dir, train_split, seed = 0):
     '''
