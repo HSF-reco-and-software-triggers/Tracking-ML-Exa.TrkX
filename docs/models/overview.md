@@ -11,3 +11,9 @@
 
 - Best model for each use case (by memory, timing, etc.)
 - Best hyperparameter choice
+
+## Test Model
+
+::: LightningModules.GNN.Models.interaction_gnn.InteractionGNN
+    rendering:
+      show_source: True

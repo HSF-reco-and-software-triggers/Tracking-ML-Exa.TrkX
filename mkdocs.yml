@@ -27,13 +27,17 @@ nav:
     - PyLightning & MLFlow: tools/frameworks.md
 
 
-
-
 theme:
   name: material
   palette:
     primary: white
     accent: indigo
+  plugins:
+    - search
+    - mkdocstrings:
+        default_handler: python
+        watch:
+          -src/Pipelines/Examples/LightningModules
   # logo: media/favicon.png
   # favicon: media/favicon.ico
   features:
