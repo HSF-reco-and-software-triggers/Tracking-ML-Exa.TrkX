@@ -14,8 +14,16 @@
 
 ## Test Model
 
-<!-- ::: GNN.Models.interaction_gnn.InteractionGNN
+::: src.Pipelines.Examples.LightningModules.GNN.Models.interaction_gnn.InteractionGNN
 
+::: src.Pipelines.Examples.LightningModules.GNN.Models.interaction_gnn.InteractionGNN
+    handler: python
+    selection:
+      members:
+        - forward
+    rendering:
+      show_root_heading: false
+      show_source: false
 
 ::: GNN.Models.interaction_gnn.InteractionGNN
     handler: python
@@ -24,4 +32,4 @@
         - forward
     rendering:
       show_root_heading: false
-      show_source: false -->
+      show_source: false
