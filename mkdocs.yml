@@ -32,14 +32,15 @@ theme:
   palette:
     primary: white
     accent: indigo
-  plugins:
-    - search
-    - mkdocstrings:
-        default_handler: python
-        watch:
-          - src/Pipelines/Examples/LightningModules
   # logo: media/favicon.png
   # favicon: media/favicon.ico
   features:
     - navigation.tabs
     - navigation.instant
+
+plugins:
+  - search
+  - mkdocstrings
+      # default_handler: python
+      # watch:
+      #   - src/Pipelines/Examples/LightningModules

@@ -14,15 +14,14 @@
 
 ## Test Model
 
-::: LightningModules.GNN.Models.interaction_gnn.InteractionGNN
-    rendering:
-      show_source: True
+<!-- ::: GNN.Models.interaction_gnn.InteractionGNN
 
-::: LightningModules.GNN.Models.interaction_gnn.InteractionGNN
+
+::: GNN.Models.interaction_gnn.InteractionGNN
     handler: python
     selection:
       members:
         - forward
     rendering:
       show_root_heading: false
-      show_source: false
+      show_source: false -->
