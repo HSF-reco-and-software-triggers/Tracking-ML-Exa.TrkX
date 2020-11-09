@@ -14,7 +14,7 @@
 
 ## Test Model
 
-::: src.Pipelines.Examples.LightningModules.GNN
+::: src.Pipelines.Examples.LightningModules.GNN.gnn_base
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.Models.interaction_gnn.InteractionGNN
     handler: python
