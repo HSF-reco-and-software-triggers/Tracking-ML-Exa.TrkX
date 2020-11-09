@@ -11,7 +11,7 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: 3.x
-      - run: pip install torch==1.7.0+cpu
+      - run: pip install torch==1.7.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
       - run: pip install pytorch-lightning
       - run: pip install decorator
       - run: pip install faiss-cpu
