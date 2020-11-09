@@ -20,7 +20,7 @@
       members:
         - test_method
     rendering:
-      show_root_heading: false
+      show_root_heading: true
       show_source: true
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.gnn_base.GNNBase -->
