@@ -10,9 +10,18 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: 3.x
+          python-version: 3.8
+      - run: pip install pytorch-lightning
       - run: pip install decorator
       - run: pip install faiss-cpu
       - run: pip install mkdocs-material
       - run: pip install mkdocstrings
       - run: mkdocs gh-deploy --force
+      - uses: schneegans/dynamic-badges-action@v1.0.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: acee2761c6c03febc3331296514ff721
+          filename: test.json
+          label: Hello
+          message: World
+          color: orange
