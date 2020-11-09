@@ -14,7 +14,7 @@
 
 ## Test Model
 
-::: src.FooFolder.foo.Bar
+::: src.Pipelines.Examples.LightningModules.FooFolder.foo.Bar
     handler: python
     selection:
       members:
