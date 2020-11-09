@@ -12,7 +12,7 @@ from torch_geometric.nn.conv import MessagePassing
 from torch.utils.checkpoint import checkpoint
 
 from ..gnn_base import GNNBase
-from ..utils import make_mlp
+from ..utils import make_mlp, hard_random_edge_slice, hard_eta_edge_slice
 
 class CheckpointedResAGNN(GNNBase):
 
@@ -79,3 +79,34 @@ class CheckpointedResAGNN(GNNBase):
         clf_inputs = torch.cat([x[start], x[end]], dim=1)
         return checkpoint(self.edge_network, clf_inputs).squeeze(-1)
     
+    
+    
+class SliceCheckpointedResAGNN(CheckpointedResAGNN):
+    
+    def __init__(self, hparams):
+        super().__init__(hparams)
+        
+    def training_step(self, batch, batch_idx):
+        
+        weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
+                      else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
+        
+        if 'delta_phi' in self.hparams.keys():
+            subset_edge_ind = hard_random_edge_slice(self.hparams["delta_phi"], batch)
+        elif 'delta_eta' in self.hparams.keys():
+            subset_edge_ind = hard_eta_edge_slice(self.hparams["delta_eta"], batch)
+        
+        output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), 
+                       batch.edge_index[:, subset_edge_ind]).squeeze()
+                  if ('ci' in self.hparams["regime"])
+                  else self(batch.x, batch.edge_index[:, subset_edge_ind]).squeeze())
+
+        if ('pid' in self.hparams["regime"]):
+            y_pid = (batch.pid[batch.edge_index[0, subset_edge_ind]] == batch.pid[batch.edge_index[1, subset_edge_ind]]).float()
+            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), pos_weight = weight)
+        else:
+            loss = F.binary_cross_entropy_with_logits(output, batch.y[subset_edge_ind], pos_weight = weight)
+            
+        self.log('train_loss', loss)
+
+        return loss

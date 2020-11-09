@@ -2,18 +2,45 @@ import os, sys
 
 import torch.nn as nn
 import torch
+import pandas as pd
 import numpy as np
 import cupy as cp
+import trackml.dataset
 
-def load_dataset(input_dir, num):
+# ---------------------------- Dataset Processing -------------------------
+
+def load_dataset(input_dir, num, pt_cut):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
         loaded_events = [torch.load(event, map_location=torch.device('cpu')) for event in all_events[:num]]
+        loaded_events = filter_edge_pt(loaded_events, pt_cut)
         return loaded_events
     else:
         return None
 
+def fetch_pt(event):
+    truth = trackml.dataset.load_event(
+        event.event_file, parts=['truth'])[0]
+    hid = event.hid
+    merged_truth = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(truth, on="hit_id")
+    pt = np.sqrt(merged_truth.tpx**2 + merged_truth.tpy**2)
+    
+    return pt
+    
+def filter_edge_pt(events, pt_cut=0):
+    
+    if pt_cut > 0:
+        for event in events:
+            pt = fetch_pt(event)
+            edge_subset = pt.to_numpy()[event.edge_index] > pt_cut
+            combined_subset = edge_subset[0] & edge_subset[1]
+            event.edge_index = event.edge_index[:, combined_subset]
+            event.y = event.y[combined_subset]
+            event.y_pid = event.y_pid[combined_subset]
+    
+    return events
+    
 def random_edge_slice_v2(delta_phi, batch):
     '''
     Same behaviour as v1, but avoids the expensive calls to np.isin and np.unique, using sparse operations on GPU
@@ -63,6 +90,39 @@ def random_edge_slice(delta_phi, batch):
     nested_ind = np.isin(np.where(subset_edges_extended)[0], np.where(subset_edges_ind)[0])
     
     return subset_edges_ind, subset_edges_extended, nested_ind
+
+def hard_random_edge_slice(delta_phi, batch):
+    
+    # 1. Select random phi
+    random_phi = np.random.rand()*2 - 1
+    e = batch.edge_index.to('cpu')
+    x = batch.x.to('cpu')
+    
+    e_average = (x[e[0], 1] + x[e[1], 1])/2
+    dif = abs(e_average - random_phi)
+    subset_edges_ind = ((dif < delta_phi) | ((2-dif) < delta_phi)).numpy()
+    
+    return subset_edges_ind
+
+def calc_eta(r, z):
+    theta = np.arctan2(r, z)
+    return -1. * np.log(np.tan(theta / 2.))
+
+def hard_eta_edge_slice(delta_eta, batch):
+    
+    e = batch.edge_index.to('cpu')
+    x = batch.x.to('cpu')
+    
+    etas = calc_eta(x[:,0], x[:,2])    
+    random_eta = (np.random.rand() - 0.5)*2*(etas.max() - delta_eta)
+    
+    e_average = (etas[e[0]] + etas[e[1]])/2
+    dif = abs(e_average - random_eta)
+    subset_edges_ind = ((dif < delta_eta)).numpy()
+    
+    return subset_edges_ind
+
+# ------------------------- Convenience Utilities ---------------------------
 
 def make_mlp(input_size, sizes,
              hidden_activation='ReLU',

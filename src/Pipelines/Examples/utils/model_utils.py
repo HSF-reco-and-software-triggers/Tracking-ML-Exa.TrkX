@@ -1,8 +1,11 @@
 import os, sys
 import yaml
 import importlib
+import torch
 
+import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 
 def find_config(name, path):
@@ -16,28 +19,28 @@ def find_checkpoint(run_id, path):
             latest_run_path = os.path.join(root_dir, run_id, "last.ckpt")
             return latest_run_path
 
-def load_config(stage, resume_id):
+def load_config(stage, resume_id, pipeline_config):
     if resume_id is None:
-        with open(find_config(stage["config"], os.path.join(MODEL_LIBRARY, stage["set"]))) as f:
+        with open(find_config(stage["config"], os.path.join(pipeline_config["model_library"], stage["set"]))) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
         
     else:
-        ckpnt_path = find_checkpoint(resume_id, ARTIFACT_LIBRARY)
-        ckpnt = torch.load(ckpnt_path)
+        ckpnt_path = find_checkpoint(resume_id, pipeline_config["artifact_library"])
+        ckpnt = torch.load(ckpnt_path, map_location=torch.device('cpu'))
         config = ckpnt["hyper_parameters"]
     
-    if "overwrite" in stage.keys():
-        config.update(stage["overwrite"])
+    if "override" in stage.keys():
+        config.update(stage["override"])
     
     config["stage"] = stage
     
     return config    
         
-def find_model(model_set, model_name):
+def find_model(model_set, model_name, model_library):
         
     # List all modules in the set/Models directory
     module_list = [os.path.splitext(name)[0] for 
-                   name in os.listdir(os.path.join(MODEL_LIBRARY, model_set, "Models")) if name.endswith(".py")]
+                   name in os.listdir(os.path.join(model_library, model_set, "Models")) if name.endswith(".py")]
     
     # Import all modules in the set/Models directory and find model_name
     imported_module_list = [importlib.import_module('.'.join([model_set, "Models", module])) for module in module_list]
@@ -47,19 +50,20 @@ def find_model(model_set, model_name):
     model_class = getattr(names[0], model_name)
     return model_class
 
-def build_model(stage):
+def build_model(stage, pipeline_config):
     
     model_set = stage["set"]
     model_name = stage["name"]
+    model_library = pipeline_config["model_library"]
     config_file = stage["config"]
     
-    model_class = find_model(model_set, model_name)
+    model_class = find_model(model_set, model_name, model_library)
     
     return model_class
 
 def get_logger(model_config, run_id):
     
-    wandb_logger = WandbLogger(project=model_config["project"], group="LayerlessEndcaps", save_dir = model_config["wandb_save_dir"], id=run_id)
+    wandb_logger = WandbLogger(project=model_config["project"], save_dir = model_config["wandb_save_dir"], id=run_id)
    
     return wandb_logger
 
@@ -68,12 +72,16 @@ def callback_objects(model_config):
 
     callback_list = model_config["callbacks"]
     model_set = model_config["stage"]["set"]
+    callback_object_list = [find_model(model_set, callback)() for callback in callback_list]
     
-    return [find_model(model_set, callback)() for callback in callback_list]
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
+    callback_object_list = callback_object_list + [lr_monitor]
+    
+    return 
 
-def build_trainer(model_config, logger, resume_id):
+def build_trainer(model_config, logger, resume_id, pipeline_config):
     
-    model_filepath = os.path.join(ARTIFACT_LIBRARY, model_config["project"], logger.experiment._run_id, "last.ckpt")
+    model_filepath = os.path.join(pipeline_config["artifact_library"], model_config["project"], logger.experiment._run_id, "last.ckpt")
     
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
@@ -81,7 +89,7 @@ def build_trainer(model_config, logger, resume_id):
         save_top_k=1,
         save_last=True,
         mode='min')
-    
+        
     # Handle resume condition
     if resume_id is None:
         # The simple case: We start fresh
