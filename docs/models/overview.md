@@ -19,9 +19,9 @@
     selection:
       members:
         - test_method
-      rendering:
-        show_root_heading: false
-        show_source: true
+    rendering:
+      show_root_heading: false
+      show_source: true
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.gnn_base.GNNBase -->
 
