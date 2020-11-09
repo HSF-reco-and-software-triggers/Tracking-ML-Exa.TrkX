@@ -15,10 +15,13 @@
 ## Test Model
 
 ::: src.foo.Bar
-    <!-- handler: python
+    handler: python
     selection:
       members:
-        - test_method -->
+        - test_method
+      rendering:
+        show_root_heading: false
+        show_source: true
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.gnn_base.GNNBase -->
 
