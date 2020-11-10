@@ -14,11 +14,12 @@
 
 ## Test Model
 
-::: src.Pipelines.Examples.LightningModules.Embedding.foo.Bar
+::: src.Pipelines.Examples.LightningModules.Embedding.embedding_base.EmbeddingBase
     handler: python
     selection:
       members:
-        - test_method
+        - training_step
+        - validation_step
     rendering:
       show_root_heading: true
       show_source: true
