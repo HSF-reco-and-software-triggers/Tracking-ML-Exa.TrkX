@@ -10,7 +10,7 @@
 Follow the tutorial in [Quickstart](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/quickstart) to get up and running quickly with a toy model.
 
 <figure>
-  <img src="docs/media/application_diagram_1.png"/>
+  <img src=".../docs/media/application_diagram_1.png"/>
   <figcaption>The repository through an application lens, using Pipelines for specific physics goals</figcaption>
 </figure>
 
