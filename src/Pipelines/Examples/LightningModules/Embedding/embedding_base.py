@@ -12,10 +12,13 @@ from torch_geometric.data import DataLoader
 from torch_cluster import radius_graph
 import numpy as np
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-# Local imports
-from .utils import graph_intersection, build_edges, res
+# Local Imports
+from .utils import graph_intersection
+if torch.cuda.is_available():
+    from .utils import build_edges, res
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 def load_datasets(input_dir, train_split, seed = 0):
     '''
@@ -90,8 +93,9 @@ class EmbeddingBase(LightningModule):
             e_spatial = torch.cat([e_spatial, torch.randint(e_bidir.min(), e_bidir.max(), (2, n_random), device=self.device)], axis=-1)
 
         if 'hnm' in self.hparams["regime"]:
-            e_spatial = torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"], res)], axis=-1)
-            # e_spatial = torch.cat([e_spatial, radius_graph(spatial, r=self.hparams["r_train"], max_num_neighbors=self.hparams["knn"])], axis=-1)
+            e_spatial = (torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"], res)], axis=-1)
+                        if torch.cuda.is_available()
+                        else torch.cat([e_spatial, radius_graph(spatial, r=self.hparams["r_train"], max_num_neighbors=self.hparams["knn"])], axis=-1))
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 
@@ -123,8 +127,9 @@ class EmbeddingBase(LightningModule):
                                torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
 
         # Get random edge list
-        e_spatial = build_edges(spatial, self.hparams["r_val"], 100, res)
-        # e_spatial = radius_graph(spatial, r=self.hparams["r_val"], max_num_neighbors=1000)
+        e_spatial = (build_edges(spatial, self.hparams["r_val"], 100, res)
+                    if torch.cuda.is_available()
+                    else radius_graph(spatial, r=self.hparams["r_val"], max_num_neighbors=1000))
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 
