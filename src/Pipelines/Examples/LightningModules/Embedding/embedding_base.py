@@ -77,6 +77,21 @@ class EmbeddingBase(LightningModule):
 
     def training_step(self, batch, batch_idx):
 
+        """
+        Example:
+        TODO - Explain how the embedding training step works by example!
+
+        Args:
+            batch (``list``, required): A list of ``torch.tensor`` objects
+            batch (``int``, required): The index of the batch 
+
+        Returns:
+            ``torch.tensor`` The loss function as a tensor
+        """
+
+
+
+
         if 'ci' in self.hparams["regime"]:
             spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
         else:
