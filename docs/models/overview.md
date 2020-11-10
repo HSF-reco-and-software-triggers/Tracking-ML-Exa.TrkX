@@ -11,3 +11,35 @@
 
 - Best model for each use case (by memory, timing, etc.)
 - Best hyperparameter choice
+
+## Test Model
+
+::: src.Pipelines.Examples.LightningModules.Embedding.embedding_base.EmbeddingBase
+    handler: python
+    selection:
+      members:
+        - training_step
+        - validation_step
+    rendering:
+      show_root_heading: true
+      show_source: true
+
+<!-- ::: src.Pipelines.Examples.LightningModules.GNN.gnn_base.GNNBase -->
+
+<!-- ::: src.Pipelines.Examples.LightningModules.GNN.Models.interaction_gnn.InteractionGNN
+    handler: python
+    selection:
+      members:
+        - forward
+    rendering:
+      show_root_heading: false
+      show_source: false
+
+::: GNN.Models.interaction_gnn.InteractionGNN
+    handler: python
+    selection:
+      members:
+        - forward
+    rendering:
+      show_root_heading: false
+      show_source: false -->

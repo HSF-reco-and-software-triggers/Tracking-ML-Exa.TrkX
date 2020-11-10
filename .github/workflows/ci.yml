@@ -10,6 +10,39 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
-          python-version: 3.x
-      - run: pip install mkdocs-material
-      - run: mkdocs gh-deploy --force
+          python-version: 3.8
+      - name: Install Dependencies 1
+        run: pip install torch==1.7.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+      - name: Install Dependencies 2
+        run: pip install pytorch-lightning decorator faiss-cpu
+      - name: Install PyGeometric 1
+        run: pip install torch-scatter==latest+cpu torch-sparse==latest+cpu torch-cluster==latest+cpu torch-spline-conv==latest+cpu -f https://pytorch-geometric.com/whl/torch-1.7.0.html
+      - name: Install PyGeometric 2
+        run: pip install torch-geometric
+      - name: Install Docs
+        run: pip install mkdocs-material mkdocstrings
+      - name: Test Import
+        run: python -c 'from src.Pipelines.Examples.LightningModules.Embedding.embedding_base import EmbeddingBase'
+      - name: Deploy Docs
+        run: mkdocs gh-deploy --force
+      - name: Make Success Badge  
+        if: success()
+        uses: schneegans/dynamic-badges-action@v1.0.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: acee2761c6c03febc3331296514ff721
+          filename: test.json
+          label: build
+          message: passing
+          color: green
+      - name: Make Failure Badge
+        if: failure()
+        uses: schneegans/dynamic-badges-action@v1.0.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: acee2761c6c03febc3331296514ff721
+          filename: test.json
+          isError: true
+          label: build
+          message: failing
+          color: orange

@@ -27,8 +27,6 @@ nav:
     - PyLightning & MLFlow: tools/frameworks.md
 
 
-
-
 theme:
   name: material
   palette:
@@ -39,3 +37,10 @@ theme:
   features:
     - navigation.tabs
     - navigation.instant
+
+plugins:
+  - search
+  - mkdocstrings
+      # default_handler: python
+      # watch:
+      #   - src/Pipelines/Examples/LightningModules

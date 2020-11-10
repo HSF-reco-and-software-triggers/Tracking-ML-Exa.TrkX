@@ -12,10 +12,13 @@ from torch_geometric.data import DataLoader
 from torch_cluster import radius_graph
 import numpy as np
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-# Local imports
-from .utils import graph_intersection, build_edges, res
+# Local Imports
+from .utils import graph_intersection
+if torch.cuda.is_available():
+    from .utils import build_edges, res
+    device = 'cuda'
+else:
+    device = 'cpu'
 
 def load_datasets(input_dir, train_split, seed = 0):
     '''
@@ -74,6 +77,18 @@ class EmbeddingBase(LightningModule):
 
     def training_step(self, batch, batch_idx):
 
+        """
+        Example:
+        TODO - Explain how the embedding training step works by example!
+
+        Args:
+            batch (``list``, required): A list of ``torch.tensor`` objects
+            batch (``int``, required): The index of the batch
+
+        Returns:
+            ``torch.tensor`` The loss function as a tensor
+        """
+
         if 'ci' in self.hparams["regime"]:
             spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
         else:
@@ -90,8 +105,9 @@ class EmbeddingBase(LightningModule):
             e_spatial = torch.cat([e_spatial, torch.randint(e_bidir.min(), e_bidir.max(), (2, n_random), device=self.device)], axis=-1)
 
         if 'hnm' in self.hparams["regime"]:
-            e_spatial = torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"], res)], axis=-1)
-            # e_spatial = torch.cat([e_spatial, radius_graph(spatial, r=self.hparams["r_train"], max_num_neighbors=self.hparams["knn"])], axis=-1)
+            e_spatial = (torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"], res)], axis=-1)
+                        if torch.cuda.is_available()
+                        else torch.cat([e_spatial, radius_graph(spatial, r=self.hparams["r_train"], max_num_neighbors=self.hparams["knn"])], axis=-1))
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 
@@ -113,6 +129,9 @@ class EmbeddingBase(LightningModule):
         return result
 
     def validation_step(self, batch, batch_idx):
+        """
+        Step to evaluate the model's performance
+        """
 
         if 'ci' in self.hparams["regime"]:
             spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
@@ -123,8 +142,9 @@ class EmbeddingBase(LightningModule):
                                torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
 
         # Get random edge list
-        e_spatial = build_edges(spatial, self.hparams["r_val"], 100, res)
-        # e_spatial = radius_graph(spatial, r=self.hparams["r_val"], max_num_neighbors=1000)
+        e_spatial = (build_edges(spatial, self.hparams["r_val"], 100, res)
+                    if torch.cuda.is_available()
+                    else radius_graph(spatial, r=self.hparams["r_val"], max_num_neighbors=1000))
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 
@@ -149,6 +169,10 @@ class EmbeddingBase(LightningModule):
         return result
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_idx, second_order_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
+        """
+        Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
+        """
+        
         # warm up lr
         if (self.hparams["warmup"] is not None) and (self.trainer.global_step < self.hparams["warmup"]):
             lr_scale = min(1., float(self.trainer.global_step + 1) / self.hparams["warmup"])
