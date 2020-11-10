@@ -11,17 +11,30 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: 3.8
-      - run: pip install pytorch-lightning
-      - run: pip install decorator
-      - run: pip install faiss-cpu
-      - run: pip install mkdocs-material
-      - run: pip install mkdocstrings
-      - run: mkdocs gh-deploy --force
-      - uses: schneegans/dynamic-badges-action@v1.0.0
+      - name: Install Dependencies
+        run: pip install pytorch-lightning decorator faiss-cpu
+      - name: Install Docs
+        run: pip install mkdocs-material mkdocstrings
+      - name: Deploy Docs
+        run: mkdocs gh-deploy --force
+      - name: Make Success Badge  
+        if: success()
+        uses: schneegans/dynamic-badges-action@v1.0.0
         with:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: acee2761c6c03febc3331296514ff721
           filename: test.json
-          label: Hello
-          message: World
+          label: build
+          message: passing
+          color: green
+      - name: Make Failure Badge
+        if: failure()
+        uses: schneegans/dynamic-badges-action@v1.0.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: acee2761c6c03febc3331296514ff721
+          filename: test.json
+          isError: true
+          label: build
+          message: failing
           color: orange
