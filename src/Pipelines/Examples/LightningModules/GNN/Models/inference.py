@@ -2,6 +2,8 @@ import sys, os
 
 from pytorch_lightning.callbacks import Callback
 import torch.nn.functional as F
+import sklearn.metrics
+import matplotlib.pyplot as plt
 import torch
 
 '''
@@ -61,24 +63,62 @@ class GNNInferenceCallback(Callback):
 
         with open(os.path.join(self.output_dir, datatype, batch.event_file[-4:]), 'wb') as pickle_file:
             torch.save(batch, pickle_file)
-            
+
 
 
 class GNNTelemetry(Callback):
-    
+
     """
     This callback contains standardised tests of the performance of a GNN
     """
-    
+
     def __init__(self):
         self.output_dir = None
         self.overwrite = False
-    
+
     def on_test_start(self, trainer, pl_module):
-        
+
         """
         This hook is automatically called when the model is tested after training. The best checkpoint is automatically loaded
         """
-        
+        self.preds = []
+        self.truth = []
         pass
-    
+
+    def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+
+        """
+        Get the relevant outputs from each batch
+        """
+
+        self.preds.append(outputs.preds.to("cpu"))
+        self.truth.append(outputs.truth.to("cpu"))
+
+    def on_test_end(self, trainer, pl_module):
+
+        """
+        1. Aggregate all outputs,
+        2. Calculate the ROC curve,
+        3. Plot ROC curve,
+        4. Save plots to PDF 'metrics.pdf'
+        """
+
+        # REFACTOR THIS INTO CALCULATE METRICS, PLOT METRICS, SAVE METRICS
+        preds = torch.cat(self.preds).float().numpy()
+        truth = torch.cat(self.truth).bool().numpy()
+
+        roc_fpr, roc_tpr, roc_thresholds = sklearn.metrics.roc_curve(truth, preds)
+        roc_auc = sklearn.metrics.auc(roc_fpr, roc_tpr)
+
+        # Update this to dynamically adapt to number of metrics
+        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=figsize)
+        axs = axs.flatten()
+
+        axs[0].plot(roc_fpr, roc_tpr)
+        axs[0].plot([0, 1], [0, 1], '--')
+        axs[0].set_xlabel('False positive rate')
+        axs[0].set_ylabel('True positive rate')
+        axs[0].set_title('ROC curve, AUC = %.3f' % roc_auc)
+        plt.tight_layout()
+
+        fig.savefig("metrics.pdf", format="pdf")
