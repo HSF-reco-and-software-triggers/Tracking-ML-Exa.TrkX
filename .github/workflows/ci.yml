@@ -11,10 +11,18 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: 3.8
-      - name: Install Dependencies
+      - name: Install Dependencies 1
+        run: pip install torch==1.7.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+      - name: Install Dependencies 2
         run: pip install pytorch-lightning decorator faiss-cpu
+      - name: Install PyGeometric 1
+        run: pip install torch-scatter==latest+cpu torch-sparse==latest+cpu torch-cluster==latest+cpu torch-spline-conv==latest+cpu -f https://pytorch-geometric.com/whl/torch-1.7.0.html
+      - name: Install PyGeometric 2
+        run: pip install torch-geometric
       - name: Install Docs
         run: pip install mkdocs-material mkdocstrings
+      - name: Test Import
+        run: python -c 'import src.Pipelines.Examples.LightningModules.Embedding.foo'
       - name: Deploy Docs
         run: mkdocs gh-deploy --force
       - name: Make Success Badge  
