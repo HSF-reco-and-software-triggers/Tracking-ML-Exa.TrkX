@@ -83,14 +83,11 @@ class EmbeddingBase(LightningModule):
 
         Args:
             batch (``list``, required): A list of ``torch.tensor`` objects
-            batch (``int``, required): The index of the batch 
+            batch (``int``, required): The index of the batch
 
         Returns:
             ``torch.tensor`` The loss function as a tensor
         """
-
-
-
 
         if 'ci' in self.hparams["regime"]:
             spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
@@ -132,6 +129,9 @@ class EmbeddingBase(LightningModule):
         return result
 
     def validation_step(self, batch, batch_idx):
+        """
+        Step to evaluate the model's performance
+        """
 
         if 'ci' in self.hparams["regime"]:
             spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
@@ -169,6 +169,10 @@ class EmbeddingBase(LightningModule):
         return result
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_idx, second_order_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
+        """
+        Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
+        """
+        
         # warm up lr
         if (self.hparams["warmup"] is not None) and (self.trainer.global_step < self.hparams["warmup"]):
             lr_scale = min(1., float(self.trainer.global_step + 1) / self.hparams["warmup"])
