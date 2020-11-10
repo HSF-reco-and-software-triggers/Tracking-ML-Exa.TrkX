@@ -14,12 +14,12 @@ import numpy as np
 
 
 # Local imports
-from .utils import graph_intersection
-if torch.cuda.is_available():
-    from .utils import build_edges, res
-    device = 'cuda'
-else:
-    device = 'cpu'
+# from .utils import graph_intersection
+# if torch.cuda.is_available():
+#     from .utils import build_edges, res
+#     device = 'cuda'
+# else:
+#     device = 'cpu'
 
 def load_datasets(input_dir, train_split, seed = 0):
     '''
