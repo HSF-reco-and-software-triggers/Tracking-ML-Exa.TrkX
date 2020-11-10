@@ -48,21 +48,21 @@ class GNNBase(LightningModule):
         
     def configure_optimizers(self):
         optimizer = [torch.optim.AdamW(self.parameters(), lr=(self.hparams["lr"]), betas=(0.9, 0.999), eps=1e-08, amsgrad=True)]
-        scheduler = [
-            {
-                'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
-                'monitor': 'val_loss',
-                'interval': 'epoch',
-                'frequency': 1
-            }
-        ]
 #         scheduler = [
 #             {
-#                 'scheduler': torch.optim.lr_scheduler.StepLR(optimizer[0], step_size=50, gamma=0.3),
+#                 'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
+#                 'monitor': 'val_loss',
 #                 'interval': 'epoch',
 #                 'frequency': 1
 #             }
 #         ]
+        scheduler = [
+            {
+                'scheduler': torch.optim.lr_scheduler.StepLR(optimizer[0], step_size=self.hparams["patience"], gamma=self.hparams["factor"]),
+                'interval': 'epoch',
+                'frequency': 1
+            }
+        ]
         return optimizer, scheduler
 
     def training_step(self, batch, batch_idx):

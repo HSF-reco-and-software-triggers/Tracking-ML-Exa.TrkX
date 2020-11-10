@@ -8,7 +8,7 @@
 #SBATCH -o logs/%x-%j.out
 #SBATCH -A m1759
 
-#SBATCH -q special
+# SBATCH -q special
 
 conda activate exatrkx-test
 
