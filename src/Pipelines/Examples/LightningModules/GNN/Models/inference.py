@@ -62,3 +62,23 @@ class GNNInferenceCallback(Callback):
         with open(os.path.join(self.output_dir, datatype, batch.event_file[-4:]), 'wb') as pickle_file:
             torch.save(batch, pickle_file)
             
+
+
+class GNNTelemetry(Callback):
+    
+    """
+    This callback contains standardised tests of the performance of a GNN
+    """
+    
+    def __init__(self):
+        self.output_dir = None
+        self.overwrite = False
+    
+    def on_test_start(self, trainer, pl_module):
+        
+        """
+        This hook is automatically called when the model is tested after training. The best checkpoint is automatically loaded
+        """
+        
+        pass
+    

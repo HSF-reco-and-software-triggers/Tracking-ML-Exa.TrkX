@@ -110,3 +110,5 @@ class SliceCheckpointedResAGNN(CheckpointedResAGNN):
         self.log('train_loss', loss)
 
         return loss
+    
+    

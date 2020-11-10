@@ -85,7 +85,7 @@ class GNNBase(LightningModule):
 
         return loss
 
-    def validation_step(self, batch, batch_idx):
+    def shared_evaluation(self, batch, batch_idx):
 
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
@@ -127,6 +127,19 @@ class GNNBase(LightningModule):
             
         return loss
 
+    def validation_step(self, batch, batch_idx):
+        
+        loss = self.shared_evaluation(batch, batch_idx)
+            
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+
+        loss = self.shared_evaluation(batch, batch_idx)
+            
+        return loss
+    
+    
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
         # warm up lr
         if (self.hparams["warmup"] is not None) and (self.trainer.global_step < self.hparams["warmup"]):
