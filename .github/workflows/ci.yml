@@ -22,7 +22,7 @@ jobs:
       - name: Install Docs
         run: pip install mkdocs-material mkdocstrings
       - name: Test Import
-        run: python -c 'import src.Pipelines.Examples.LightningModules.Embedding.embedding_base.EmbeddingBase'
+        run: python -c 'from src.Pipelines.Examples.LightningModules.Embedding.embedding_base import EmbeddingBase'
       - name: Deploy Docs
         run: mkdocs gh-deploy --force
       - name: Make Success Badge  
