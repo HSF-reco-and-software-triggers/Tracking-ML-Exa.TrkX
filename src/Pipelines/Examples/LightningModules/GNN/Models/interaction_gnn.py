@@ -81,11 +81,11 @@ class InteractionGNN(GNNBase):
             # Compute new node features
             edge_messages = scatter_add(e, end, dim=0, dim_size=x.shape[0]) + scatter_add(e, start, dim=0, dim_size=x.shape[0])
             node_inputs = torch.cat([x, edge_messages], dim=-1)
-            x = self.node_network(node_inputs)
-
-            # Compute new edge features
+            x = checkpoint(self.node_network, node_inputs)
+          
+            # Compute new edge features            
             edge_inputs = torch.cat([x[start], x[end], e], dim=-1)
-            e = self.edge_network(edge_inputs)
+            e = checkpoint(self.edge_network, edge_inputs)
             e = torch.sigmoid(e)
 
 #             classifier_inputs = torch.cat([x[start], x[end], e], dim=1)
