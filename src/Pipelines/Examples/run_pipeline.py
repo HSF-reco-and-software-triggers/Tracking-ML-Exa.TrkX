@@ -34,6 +34,8 @@ def main(args):
         model_config = load_config(stage, resume_id, pipeline_config)
         print("Model configuration:", model_config)
 
+        
+def train():
         # Define a logger (default: Weights & Biases)
         logger = get_logger(model_config, resume_id)
 
