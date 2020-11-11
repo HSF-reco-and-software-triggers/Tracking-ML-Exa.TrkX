@@ -1,8 +1,11 @@
 import sys
 import argparse
 import yaml
+import logging
 
 from utils.stage_utils import get_resume_id, load_config, get_logger, build_model, build_trainer
+logging.basicConfig(level=logging.INFO)
+
 
 def parse_args():
 

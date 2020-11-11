@@ -1,10 +1,12 @@
 import sys, os
+import logging
 
 from pytorch_lightning.callbacks import Callback
 import torch.nn.functional as F
 import sklearn.metrics
 import matplotlib.pyplot as plt
 import torch
+import numpy as np
 
 '''
 Class-based Callback inference for integration with Lightning
@@ -73,9 +75,9 @@ class GNNTelemetry(Callback):
     """
 
     def __init__(self):
-        self.output_dir = None
-        self.overwrite = False
-
+        super().__init__()
+        logging.info("CONSTRUCTING CALLBACK!")
+        
     def on_test_start(self, trainer, pl_module):
 
         """
@@ -83,7 +85,6 @@ class GNNTelemetry(Callback):
         """
         self.preds = []
         self.truth = []
-        pass
 
     def on_test_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
 
@@ -91,8 +92,8 @@ class GNNTelemetry(Callback):
         Get the relevant outputs from each batch
         """
 
-        self.preds.append(outputs.preds.to("cpu"))
-        self.truth.append(outputs.truth.to("cpu"))
+        self.preds.append(outputs["preds"])
+        self.truth.append(outputs["truth"])
 
     def on_test_end(self, trainer, pl_module):
 
@@ -104,15 +105,17 @@ class GNNTelemetry(Callback):
         """
 
         # REFACTOR THIS INTO CALCULATE METRICS, PLOT METRICS, SAVE METRICS
-        preds = torch.cat(self.preds).float().numpy()
-        truth = torch.cat(self.truth).bool().numpy()
+        preds = np.concatenate(self.preds)
+        truth = np.concatenate(self.truth)
+        print(preds.shape, truth.shape)
 
         roc_fpr, roc_tpr, roc_thresholds = sklearn.metrics.roc_curve(truth, preds)
         roc_auc = sklearn.metrics.auc(roc_fpr, roc_tpr)
-
+        logging.info("ROC AUC: %s", roc_auc)
+        
         # Update this to dynamically adapt to number of metrics
-        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=figsize)
-        axs = axs.flatten()
+        fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(20,20))
+        axs = axs.flatten() if type(axs) is list else [axs]
 
         axs[0].plot(roc_fpr, roc_tpr)
         axs[0].plot([0, 1], [0, 1], '--')

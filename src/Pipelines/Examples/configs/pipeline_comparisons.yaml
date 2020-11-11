@@ -2,4 +2,4 @@ model_library: /global/homes/d/danieltm/ExaTrkX/Tracking-ML-Exa.TrkX/src/Pipelin
 artifact_library: /global/cscratch1/sd/danieltm/ExaTrkX/lightning_checkpoints
 
 stage_list:
-    - {set: GNN, name: SliceCheckpointedResAGNN, config: train_gnn.yaml, resume_id: }
+    - {set: GNN, name: SliceCheckpointedResAGNN, config: train_gnn.yaml, resume_id: bcd1bog5}

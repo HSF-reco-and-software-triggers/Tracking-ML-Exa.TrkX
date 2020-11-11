@@ -1,4 +1,5 @@
 import sys, os
+import logging
 
 import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
@@ -93,25 +94,18 @@ class GNNBase(LightningModule):
         output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index).squeeze()
                   if ('ci' in self.hparams["regime"])
                   else self(batch.x, batch.edge_index).squeeze())
+        
+        truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float() if 'pid' in self.hparams["regime"] else batch.y
 
-        if ('pid' in self.hparams["regime"]):
-            y_pid = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), pos_weight = weight)
-        else:
-            loss = F.binary_cross_entropy_with_logits(output, batch.y, pos_weight = weight)
+        loss = F.binary_cross_entropy_with_logits(output, truth.float(), pos_weight = weight)
 
         #Edge filter performance
         preds = F.sigmoid(output) > self.hparams["edge_cut"]
         edge_positive = preds.sum().float()
 
-        if ('pid' in self.hparams["regime"]):
-            y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            edge_true = y_pid.sum().float()
-            edge_true_positive = (y_pid & preds).sum().float()
-        else:
-            edge_true = batch.y.sum()
-            edge_true_positive = (batch.y.bool() & preds).sum().float()
-
+        edge_true = truth.sum().float()
+        edge_true_positive = (truth.bool() & preds).sum().float()
+    
         eff = torch.tensor(edge_true_positive/edge_true)
         pur = torch.tensor(edge_true_positive/edge_positive)
         
@@ -120,24 +114,22 @@ class GNNBase(LightningModule):
                         text="Efficiency and purity have both cracked 99%. Great job, Dan! You're having a great Thursday, and I think you've earned a celebratory beer.",
                         wait_duration=timedelta(minutes=60))
             self.hparams["posted_alert"] = True
-            
-        current_lr = self.optimizers().param_groups[0]['lr']
-        print(current_lr)
-        self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur, "current_lr": current_lr})
-            
-        return loss
+                    
+        self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur})
+        
+        return {"loss": loss, "preds": preds.cpu().numpy(), "truth": truth.cpu().numpy()}
 
     def validation_step(self, batch, batch_idx):
         
-        loss = self.shared_evaluation(batch, batch_idx)
+        outputs = self.shared_evaluation(batch, batch_idx)
             
-        return loss
+        return outputs["loss"]
     
     def test_step(self, batch, batch_idx):
 
-        loss = self.shared_evaluation(batch, batch_idx)
-            
-        return loss
+        outputs = self.shared_evaluation(batch, batch_idx)
+        
+        return outputs
     
     
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
