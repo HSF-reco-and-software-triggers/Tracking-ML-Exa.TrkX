@@ -2,7 +2,8 @@ import os, sys
 import yaml
 import importlib
 import logging
-
+from itertools import product
+from more_itertools import collapse
 
 import torch
 import pytorch_lightning as pl
@@ -46,10 +47,27 @@ def load_config(stage, resume_id, pipeline_config):
     if "override" in stage.keys():
         config.update(stage["override"])
 
-    config["stage"] = stage
+    config.update(stage)
 
     logging.info("Config found and built")
     return config
+
+def combo_config(config):
+    total_list = {k: (v if type(v) == list else [v]) for (k,v) in config.items()}
+    keys, values = zip(*total_list.items())
+
+    # Build list of config dictionaries
+    config_list = []
+    [config_list.append(dict(zip(keys, bundle))) for bundle in product(*values)];
+    
+    return config_list
+
+def dict_to_args(config):
+    collapsed_list = list(collapse([["--"+k,v] for k,v in config.items()]))
+    collapsed_list = [str(entry) for entry in collapsed_list]
+    command_line_args = " ".join(collapsed_list)
+    
+    return command_line_args
 
 def find_model(model_set, model_name, model_library):
 
@@ -127,3 +145,32 @@ def build_trainer(model_config, logger, resume_id, pipeline_config):
 def get_resume_id(stage):
     resume_id = stage["resume_id"] if "resume_id" in stage.keys() else None
     return resume_id
+
+
+def boolify(s):
+    if s == 'True' or s == 'true':
+            return True
+    if s == 'False' or s == 'false':
+            return False
+    raise ValueError('Not Boolean Value!')
+
+def estimateType(var):
+    '''guesses the str representation of the variables type'''
+    if type(var) is list:
+        return [estimateType(varEntry) for varEntry in var]
+    else:
+        var = str(var) #important if the parameters aren't strings...
+        for caster in (boolify, int, float):
+                try:
+                        return caster(var)
+                except ValueError:
+                        pass
+    return var
+
+def autocast(dFxn):
+    def wrapped(*c, **d):
+            cp = [estimateType(x) for x in c]
+            dp = dict( (i, estimateType(j)) for (i,j) in d.items())
+            return dFxn(*cp, **dp)
+
+    return wrapped

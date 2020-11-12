@@ -12,6 +12,9 @@ patience: 50
 regime: [[non_ci, pid]]
 max_epochs: 200
 slack_alert: False
+stage:
+    resume_id: 123
+    set: GNN
 
 # Post-processing
 callbacks:  #[GNNInferenceCallback]
