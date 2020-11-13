@@ -114,8 +114,9 @@ class GNNBase(LightningModule):
                         text="Efficiency and purity have both cracked 99%. Great job, Dan! You're having a great Thursday, and I think you've earned a celebratory beer.",
                         wait_duration=timedelta(minutes=60))
             self.hparams["posted_alert"] = True
-                    
-        self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur})
+        
+        current_lr = self.optimizers().param_groups[0]['lr']
+        self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur, "current_lr": current_lr})
         
         return {"loss": loss, "preds": preds.cpu().numpy(), "truth": truth.cpu().numpy()}
 
