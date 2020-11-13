@@ -43,14 +43,13 @@ def main(args):
     with open(args.pipeline_config) as f:
         pipeline_config = yaml.load(f, Loader=yaml.FullLoader)
     
-    print("PIPELINE CONFIG:", pipeline_config)
+    libraries = pipeline_config["libraries"]
     
     with open(args.batch_config) as f:
         batch_config = yaml.load(f, Loader=yaml.FullLoader)
 
-    print("SLURM CONFIG:", batch_config)
     # Make models available to the pipeline
-    sys.path.append(pipeline_config["model_library"])
+    sys.path.append(libraries["model_library"]) #  !!  TEST WITHOUT THIS LINE IN MAIN()
 
     for stage in pipeline_config["stage_list"]:
 
@@ -58,7 +57,7 @@ def main(args):
         resume_id = get_resume_id(stage)
 
         # Get config file, from given location OR from ckpnt
-        model_config = load_config(stage, resume_id, pipeline_config)
+        model_config = load_config(stage, resume_id, libraries)
 #         print("Model configuration:", model_config)
         
         model_config_combos = combo_config(model_config)
@@ -67,32 +66,39 @@ def main(args):
         print(model_config_combos[0])
     
         for config in model_config_combos:
-            command_line_args = dict_to_args(config)
-            print("ARGS TO COMMAND LINE:", command_line_args)
 #             os.system('python test_script.py --run-stage ' + command_line_args)
-            slurm = Slurm(**batch_config)
-            slurm.sbatch('python test_script.py ' + command_line_args)
-
+            if args.batch:
+                command_line_args = dict_to_args(config)
+                print("ARGS TO COMMAND LINE:", command_line_args)
+                slurm = Slurm(**batch_config)
+                slurm.sbatch("""bash
+                             conda activate exatrkx-test
+                             python run_pipeline.py --run-stage """ + command_line_args)
+            else:
+                run_stage(**config)
+                
         
-def run_stage(args):
-    print("Running stage, with args:")
-    print(args)
+
+@autocast        
+def run_stage(**model_config):
+    print("Running stage, with args")
+    sys.path.append(model_config["model_library"])
     
-        # Define a logger (default: Weights & Biases)
-#         logger = get_logger(model_config, resume_id)
+    # Define a logger (default: Weights & Biases)
+    logger = get_logger(model_config)
 
-#         # Load the model and configuration file for this stage
-#         model_class = build_model(stage, pipeline_config)
-#         model = model_class(model_config)
+    # Load the model and configuration file for this stage
+    model_class = build_model(model_config)
+    model = model_class(model_config)
 
-#         # Load the trainer, handling any resume conditions
-#         trainer = build_trainer(model_config, logger, resume_id, pipeline_config)
+    # Load the trainer, handling any resume conditions
+    trainer = build_trainer(model_config, logger)
 
-#         # Run training
-#         trainer.fit(model)
+    # Run training
+    trainer.fit(model)
 
-#         # Run testing and, if requested, inference callbacks to continue the pipeline
-#         trainer.test()
+    # Run testing and, if requested, inference callbacks to continue the pipeline
+    trainer.test()
 
 if __name__=="__main__":
 
@@ -100,6 +106,6 @@ if __name__=="__main__":
     args = parse_pipeline()
     print("Parsed args:", args)
     if args.run_stage:
-        run_stage(args)
+        run_stage(**vars(args))
     else:
         main(args)
