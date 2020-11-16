@@ -26,18 +26,6 @@ def parse_pipeline():
     
     return parser.parse_args()
 
-def parse_stage():
-
-    """Parse command line arguments."""
-
-    parser = argparse.ArgumentParser('run_pipeline.py')
-    add_arg = parser.add_argument
-    parsed, unknown = parser.parse_known_args()
-    
-    [add_arg(arg, nargs="+") for arg in unknown if arg.startswith(("-", "--"))]
-    
-    return parser.parse_args()
-
 def main(args):
 
     with open(args.pipeline_config) as f:
