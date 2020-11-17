@@ -13,22 +13,20 @@ from torch_cluster import radius_graph
 import numpy as np
 
 # Local Imports
-from .utils import graph_intersection
+from .utils import load_dataset, graph_intersection
 if torch.cuda.is_available():
     from .utils import build_edges, res
     device = 'cuda'
 else:
     device = 'cpu'
 
-def load_datasets(input_dir, train_split, seed = 0):
+def split_datasets(input_dir, train_split, pt_cut = 0, seed = 0):
     '''
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
     '''
     torch.manual_seed(seed)
-    all_events = os.listdir(input_dir)
-    all_events = sorted([os.path.join(input_dir, event) for event in all_events])
-    loaded_events = [torch.load(event) for event in all_events[:sum(train_split)]]
+    loaded_events = load_dataset(input_dir, sum(train_split), pt_cut)
     train_events, val_events, test_events = random_split(loaded_events, train_split)
 
     return train_events, val_events, test_events
@@ -42,7 +40,7 @@ class EmbeddingBase(LightningModule):
         '''
         # Assign hyperparameters
         self.hparams = hparams
-        self.trainset, self.valset, self.testset = load_datasets(self.hparams["input_dir"], self.hparams["train_split"])
+        self.trainset, self.valset, self.testset = split_datasets(self.hparams["input_dir"], self.hparams["train_split"], self.hparams["pt_min"])
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
@@ -94,8 +92,7 @@ class EmbeddingBase(LightningModule):
         else:
             spatial = self(batch.x)
 
-        e_bidir = torch.cat([batch.layerless_true_edges,
-                               torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
+        e_bidir = torch.cat([batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1)
 
         e_spatial = torch.empty([2,0], dtype=torch.int64, device=self.device)
 
@@ -123,23 +120,19 @@ class EmbeddingBase(LightningModule):
 
         loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
 
-        result = pl.TrainResult(minimize=loss)
-        result.log('train_loss', loss, prog_bar=True)
+        self.log('train_loss', loss)
 
-        return result
-
-    def validation_step(self, batch, batch_idx):
-        """
-        Step to evaluate the model's performance
-        """
-
+        return loss
+    
+    
+    def shared_evaluation(self, batch, batch_idx):
+        
         if 'ci' in self.hparams["regime"]:
             spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
         else:
             spatial = self(batch.x)
-
-        e_bidir = torch.cat([batch.layerless_true_edges,
-                               torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
+            
+        e_bidir = torch.cat([batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1)
 
         # Get random edge list
         e_spatial = (build_edges(spatial, self.hparams["r_val"], 100, res)
@@ -155,20 +148,39 @@ class EmbeddingBase(LightningModule):
         neighbors = spatial.index_select(0, e_spatial[0])
         d = torch.sum((reference - neighbors)**2, dim=-1)
 
-        val_loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
-
-        result = pl.EvalResult(checkpoint_on=val_loss)
-        result.log('val_loss', val_loss, prog_bar=True)
+        loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
 
         cluster_true = 2*len(batch.layerless_true_edges[0])
         cluster_true_positive = y_cluster.sum()
         cluster_positive = len(e_spatial[0])
+        
+        eff = torch.tensor(cluster_true_positive / cluster_true)
+        pur = torch.tensor(cluster_true_positive / cluster_positive)
 
-        result.log_dict({'eff': torch.tensor(cluster_true_positive/cluster_true), 'pur': torch.tensor(cluster_true_positive/cluster_positive)}, prog_bar=True)
+        current_lr = self.optimizers().param_groups[0]['lr']
+        self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur, "current_lr": current_lr})
+        
+        return loss
+        
+    def validation_step(self, batch, batch_idx):
+        """
+        Step to evaluate the model's performance
+        """
 
-        return result
+        val_loss = self.shared_evaluation(batch, batch_idx)
 
-    def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_idx, second_order_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
+        return val_loss
+    
+    def test_step(self, batch, batch_idx):
+        """
+        Step to evaluate the model's performance
+        """
+
+        test_loss = self.shared_evaluation(batch, batch_idx)
+
+        return test_loss
+
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
         """
         Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
         """
@@ -178,7 +190,7 @@ class EmbeddingBase(LightningModule):
             lr_scale = min(1., float(self.trainer.global_step + 1) / self.hparams["warmup"])
             for pg in optimizer.param_groups:
                 pg['lr'] = lr_scale * self.hparams["lr"]
-
+        
         # update params
-        optimizer.step()
+        optimizer.step(closure=optimizer_closure)
         optimizer.zero_grad()

@@ -18,21 +18,17 @@ from itertools import permutations
 import itertools
 
 # Locals
-from .cell_direction_utils.utils import get_one_event
+from .cell_utils import get_one_event
 
 def get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise):
 
     event_file = data.event_file
     evtid = event_file[-4:]
-    print("Cell features for", evtid)
-
+    
     hits, truth = get_one_event(event_file,
                   detector_orig,
-                  detector_proc,
-                  remove_endcaps= (not endcaps),
-                  remove_noise= (not noise),
-                  pt_cut=0)
-
+                  detector_proc)
+    
     hid = pd.DataFrame(data.hid.numpy(), columns = ["hit_id"])
     cell_data = torch.from_numpy((hid.merge(hits, on="hit_id")[cell_features]).to_numpy()).float()
     data.cell_data = cell_data
@@ -97,7 +93,7 @@ def build_event(event_file, pt_min, feature_scale, adjacent=True, endcaps=False,
                 e.extend(list(itertools.product(i, j)))
 
         layerless_true_edges = np.array(e).T
-        print("Layerless truth graph built for", event_file, "with size", layerless_true_edges.shape)
+        logging.info("Layerless truth graph built for {} with size {}".format(event_file, layerless_true_edges.shape))
 
     if layerwise:
         # Get true edge list using the ordering of layers
@@ -110,33 +106,32 @@ def build_event(event_file, pt_min, feature_scale, adjacent=True, endcaps=False,
         res = np.split(idx_sort, idx_start[1:])
         layerwise_true_edges = np.concatenate([list(permutations(i, r=2)) for i in res if len(list(permutations(i, r=2))) > 0]).T
         if adjacent: layerwise_true_edges = layerwise_true_edges[:, (layers[layerwise_true_edges[1]] - layers[layerwise_true_edges[0]] == 1)]
-        print("Layerwise truth graph built for", event_file, "with size", layerwise_true_edges.shape)
+        logging.info("Layerwise truth graph built for {} with size {}".format(event_file, layerwise_true_edges.shape))
 
     return hits[['r', 'phi', 'z']].to_numpy() / feature_scale, hits.particle_id.to_numpy(), layers, layerless_true_edges, layerwise_true_edges, hits['hit_id'].to_numpy()
 
-def prepare_event(event_file, detector_orig, detector_proc, cell_features, output_dir=None, pt_min=0, adjacent=True, endcaps=False, layerless=True, layerwise=True, noise=False, cell_information=True, **kwargs):
+def prepare_event(event_file, detector_orig, detector_proc, cell_features, progressbar=None, output_dir=None, pt_min=0, adjacent=True, endcaps=False, layerless=True, layerwise=True, noise=False, cell_information=True, overwrite=False, **kwargs):
 
-    evtid = int(event_file[-9:])
-    filename = os.path.join(output_dir, str(evtid))
+    try:
+        evtid = int(event_file[-9:])
+        filename = os.path.join(output_dir, str(evtid))
 
-    if not os.path.exists(filename):
-    
-        print("Preparing", evtid)
+        if not os.path.exists(filename) or overwrite:
+            logging.info("Preparing event {}".format(evtid))
+            feature_scale = [1000, np.pi, 1000]
 
-        feature_scale = [1000, np.pi, 1000]
+            X, pid, layers, layerless_true_edges, layerwise_true_edges, hid = build_event(event_file, pt_min, feature_scale, adjacent=adjacent, endcaps=endcaps, layerless=layerless, layerwise=layerwise, noise=noise)
 
-        X, pid, layers, layerless_true_edges, layerwise_true_edges, hid = build_event(event_file, pt_min, feature_scale, adjacent=adjacent, endcaps=endcaps, layerless=layerless, layerwise=layerwise, noise=noise)
+            data = Data(x = torch.from_numpy(X).float(), pid = torch.from_numpy(pid), layers=torch.from_numpy(layers), event_file=event_file, hid = torch.from_numpy(hid))
+            if layerless_true_edges is not None: data.layerless_true_edges = torch.from_numpy(layerless_true_edges)
+            if layerwise_true_edges is not None: data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
 
-        data = Data(x = torch.from_numpy(X).float(), pid = torch.from_numpy(pid), layers=torch.from_numpy(layers), event_file=event_file, hid = torch.from_numpy(hid))
-        if layerless_true_edges is not None: data.layerless_true_edges = torch.from_numpy(layerless_true_edges)
-        if layerwise_true_edges is not None: data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
+            if cell_information:
+                data = get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise)
 
-        if cell_information:
-            data = get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise)
-
-        with open(filename, 'wb') as pickle_file:
-            torch.save(data, pickle_file)
-
-    else:
-        
-        print(evtid, "already exists")
+            with open(filename, 'wb') as pickle_file:
+                torch.save(data, pickle_file)
+        else:
+            print(evtid, "already exists")
+    except:
+        print("Exception with file:", event_file)

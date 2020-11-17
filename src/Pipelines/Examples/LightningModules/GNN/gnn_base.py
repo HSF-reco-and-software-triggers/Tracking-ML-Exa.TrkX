@@ -23,11 +23,11 @@ class GNNBase(LightningModule):
         self.hparams = hparams
         self.hparams["posted_alert"] = False
         
+    def setup(self, stage):
         # Handle any subset of [train, val, test] data split, assuming that ordering
         input_dirs = [None, None, None]
-        input_dirs[:len(hparams["datatype_names"])] = [os.path.join(hparams["input_dir"], datatype) for datatype in hparams["datatype_names"]]
-        self.trainset, self.valset, self.testset = [load_dataset(input_dir, hparams["datatype_split"][i], hparams["pt_min"]) for i, input_dir in enumerate(input_dirs)]
-        print("Data processed")
+        input_dirs[:len(self.hparams["datatype_names"])] = [os.path.join(self.hparams["input_dir"], datatype) for datatype in self.hparams["datatype_names"]]
+        self.trainset, self.valset, self.testset = [load_dataset(input_dir, self.hparams["datatype_split"][i]) for i, input_dir in enumerate(input_dirs)]
         
     def train_dataloader(self):
         if self.trainset is not None:

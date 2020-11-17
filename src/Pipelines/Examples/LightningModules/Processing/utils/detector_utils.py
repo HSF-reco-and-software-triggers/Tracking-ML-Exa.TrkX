@@ -7,33 +7,8 @@ import numpy as np
 import pandas as pd
 import functools
 
-import multiprocessing
-from multiprocessing.dummy import Pool as ThreadPool
-from multiprocessing import Pool as ProcessPool
-
 import trackml.dataset
 
-from .extract_direction import extract_dir
-
-#############################################
-#           FEATURE_AUGMENTATION            #
-#############################################
-def augment_hit_features(hits, cells, detector_orig, detector_proc):
-
-    cell_stats = get_cell_stats(cells)
-    hits['cell_count'] = cell_stats[:,0]
-    hits['cell_val']   = cell_stats[:,1]
-
-    hits = extract_dir(hits, cells, detector_orig, detector_proc)
-
-    return hits
-
-def get_cell_stats(cells):
-    hit_cells = cells.groupby(['hit_id']).value.count().values
-    hit_value = cells.groupby(['hit_id']).value.sum().values
-    cell_stats = np.hstack((hit_cells.reshape(-1,1), hit_value.reshape(-1,1)))
-    cell_stats = cell_stats.astype(np.float32)
-    return cell_stats
 
 #############################################
 #               DETECTOR UTILS              #
@@ -151,90 +126,3 @@ class Detector_Pixel_Size(object):
             v, l, m = tuple(map(int, (r.volume_id, r.layer_id, r.module_id)))
             self.all_s[v, l, m, 0] = r.pitch_u
             self.all_s[v, l, m, 1] = r.pitch_v
-
-
-###########################################
-#               EVENT LOADING             #
-###########################################
-
-
-def get_one_event(event_path,
-                  detector_orig,
-                  detector_proc,
-                  remove_endcaps,
-                  remove_noise,
-                  pt_cut):
-
-    print("Loading event {} with a {} pT cut".format(event_path, pt_cut))
-
-    hits, cells, particles, truth = trackml.dataset.load_event(event_path)
-    pt = np.sqrt(particles.px**2 + particles.py**2)
-    particles = particles.assign(pt=pt)
-
-    if remove_noise:
-        hits, cells, truth = remove_all_noise(hits, cells, truth)
-
-    if remove_endcaps:
-        hits, cells, truth = remove_all_endcaps(hits, cells, truth)
-    truth = truth.merge(particles[['particle_id', 'pt']], on='particle_id')
-    truth = truth.sort_values(by='hit_id')
-    truth = truth.set_index([truth['hit_id']-1])
-    hits, truth, cells = apply_pt_cut(hits, truth, cells, pt_cut)
-
-    try:
-        hits = augment_hit_features(hits, cells, detector_orig, detector_proc)
-    except Exception as e:
-        print(e)
-        print("Number hits:  {}".format(hits.shape))
-        print("Number cells: {}".format(cells.shape))
-        raise Exception("Error augmenting hits.")
-    return [hits, truth]
-
-
-#########################################################
-#               PICKLE DATASET LOAD / SAVE              #
-#########################################################
-# def get_event_paths(data_path, data_dir_name):
-#     train_dir = os.path.join(data_path, data_dir_name)
-#     event_names = [e.split('-')[0] for e in os.listdir(train_dir)]
-#     event_names = list(set(event_names))
-#     event_names.sort()
-#     event_paths = [os.path.join(train_dir, e) for e in event_names]
-#     return event_paths
-
-
-# def save_preprocessed_event(event, preproc_path, preproc_file):
-#     os.makedirs(preproc_path, exist_ok=True)
-#     with open(preproc_file, 'wb') as f:
-#         pickle.dump(event, f)
-
-# def preprocess_one_event(event_path,
-#                          preproc_path,
-#                          percent_keep,
-#                          detector_orig,
-#                          detector_proc,
-#                          remove_endcaps,
-#                          remove_noise,
-#                          pt_cut,
-#                          force):
-
-#     i, event_path = event_path
-#     if (i%10)==0:
-#         print("{:5d}".format(i))
-#     event_name = event_path.split('/')[-2] + "_" + event_path.split('/')[-1]
-#     preproc_file = os.path.join(preproc_path, "{}.pickle".format(event_name))
-#     if not os.path.exists(preproc_file) or force:
-#         try:
-#             event = get_one_event(event_path,
-#                                   detector_orig,
-#                                   detector_proc,
-#                                   remove_endcaps,
-#                                   remove_noise,
-#                                   pt_cut)
-
-#             save_preprocessed_event(event, preproc_path, preproc_file)
-#         except Exception as e:
-#             print(e)
-#             exit()
-#     else:
-#         print("File already exists at {}".format(preproc_file))

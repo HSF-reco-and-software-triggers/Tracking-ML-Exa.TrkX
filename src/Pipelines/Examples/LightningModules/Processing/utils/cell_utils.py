@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import logging
 
+import trackml.dataset
+
 #####################################################
 #                   UTILD PANDAS                    #
 #####################################################
@@ -263,31 +265,50 @@ def check_diff(h1, h2, name):
     n2 = h2[name].values
     print(name, max(np.absolute(n1-n2)))
 
-def extract_dir(hits, cells, detector_orig, detector_proc):
-    # print(cells.keys())
-    # print(hits.shape, cells.shape)
-    # hits_subset = hits[:100]
-    # cells_subset = cells.loc[cells['hit_id'].isin(hits_subset['hit_id'])]
-    # print(hits_subset.shape, cells_subset.shape, '\n')
-    # t0 = time.time()
-    # # h1 = extract_dir_old(hits_subset, cells, detector_orig)
-    # h1 = extract_dir_old(hits, cells, detector_orig)
-    # t1 = time.time()
-    # print("\nnb2\n")
-    # # h2 = extract_dir_new(hits_subset, cells_subset, detector_proc)
-    # h2 = extract_dir_new(hits, cells, detector_proc)
-    # t2 = time.time()
-    # print("{:8.3f}s for old".format(t1-t0))
-    # print("{:8.3f}s for new".format(t2-t1))
-    # for n in ['x', 'y', 'z', 'leta', 'lphi', 'lx', 'ly', 'lz', 'geta', 'gphi']:
-    #     check_diff(h1, h2, n)
-    # # eta1 = h1['geta'].values
-    # # eta2 = h2['geta'].values
-    # # print(max(eta1-eta2))
-    # print("made it to end")
-    # print(h1[:10])
-    # print(h2[:10])
-    # exit()
+#############################################
+#           FEATURE_AUGMENTATION            #
+#############################################
 
-    return extract_dir_new(hits, cells, detector_proc)
-    # return extract_dir_old(hits, cells, detector_orig)
+def augment_hit_features(hits, cells, detector_orig, detector_proc):
+
+    cell_stats = get_cell_stats(cells)
+    hits['cell_count'] = cell_stats[:,0]
+    hits['cell_val']   = cell_stats[:,1]
+
+    hits = extract_dir_new(hits, cells, detector_proc)
+
+    return hits
+
+def get_cell_stats(cells):
+    hit_cells = cells.groupby(['hit_id']).value.count().values
+    hit_value = cells.groupby(['hit_id']).value.sum().values
+    cell_stats = np.hstack((hit_cells.reshape(-1,1), hit_value.reshape(-1,1)))
+    cell_stats = cell_stats.astype(np.float32)
+    return cell_stats
+
+
+###########################################
+#               EVENT LOADING             #
+###########################################
+
+
+def get_one_event(event_path,
+                  detector_orig,
+                  detector_proc):
+
+    hits, cells, particles, truth = trackml.dataset.load_event(event_path)
+    pt = np.sqrt(particles.px**2 + particles.py**2)
+    particles = particles.assign(pt=pt)
+
+    truth = truth.merge(particles[['particle_id', 'pt']], on='particle_id')
+    truth = truth.sort_values(by='hit_id')
+    truth = truth.set_index([truth['hit_id']-1])
+
+    try:
+        hits = augment_hit_features(hits, cells, detector_orig, detector_proc)
+    except Exception as e:
+        print(e)
+        print("Number hits:  {}".format(hits.shape))
+        print("Number cells: {}".format(cells.shape))
+        raise Exception("Error augmenting hits.")
+    return [hits, truth]

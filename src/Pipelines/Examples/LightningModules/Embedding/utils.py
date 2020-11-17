@@ -4,6 +4,8 @@ import faiss
 import torch
 import scipy as sp
 import numpy as np
+import pandas as pd
+import trackml.dataset
 
 if torch.cuda.is_available():
     res = faiss.StandardGpuResources()
@@ -11,6 +13,66 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
+def load_dataset(input_dir, num, pt_cut):
+    if input_dir is not None:
+        all_events = os.listdir(input_dir)
+        all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+        loaded_events = [torch.load(event, map_location=torch.device('cpu')) for event in all_events[:num]]
+        loaded_events = filter_hit_pt(loaded_events, pt_cut)
+        return loaded_events
+    else:
+        return None
+
+def fetch_pt(event):
+    truth = trackml.dataset.load_event(
+        event.event_file, parts=['truth'])[0]
+    hid = event.hid
+    merged_truth = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(truth, on="hit_id")
+    pt = np.sqrt(merged_truth.tpx**2 + merged_truth.tpy**2)
+    
+    return pt
+    
+def filter_edge_pt(events, pt_cut=0):
+    
+    if pt_cut > 0:
+        for event in events:
+            pt = fetch_pt(event)
+            edge_subset = pt.to_numpy()[event.edge_index] > pt_cut
+            combined_subset = edge_subset[0] & edge_subset[1]
+            event.edge_index = event.edge_index[:, combined_subset]
+            event.y = event.y[combined_subset]
+            event.y_pid = event.y_pid[combined_subset]
+    
+    return events
+
+def filter_hit_pt(events, pt_cut=0):
+    
+    if pt_cut > 0:
+        for event in events:
+            pt = fetch_pt(event)
+            hit_subset = pt.to_numpy() > pt_cut
+            event.cell_data = event.cell_data[hit_subset]
+            event.hid = event.hid[hit_subset]
+            event.x = event.x[hit_subset]
+            event.pid = event.pid[hit_subset]
+            event.layers = event.layers[hit_subset]
+            if 'layerless_true_edges' in event.__dict__.keys():
+                event.layerless_true_edges = reset_edge_id(hit_subset, event.layerless_true_edges)
+            if 'layerwise_true_edges' in event.__dict__.keys():
+                event.layerwise_true_edges = reset_edge_id(hit_subset, event.layerwise_true_edges)
+    
+    return events
+
+def reset_edge_id(subset, graph):
+    subset_ind = np.where(subset)[0]
+    filler = -np.ones((graph.max()+1,))
+    filler[subset_ind] = np.arange(len(subset_ind))
+    graph = torch.from_numpy(filler[graph])
+    exist_edges = (graph[0] >= 0) & (graph[1] >= 0)
+    graph = graph[:, exist_edges]
+    
+    return graph
+    
 def graph_intersection(pred_graph, truth_graph):
     array_size = max(pred_graph.max().item(), truth_graph.max().item()) + 1
 

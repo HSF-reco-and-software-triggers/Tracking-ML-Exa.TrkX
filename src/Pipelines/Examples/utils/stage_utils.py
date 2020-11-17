@@ -73,10 +73,10 @@ def dict_to_args(config):
 
 def find_model(model_set, model_name, model_library):
 
-    # List all modules in the set/Models directory
+    # List all modules in the set/ and set/Models directories
     module_list = [os.path.splitext(name)[0] for
                    name in os.listdir(os.path.join(model_library, model_set, "Models")) if name.endswith(".py")]
-
+    
     # Import all modules in the set/Models directory and find model_name
     imported_module_list = [importlib.import_module('.'.join([model_set, "Models", module])) for module in module_list]
     names = [mod for mod in imported_module_list if model_name in getattr(mod, '__all__', [n for n in dir(mod) if not n.startswith('_')])]
@@ -138,7 +138,7 @@ def build_trainer(model_config, logger):
     # Handle resume condition
     if model_config["resume_id"] is None:
         # The simple case: We start fresh
-        trainer = pl.Trainer(max_epochs = model_config['max_epochs'], gpus=gpus, logger=logger, checkpoint_callback=checkpoint_callback, callbacks=callback_objects(model_config), amp_level='O2', precision=16)
+        trainer = pl.Trainer(max_epochs = model_config['max_epochs'], gpus=gpus, logger=logger, checkpoint_callback=checkpoint_callback, callbacks=callback_objects(model_config))
     else:
         # Here we assume
         trainer = pl.Trainer(resume_from_checkpoint=model_filepath, max_epochs = model_config['max_epochs'], gpus=gpus, logger=logger, checkpoint_callback=checkpoint_callback, callbacks=callback_objects(model_config))

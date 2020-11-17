@@ -5,8 +5,8 @@ detector_path: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/detectors.csv
 n_files: 32
 n_tasks: 1
 n_workers: 32
+overwrite: True
 
-pt_min: 0
 endcaps: True
 noise: False
 adjacent: True

@@ -5,7 +5,7 @@ import os
 # 3rd party imports
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import Callback
-from .embedding_base import EmbeddingBase
+from ..embedding_base import EmbeddingBase
 from torch.nn import Linear
 import torch.nn as nn
 from torch_cluster import radius_graph
@@ -13,7 +13,7 @@ import torch
 from torch_geometric.data import DataLoader
 
 # Local imports
-from .utils import graph_intersection
+from ..utils import graph_intersection
 
 class LayerlessEmbedding(EmbeddingBase):
 

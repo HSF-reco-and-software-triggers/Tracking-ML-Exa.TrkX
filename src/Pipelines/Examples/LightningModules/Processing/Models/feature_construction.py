@@ -10,10 +10,12 @@ import pytorch_lightning as pl
 from pytorch_lightning import LightningDataModule
 from torch.nn import Linear
 import torch.nn as nn
+from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
 # Local imports
-from .utils import prepare_event
-from .cell_direction_utils.utils import load_detector
+from ..utils.event_utils import prepare_event
+from ..utils.detector_utils import load_detector
 
 class FeatureStore(LightningDataModule):
 
@@ -28,7 +30,8 @@ class FeatureStore(LightningDataModule):
 
         self.n_tasks = self.hparams['n_tasks']
         self.task = 0 if "task" not in self.hparams else self.hparams['task']
-        self.n_workers = self.hparams['n_workers']
+        self.n_workers = self.hparams['n_workers'] if "n_workers" in self.hparams else len(os.sched_getaffinity(0))
+        self.show_progress = self.hparams['show_progress'] if 'show_progress' in self.hparams else True
 
     def prepare_data(self):
         # Find the input files
@@ -47,9 +50,8 @@ class FeatureStore(LightningDataModule):
         # output_dir = os.path.expandvars(self.output_dir) FIGURE OUT HOW TO USE THIS!
         os.makedirs(self.output_dir, exist_ok=True)
         print('Writing outputs to ' + self.output_dir)
-
-        # Process input files with a worker pool
-        with mp.Pool(processes=self.n_workers) as pool:
-            process_func = partial(prepare_event, detector_orig=detector_orig, detector_proc=detector_proc, cell_features=cell_features, **self.hparams)
-            pool.map(process_func, all_events)
+            
+        # Process input files with a worker pool and progress bar
+        process_func = partial(prepare_event, detector_orig=detector_orig, detector_proc=detector_proc, cell_features=cell_features, **self.hparams)
+        process_map(process_func, all_events, max_workers = self.n_workers)
 
