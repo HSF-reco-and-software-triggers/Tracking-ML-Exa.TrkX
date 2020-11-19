@@ -1,6 +1,7 @@
 <div align="center">
 
 # Tracking with ML
+![logo](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/final_wide.png)
 ### Exa.TrkX Collaboration
 
 
