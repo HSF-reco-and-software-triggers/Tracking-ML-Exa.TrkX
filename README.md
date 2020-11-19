@@ -1,7 +1,11 @@
 <div align="center">
 
 # Tracking with ML
-![logo](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/final_wide.png)
+
+<figure>
+    <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/final_wide.png" width="250"/>
+</figure>
+    
 ### Exa.TrkX Collaboration
 
 
@@ -20,7 +24,9 @@ To start as quickly as possible, clone the repository and follow the steps in [Q
 
 Once up and running, you may want to consider more complex ML [Models](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/models/overview/). Many of these are built on other libraries (for example [Pytorch Geometric](https://github.com/rusty1s/pytorch_geometric)).
 
+<div align="center">
 <figure>
-  <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/application_diagram_1.png"/>
+  <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/application_diagram_1.png" width="600"/>
   <figcaption>The repository through an application lens, using Pipelines for specific physics goals</figcaption>
 </figure>
+</div>
