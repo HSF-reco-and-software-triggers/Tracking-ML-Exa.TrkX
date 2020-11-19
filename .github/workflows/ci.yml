@@ -19,6 +19,8 @@ jobs:
         run: pip install torch-scatter==latest+cpu torch-sparse==latest+cpu torch-cluster==latest+cpu torch-spline-conv==latest+cpu -f https://pytorch-geometric.com/whl/torch-1.7.0.html
       - name: Install PyGeometric 2
         run: pip install torch-geometric
+      - name: Install TrackML
+        run: pip install git+https://github.com/LAL/trackml-library
       - name: Install Docs
         run: pip install mkdocs-material mkdocstrings
       - name: Test Import
