@@ -46,9 +46,7 @@ def main(args):
 
         # Get config file, from given location OR from ckpnt
         model_config = load_config(stage, resume_id, libraries)        
-        model_config_combos = combo_config(model_config)
-    
-        print(model_config_combos[0])
+        model_config_combos = combo_config(model_config) if resume_id is None else [model_config]
     
         for config in model_config_combos:
             if args.batch:

@@ -24,20 +24,23 @@ def load_dataset(input_dir, num, pt_cut):
         return None
 
 def fetch_pt(event):
+    # Handle event in batched form
+    event_file = event.event_file[0] if type(event.event_file) is list else event.event_file
+    # Load the truth data from the event directory
     truth = trackml.dataset.load_event(
-        event.event_file, parts=['truth'])[0]
-    hid = event.hid
+        event_file, parts=['truth'])[0]
+    hid = event.hid[0] if type(event.hid) is list else event.hid
     merged_truth = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(truth, on="hit_id")
     pt = np.sqrt(merged_truth.tpx**2 + merged_truth.tpy**2)
     
-    return pt
+    return pt.to_numpy()
     
 def filter_edge_pt(events, pt_cut=0):
     
     if pt_cut > 0:
         for event in events:
             pt = fetch_pt(event)
-            edge_subset = pt.to_numpy()[event.edge_index] > pt_cut
+            edge_subset = pt[event.edge_index] > pt_cut
             combined_subset = edge_subset[0] & edge_subset[1]
             event.edge_index = event.edge_index[:, combined_subset]
             event.y = event.y[combined_subset]
@@ -50,7 +53,7 @@ def filter_hit_pt(events, pt_cut=0):
     if pt_cut > 0:
         for event in events:
             pt = fetch_pt(event)
-            hit_subset = pt.to_numpy() > pt_cut
+            hit_subset = pt > pt_cut
             event.cell_data = event.cell_data[hit_subset]
             event.hid = event.hid[hit_subset]
             event.x = event.x[hit_subset]
@@ -67,7 +70,7 @@ def reset_edge_id(subset, graph):
     subset_ind = np.where(subset)[0]
     filler = -np.ones((graph.max()+1,))
     filler[subset_ind] = np.arange(len(subset_ind))
-    graph = torch.from_numpy(filler[graph])
+    graph = torch.from_numpy(filler[graph]).long()
     exist_edges = (graph[0] >= 0) & (graph[1] >= 0)
     graph = graph[:, exist_edges]
     

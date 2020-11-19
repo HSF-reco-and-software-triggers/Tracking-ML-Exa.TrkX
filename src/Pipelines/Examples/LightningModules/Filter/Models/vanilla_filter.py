@@ -94,7 +94,6 @@ class FilterInferenceCallback(Callback):
 
         sections = 8
         cut_list = []
-        val_loss = torch.tensor(0).float()
         for j in range(sections):
             subset_ind = torch.chunk(torch.arange(batch.e_radius.shape[1]), sections)[j]
             output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()

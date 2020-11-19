@@ -1,6 +1,6 @@
 # Input/output configuration
 input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/feature_store_endcaps
-output_dir: global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/embedding_processed/0_pt_cut_endcaps
+output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/embedding_processed/0_pt_cut_endcaps
 project: EmbeddingStudy
 overwrite: True
 
@@ -21,7 +21,8 @@ emb_dim: 8
 weight: 4
 randomisation: 2
 r_train: 1
-r_val: 0.5
+r_val: 1
+r_test: 1.5
 knn: 20
 warmup: 500
 margin: 1

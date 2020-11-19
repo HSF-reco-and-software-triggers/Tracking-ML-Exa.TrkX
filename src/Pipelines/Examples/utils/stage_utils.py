@@ -15,7 +15,6 @@ def handle_config_cases(some_config):
     """
     Simply used to standardise the possible config entries. We always want a list
     """
-    print("callback in:", some_config)
     if type(some_config) is list:
         return some_config
     if some_config is None:
@@ -106,18 +105,18 @@ def get_logger(model_config):
     return wandb_logger
 
 
-def callback_objects(model_config):
+def callback_objects(model_config, lr_logger=False):
     
     callback_list = model_config["callbacks"]
     callback_list = handle_config_cases(callback_list)
-    print("callback out:", callback_list)
     
     model_set = model_config["set"]
     model_library = model_config["model_library"]
     callback_object_list = [find_model(model_set, callback, model_library)() for callback in callback_list]
-        
-    lr_monitor = LearningRateMonitor(logging_interval='epoch')
-    callback_object_list = callback_object_list + [lr_monitor]
+    
+    if lr_logger:
+        lr_monitor = LearningRateMonitor(logging_interval='epoch')
+        callback_object_list = callback_object_list + [lr_monitor]
     
     logging.info("Callbacks found")
     return callback_object_list

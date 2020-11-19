@@ -20,7 +20,7 @@ if torch.cuda.is_available():
 else:
     device = 'cpu'
 
-def split_datasets(input_dir, train_split, pt_cut = 0, seed = 0):
+def split_datasets(input_dir, train_split, pt_cut = 0, seed = 1):
     '''
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
@@ -40,7 +40,10 @@ class EmbeddingBase(LightningModule):
         '''
         # Assign hyperparameters
         self.hparams = hparams
-        self.trainset, self.valset, self.testset = split_datasets(self.hparams["input_dir"], self.hparams["train_split"], self.hparams["pt_min"])
+        
+    def setup(self, stage):
+        if stage == "fit":
+            self.trainset, self.valset, self.testset = split_datasets(self.hparams["input_dir"], self.hparams["train_split"], self.hparams["pt_min"])
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
@@ -65,7 +68,7 @@ class EmbeddingBase(LightningModule):
         scheduler = [
             {
                 'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
-                'monitor': 'checkpoint_on',
+                'monitor': 'val_loss',
                 'interval': 'epoch',
                 'frequency': 1
             }
@@ -99,6 +102,7 @@ class EmbeddingBase(LightningModule):
         if 'rp' in self.hparams["regime"]:
         # Get random edge list
             n_random = int(self.hparams["randomisation"]*e_bidir.shape[1])
+#             e_spatial = torch.cat([e_spatial, torch.randint(int(e_bidir.min().item()), int(e_bidir.max().item()), (2, n_random), device=self.device)], axis=-1)
             e_spatial = torch.cat([e_spatial, torch.randint(e_bidir.min(), e_bidir.max(), (2, n_random), device=self.device)], axis=-1)
 
         if 'hnm' in self.hparams["regime"]:
@@ -125,7 +129,7 @@ class EmbeddingBase(LightningModule):
         return loss
     
     
-    def shared_evaluation(self, batch, batch_idx):
+    def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False):
         
         if 'ci' in self.hparams["regime"]:
             spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
@@ -134,13 +138,13 @@ class EmbeddingBase(LightningModule):
             
         e_bidir = torch.cat([batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1)
 
-        # Get random edge list
-        e_spatial = (build_edges(spatial, self.hparams["r_val"], 100, res)
+        # Build whole KNN graph
+        e_spatial = (build_edges(spatial, knn_radius, knn_num, res)
                     if torch.cuda.is_available()
-                    else radius_graph(spatial, r=self.hparams["r_val"], max_num_neighbors=1000))
+                    else radius_graph(spatial, r = knn_radius, max_num_neighbors=1000))
 
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-
+        
         hinge = torch.from_numpy(y_cluster).float().to(device)
         hinge[hinge == 0] = -1
 
@@ -150,35 +154,37 @@ class EmbeddingBase(LightningModule):
 
         loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
 
-        cluster_true = 2*len(batch.layerless_true_edges[0])
+        cluster_true = e_bidir.shape[1]
         cluster_true_positive = y_cluster.sum()
         cluster_positive = len(e_spatial[0])
         
         eff = torch.tensor(cluster_true_positive / cluster_true)
         pur = torch.tensor(cluster_true_positive / cluster_positive)
-
-        current_lr = self.optimizers().param_groups[0]['lr']
-        self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur, "current_lr": current_lr})
         
-        return loss
+        current_lr = self.optimizers().param_groups[0]['lr']
+        if log:
+            self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur, "current_lr": current_lr})
+        print(eff, pur)
+        print(batch.event_file)
+        
+        return {"loss": loss, "preds": e_spatial.cpu().numpy(), "truth": y_cluster, "truth_graph": e_bidir.cpu().numpy()}
         
     def validation_step(self, batch, batch_idx):
         """
         Step to evaluate the model's performance
         """
 
-        val_loss = self.shared_evaluation(batch, batch_idx)
+        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_val"], 1000, log=True)
 
-        return val_loss
+        return outputs["loss"]
     
     def test_step(self, batch, batch_idx):
         """
         Step to evaluate the model's performance
         """
+        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_test"], 1000, log=False)
 
-        test_loss = self.shared_evaluation(batch, batch_idx)
-
-        return test_loss
+        return outputs
 
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
         """
