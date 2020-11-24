@@ -2,6 +2,7 @@ import os
 
 import faiss
 import torch
+from torch.utils.data import random_split
 import scipy as sp
 import numpy as np
 import pandas as pd
@@ -23,6 +24,17 @@ def load_dataset(input_dir, num, pt_cut):
     else:
         return None
 
+def split_datasets(input_dir, train_split, pt_cut = 0, seed = 1):
+    '''
+    Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
+    changed across final varied runs, but can be left as default for experimentation.
+    '''
+    torch.manual_seed(seed)
+    loaded_events = load_dataset(input_dir, sum(train_split), pt_cut)
+    train_events, val_events, test_events = random_split(loaded_events, train_split)
+
+    return train_events, val_events, test_events    
+
 def fetch_pt(event):
     # Handle event in batched form
     event_file = event.event_file[0] if type(event.event_file) is list else event.event_file
@@ -34,9 +46,25 @@ def fetch_pt(event):
     pt = np.sqrt(merged_truth.tpx**2 + merged_truth.tpy**2)
     
     return pt.to_numpy()
+
+def fetch_type(event):
+    # Handle event in batched form
+    event_file = event.event_file[0] if type(event.event_file) is list else event.event_file
+    # Load the truth data from the event directory
+    truth, particles = trackml.dataset.load_event(
+        event_file, parts=['truth', 'particles'])
+    hid = event.hid[0] if type(event.hid) is list else event.hid
+    merged_truth = truth.merge(particles, on="particle_id")
+    p_type = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(merged_truth, on="hit_id")
+    p_type = p_type.particle_type.values
+    
+    return p_type
     
 def filter_edge_pt(events, pt_cut=0):
-    
+    # Handle event in batched form
+    if type(events) is not list:
+        events = [events]
+        
     if pt_cut > 0:
         for event in events:
             pt = fetch_pt(event)
@@ -49,7 +77,10 @@ def filter_edge_pt(events, pt_cut=0):
     return events
 
 def filter_hit_pt(events, pt_cut=0):
-    
+    # Handle event in batched form
+    if type(events) is not list:
+        events = [events]
+        
     if pt_cut > 0:
         for event in events:
             pt = fetch_pt(event)
@@ -59,11 +90,17 @@ def filter_hit_pt(events, pt_cut=0):
             event.x = event.x[hit_subset]
             event.pid = event.pid[hit_subset]
             event.layers = event.layers[hit_subset]
+            if 'pt' in event.__dict__.keys():
+                event.pt = event.pt[hit_subset]
             if 'layerless_true_edges' in event.__dict__.keys():
-                event.layerless_true_edges = reset_edge_id(hit_subset, event.layerless_true_edges)
+                event.layerless_true_edges, remaining_edges = reset_edge_id(hit_subset, event.layerless_true_edges)
+                
             if 'layerwise_true_edges' in event.__dict__.keys():
-                event.layerwise_true_edges = reset_edge_id(hit_subset, event.layerwise_true_edges)
-    
+                event.layerwise_true_edges, remaining_edges = reset_edge_id(hit_subset, event.layerwise_true_edges)
+                
+            if 'weights' in event.__dict__.keys():
+                    event.weights = event.weights[remaining_edges]
+            
     return events
 
 def reset_edge_id(subset, graph):
@@ -74,21 +111,33 @@ def reset_edge_id(subset, graph):
     exist_edges = (graph[0] >= 0) & (graph[1] >= 0)
     graph = graph[:, exist_edges]
     
-    return graph
+    return graph, exist_edges
     
-def graph_intersection(pred_graph, truth_graph):
+def graph_intersection(pred_graph, truth_graph, using_weights=False, weights_bidir=None):
+
     array_size = max(pred_graph.max().item(), truth_graph.max().item()) + 1
 
     l1 = pred_graph.cpu().numpy()
     l2 = truth_graph.cpu().numpy()
     e_1 = sp.sparse.coo_matrix((np.ones(l1.shape[1]), l1), shape=(array_size, array_size)).tocsr()
     e_2 = sp.sparse.coo_matrix((np.ones(l2.shape[1]), l2), shape=(array_size, array_size)).tocsr()
-    e_intersection = (e_1.multiply(e_2) - ((e_1 - e_2)>0)).tocoo()
-
+    
+    e_intersection = (e_1.multiply(e_2) - ((e_1 - e_2)>0))
+    
+    if using_weights:
+        weights_list = weights_bidir.cpu().numpy()
+        weights_sparse = sp.sparse.coo_matrix((weights_list, l2), shape=(array_size, array_size)).tocsr()
+        new_weights = weights_sparse[e_intersection.astype('bool')]
+        new_weights = torch.from_numpy(np.array(new_weights)[0])
+    
+    e_intersection = e_intersection.tocoo()    
     new_pred_graph = torch.from_numpy(np.vstack([e_intersection.row, e_intersection.col])).long().to(device)
-    y = e_intersection.data > 0
-
-    return new_pred_graph, y
+    y = torch.from_numpy(e_intersection.data > 0).to(device)
+    
+    if using_weights:
+        return new_pred_graph, y, new_weights
+    else:
+        return new_pred_graph, y
 
 def build_edges(spatial, r_max, k_max, res, return_indices=False):
 

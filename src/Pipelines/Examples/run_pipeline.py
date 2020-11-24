@@ -18,7 +18,7 @@ def parse_pipeline():
     add_arg('--verbose', action="store_true")
     add_arg('--run-stage', action="store_true")
     add_arg('pipeline_config', nargs='?', default='configs/pipeline_default.yaml')
-    add_arg('batch_config', nargs='?', default='configs/batch_default.yaml')
+    add_arg('batch_config', nargs='?', default='configs/batch_gpu_default.yaml')
 
     parsed, unknown = parser.parse_known_args()
     
@@ -54,7 +54,7 @@ def main(args):
                 slurm = Slurm(**batch_config)
                 slurm.sbatch("""bash
                              conda activate exatrkx-test
-                             python run_pipeline.py --run-stage """ + command_line_args)
+                             python run_pipeline.py --run-stage """ + command_line_args) # REFACTOR VERBOSE FLAG INTO COMMAND_LINE_ARGS
             else:
                 run_stage(**config)
                 
@@ -102,7 +102,7 @@ if __name__=="__main__":
     
     logging_level = logging.INFO if args.verbose else logging.WARNING
     logging.basicConfig(level=logging_level)
-    logging.info("Parsed args:", args)
+    logging.info("Parsed args:".format(args))
     
     if args.run_stage:
         run_stage(**vars(args))

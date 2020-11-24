@@ -128,7 +128,7 @@ def build_trainer(model_config, logger):
     checkpoint_callback = ModelCheckpoint(
         monitor='val_loss',
         filepath=model_filepath,
-        save_top_k=1,
+        save_top_k=2,
         save_last=True,
         mode='min')
 

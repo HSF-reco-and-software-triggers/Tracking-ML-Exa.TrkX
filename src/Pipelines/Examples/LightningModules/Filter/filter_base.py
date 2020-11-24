@@ -74,24 +74,27 @@ class FilterBase(LightningModule):
             true_indices = torch.where(batch.y.bool())[0]
             combined_indices = torch.cat([true_indices, fake_indices])
             # Shuffle indices:
-            combined_indices[torch.randperm(len(combined_indices))]
-            weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams) 
+            combined_indices = combined_indices[torch.randperm(len(combined_indices))]
+            positive_weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams) 
                       else torch.tensor(self.hparams['ratio'])) 
 
         else:
             combined_indices = torch.range(batch.e_radius.shape[1])
-            weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams) 
+            positive_weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams) 
                       else torch.tensor((~batch.y.bool()).sum() / batch.y.sum())) 
 
         output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:,combined_indices], emb).squeeze()
                   if ('ci' in self.hparams["regime"])
                   else self(batch.x, batch.e_radius[:,combined_indices], emb).squeeze())
-
+        
+        manual_weights = batch.weights[combined_indices]
+        manual_weights[batch.y[combined_indices] == 0] = 1
+        
         if ('pid' in self.hparams["regime"]):
             y_pid = batch.pid[batch.e_radius[0,combined_indices]] == batch.pid[batch.e_radius[1,combined_indices]]
-            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = positive_weight)
         else:
-            loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices], pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices], weight = manual_weights, pos_weight = weight)
 
         result = pl.TrainResult(minimize=loss)
         result.log('train_loss', loss, prog_bar=True)

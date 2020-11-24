@@ -51,21 +51,23 @@ def select_hits(hits, truth, particles, pt_min=0, endcaps=False, noise=False):
         pt = np.sqrt(particles.px**2 + particles.py**2)
         # Applies pt cut, removes noise hits
         particles = particles[pt > pt_min]
-        truth = (truth[['hit_id', 'particle_id']]
+        truth = (truth[['hit_id', 'particle_id', 'tpx', 'tpy', 'weight']]
                  .merge(particles[['particle_id', 'vx', 'vy', 'vz']], on='particle_id'))
+        truth = truth.assign(pt = np.sqrt(truth.tpx**2 + truth.tpy**2))
     else:
         # Calculate particle transverse momentum
         pt = np.sqrt(truth.tpx**2 + truth.tpy**2)
         # Applies pt cut
         truth = truth[pt > pt_min]
         truth.loc[truth['particle_id'] == 0,'particle_id'] = float('NaN')
+        truth = truth.assign(pt = pt)
     # Calculate derived hits variables
     r = np.sqrt(hits.x**2 + hits.y**2)
     phi = np.arctan2(hits.y, hits.x)
     # Select the data columns we need
     hits = (hits[['hit_id', 'x', 'y', 'z', 'layer']]
             .assign(r=r, phi=phi)
-            .merge(truth[['hit_id', 'particle_id', 'vx', 'vy', 'vz']], on='hit_id'))
+            .merge(truth[['hit_id', 'particle_id', 'vx', 'vy', 'vz', 'pt', 'weight']], on='hit_id'))
     # (DON'T) Remove duplicate hits
 #     hits = hits.loc[
 #         hits.groupby(['particle_id', 'layer'], as_index=False).r.idxmin()
@@ -108,7 +110,11 @@ def build_event(event_file, pt_min, feature_scale, adjacent=True, endcaps=False,
         if adjacent: layerwise_true_edges = layerwise_true_edges[:, (layers[layerwise_true_edges[1]] - layers[layerwise_true_edges[0]] == 1)]
         logging.info("Layerwise truth graph built for {} with size {}".format(event_file, layerwise_true_edges.shape))
 
-    return hits[['r', 'phi', 'z']].to_numpy() / feature_scale, hits.particle_id.to_numpy(), layers, layerless_true_edges, layerwise_true_edges, hits['hit_id'].to_numpy()
+    edge_weights = hits.weight.to_numpy()[layerless_true_edges] if layerless else hits.weight.to_numpy()[layerwise_true_edges]
+    edge_weight_average = (edge_weights[0] + edge_weights[1])/2
+    edge_weight_norm = edge_weight_average / edge_weight_average.mean()
+        
+    return hits[['r', 'phi', 'z']].to_numpy() / feature_scale, hits.particle_id.to_numpy(), layers, layerless_true_edges, layerwise_true_edges, hits['hit_id'].to_numpy(), hits.pt.to_numpy(), edge_weight_norm
 
 def prepare_event(event_file, detector_orig, detector_proc, cell_features, progressbar=None, output_dir=None, pt_min=0, adjacent=True, endcaps=False, layerless=True, layerwise=True, noise=False, cell_information=True, overwrite=False, **kwargs):
 
@@ -120,9 +126,17 @@ def prepare_event(event_file, detector_orig, detector_proc, cell_features, progr
             logging.info("Preparing event {}".format(evtid))
             feature_scale = [1000, np.pi, 1000]
 
-            X, pid, layers, layerless_true_edges, layerwise_true_edges, hid = build_event(event_file, pt_min, feature_scale, adjacent=adjacent, endcaps=endcaps, layerless=layerless, layerwise=layerwise, noise=noise)
+            X, pid, layers, layerless_true_edges, layerwise_true_edges, hid, pt, weights = build_event(event_file, pt_min, feature_scale, adjacent=adjacent, endcaps=endcaps, layerless=layerless, layerwise=layerwise, noise=noise)
 
-            data = Data(x = torch.from_numpy(X).float(), pid = torch.from_numpy(pid), layers=torch.from_numpy(layers), event_file=event_file, hid = torch.from_numpy(hid))
+            data = Data(
+                x = torch.from_numpy(X).float(), 
+                pid = torch.from_numpy(pid), 
+                layers=torch.from_numpy(layers), 
+                event_file=event_file, 
+                hid = torch.from_numpy(hid),
+                pt = torch.from_numpy(pt),
+                weights = torch.from_numpy(weights)
+            )
             if layerless_true_edges is not None: data.layerless_true_edges = torch.from_numpy(layerless_true_edges)
             if layerwise_true_edges is not None: data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
 

@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 
-from ..utils import fetch_pt
+from ..utils import fetch_pt, build_edges, res, graph_intersection
 
 '''
 Class-based Callback inference for integration with Lightning
@@ -93,3 +93,82 @@ class EmbeddingTelemetry(Callback):
         
         os.makedirs(pl_module.hparams.output_dir, exist_ok=True)
         fig.savefig(os.path.join(pl_module.hparams.output_dir, "metrics.pdf"), format="pdf")
+
+        
+class EmbeddingInferenceCallback(Callback):
+    def __init__(self):
+        self.output_dir = None
+        self.overwrite = False
+
+    def on_train_start(self, trainer, pl_module):
+        # Prep the directory to produce inference data to
+        self.output_dir = pl_module.hparams.output_dir
+        self.datatypes = ["train", "val", "test"]
+        os.makedirs(self.output_dir, exist_ok=True)
+        [os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True) for datatype in self.datatypes]
+
+        # Set overwrite setting if it is in config
+        self.overwrite = pl_module.hparams.overwrite if "overwrite" in pl_module.hparams else False
+
+    def on_train_end(self, trainer, pl_module):
+        print("Training finished, running inference to build graphs...")
+
+        # By default, the set of examples propagated through the pipeline will be train+val+test set
+        datasets = {"train": pl_module.trainset, "val": pl_module.valset, "test": pl_module.testset}
+        total_length = sum([len(dataset) for dataset in datasets.values()])
+        batch_incr = 0
+
+        pl_module.eval()
+        with torch.no_grad():
+            for set_idx, (datatype, dataset) in enumerate(datasets.items()):
+                for batch_idx, batch in enumerate(dataset):
+                    percent = (batch_incr / total_length) * 100
+                    sys.stdout.flush()
+                    sys.stdout.write(f'{percent:.01f}% inference complete \r')
+                    
+                    if (not os.path.exists(os.path.join(self.output_dir, datatype, batch.event_file[-4:]))) or self.overwrite:
+                        batch = batch.to(pl_module.device) #Is this step necessary??
+                        batch = self.construct_downstream(batch, pl_module)
+                        self.save_downstream(batch, pl_module, datatype)
+
+                    batch_incr += 1
+
+    def construct_downstream(self, batch, pl_module):
+
+        if 'ci' in pl_module.hparams["regime"]:
+            spatial = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1))
+        else:
+            spatial = pl_module(batch.x)
+
+        # Make truth bidirectional
+        e_bidir = torch.cat([batch.layerless_true_edges,
+                       torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
+        weights_bidir = torch.cat([batch.weights, batch.weights])
+        
+        # Build the radius graph with radius < r_test
+        e_spatial = build_edges(spatial, pl_module.hparams.r_test, 200, res) #This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
+        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir, using_weights=False)
+        logging.info("Constructing with radius {}, producing {} edges, eff: {}, pur: {}".format(pl_module.hparams.r_test, e_spatial.shape[1], y_cluster.sum() / e_bidir.shape[1], y_cluster.sum() / y_cluster.shape[0]))
+        # Arbitrary ordering to remove half of the duplicate edges
+        R_dist = torch.sqrt(batch.x[:,0]**2 + batch.x[:,2]**2)
+        e_spatial = e_spatial[:, (R_dist[e_spatial[0]] <= R_dist[e_spatial[1]])]
+        
+        e_spatial, y_cluster, new_weights = graph_intersection(e_spatial, e_bidir, using_weights=True, weights_bidir=weights_bidir)
+        
+        # Re-introduce random direction, to avoid training bias
+        random_flip = torch.randint(2, (e_spatial.shape[1],)).bool()
+        e_spatial[0, random_flip], e_spatial[1, random_flip] = e_spatial[1, random_flip], e_spatial[0, random_flip]
+        
+        batch.e_radius = e_spatial
+        batch.y = y_cluster
+        batch.true_weights = batch.weights
+        batch.weights = new_weights
+
+        return batch
+
+    def save_downstream(self, batch, pl_module, datatype):
+
+        with open(os.path.join(self.output_dir, datatype, batch.event_file[-4:]), 'wb') as pickle_file:
+            torch.save(batch, pickle_file)
+            
+        logging.info("Saved event {}".format(batch.event_file[-4:]))
