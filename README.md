@@ -20,7 +20,7 @@ Welcome to repository and documentation for ML pipelines and techniques by the E
 
 ## Intro
 
-To start as quickly as possible, clone the repository and follow the steps in [Quickstart](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/quickstart). This will get you generating toy tracking data and running inference immediately. Many of the choices of structure will be made clear there. If you already have a particle physics problem in mind, you can apply the [Template](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/choosingguide.md) that is most suitable to your use case.
+To start as quickly as possible, clone the repository, [Install](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/quickstart) and follow the steps in [Quickstart](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/quickstart). This will get you generating toy tracking data and running inference immediately. Many of the choices of structure will be made clear there. If you already have a particle physics problem in mind, you can apply the [Template](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/choosingguide.md) that is most suitable to your use case.
 
 Once up and running, you may want to consider more complex ML [Models](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/models/overview/). Many of these are built on other libraries (for example [Pytorch Geometric](https://github.com/rusty1s/pytorch_geometric)).
 
@@ -29,3 +29,63 @@ Once up and running, you may want to consider more complex ML [Models](https://h
   <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/application_diagram_1.png" width="600"/>
 </figure>
 </div>
+
+## Install
+
+The repository can be installed and run with GPU or CPU. The installation depends on this compatibility:
+
+<table style="border: 1px solid gray; border-collapse: collapse">
+<tr style="border-bottom: 1px solid gray">
+<th style="border-bottom: 1px solid gray"> CPU </th>
+<th style="border-left: 1px solid gray"> GPU </th>
+</tr>
+<tr>
+<td style="border-bottom: 1px solid gray">
+
+1. Run 
+`export CUDA=cpu`
+    
+</td>
+<td style="border-left: 1px solid gray">
+
+1a. Find the GPU version with `nvcc --version`
+    
+1b. Run `export CUDA=cuXXX`, with `XXX = 92, 101, 102, 110`
+
+</td>
+</tr>
+<tr style="border-bottom: 1px solid gray">
+<td colspan="2">
+
+2. Install Pytorch and dependencies 
+
+```pip install --user -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html -f https://pytorch-geometric.com/whl/torch-1.5.0.html```
+
+</td>
+</tr>
+<tr style="border-bottom: 1px solid gray">
+<td colspan="2">
+
+3. Install local packages
+
+```pip install -e .```
+    
+</td>
+</tr>
+<tr>
+<td style="border-bottom: 1px solid gray">
+
+4. Install CPU-optimized packages
+
+```pip install faiss-cpu```
+    
+</td>
+<td style="border-left: 1px solid gray">
+
+4. Install CPU-optimized packages
+
+```pip install faiss-gpu cupy-cudaXXX```, with ```XXX```
+    
+</td>
+</tr>
+</table>

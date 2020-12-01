@@ -6,7 +6,7 @@ overwrite: True
 
 # Dataset parameters
 pt_min: 0
-train_split: [[400, 50, 50]] # Number of [training, validation, testing] examples
+train_split: [[100, 20, 20]] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
@@ -30,7 +30,7 @@ lr: 0.002
 factor: 0.3
 patience: 8
 regime: [[weighting, rp, hnm, ci]]
-max_epochs: 100
+max_epochs: 10
 
 # Postprocessing
 callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 

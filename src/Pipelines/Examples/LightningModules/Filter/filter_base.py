@@ -24,6 +24,7 @@ class FilterBase(LightningModule):
         '''
         Initialise the Lightning Module that can scan over different filter training regimes
         '''
+        self.save_hyperparameters()
         # Assign hyperparameters
         self.hparams = hparams
         
@@ -56,7 +57,7 @@ class FilterBase(LightningModule):
         scheduler = [
             {
                 'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
-                'monitor': 'checkpoint_on',
+                'monitor': 'val_loss',
                 'interval': 'epoch',
                 'frequency': 1
             }
@@ -87,21 +88,23 @@ class FilterBase(LightningModule):
                   if ('ci' in self.hparams["regime"])
                   else self(batch.x, batch.e_radius[:,combined_indices], emb).squeeze())
         
-        manual_weights = batch.weights[combined_indices]
-        manual_weights[batch.y[combined_indices] == 0] = 1
+        if 'weighting' in self.hparams['regime']:
+            manual_weights = batch.weights[combined_indices]
+            manual_weights[batch.y[combined_indices] == 0] = 1
+        else:
+            manual_weights = None
         
         if ('pid' in self.hparams["regime"]):
             y_pid = batch.pid[batch.e_radius[0,combined_indices]] == batch.pid[batch.e_radius[1,combined_indices]]
             loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = positive_weight)
         else:
-            loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices], weight = manual_weights, pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices].float(), weight = manual_weights, pos_weight = weight)
 
-        result = pl.TrainResult(minimize=loss)
-        result.log('train_loss', loss, prog_bar=True)
+        self.log('train_loss', loss)
 
         return result
 
-    def validation_step(self, batch, batch_idx):
+    def shared_evaluation(self, batch, batch_idx, log=False):
 
         emb = (None if (self.hparams["emb_channels"] == 0)
                else batch.embedding)  # Does this work??
@@ -114,41 +117,64 @@ class FilterBase(LightningModule):
             output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()
             cut = F.sigmoid(output) > self.hparams["filter_cut"]
             cut_list.append(cut)
+            
+            if 'weighting' in self.hparams['regime']:
+                manual_weights = batch.weights[subset_ind]
+                manual_weights[batch.y[subset_ind] == 0] = 1
+            else:
+                manual_weights = None
+                
             if ('pid' not in self.hparams['regime']):
-                val_loss =+ F.binary_cross_entropy_with_logits(output, batch.y[subset_ind])
+                val_loss =+ F.binary_cross_entropy_with_logits(output, batch.y[subset_ind].float(), weight = manual_weights)
             else:
                 y_pid = batch.pid[batch.e_radius[0, subset_ind]] == batch.pid[batch.e_radius[1, subset_ind]]
-                val_loss =+ F.binary_cross_entropy_with_logits(output, y_pid)
+                val_loss =+ F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights)
             
         cut_list = torch.cat(cut_list)
-    
-        result = pl.EvalResult(checkpoint_on=val_loss)
-        result.log('val_loss', val_loss)
-
+        
         #Edge filter performance
         edge_positive = cut_list.sum().float()
         if ('pid' in self.hparams["regime"]):
             y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
             edge_true = y_pid.sum()
-            self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), cut_list.cpu())})
+#             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), cut_list.cpu())})
         else:
             edge_true = batch.y.sum()
             edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-            self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), cut_list.cpu())})
+#             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), cut_list.cpu())})
 
+        current_lr = self.optimizers().param_groups[0]['lr']
+        
+        if log:
+            self.log_dict({'eff': torch.tensor(edge_true_positive/edge_true), 'pur': torch.tensor(edge_true_positive/edge_positive), 'val_loss': val_loss, 'current_lr': current_lr})
+        return {"loss": val_loss}
+    
+    def validation_step(self, batch, batch_idx):
+        
+        outputs = self.shared_evaluation(batch, batch_idx, log=True)
 
-        result.log_dict({'eff': torch.tensor(edge_true_positive/edge_true), 'pur': torch.tensor(edge_true_positive/edge_positive)})
-        return result
+        return outputs["loss"]
+    
+    def test_step(self, batch, batch_idx):
+        """
+        Step to evaluate the model's performance
+        """
+        outputs = self.shared_evaluation(batch, batch_idx, log=False)
 
-    def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_idx, second_order_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
+        return outputs
+
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_idx, optimizer_closure=None, on_tpu=False, using_native_amp=False, using_lbfgs=False):
+        """
+        Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
+        """
         # warm up lr
         if (self.hparams["warmup"] is not None) and (self.trainer.global_step < self.hparams["warmup"]):
             lr_scale = min(1., float(self.trainer.global_step + 1) / self.hparams["warmup"])
             for pg in optimizer.param_groups:
                 pg['lr'] = lr_scale * self.hparams["lr"]
-
+        
         # update params
-        optimizer.step()
+        optimizer.step(closure=optimizer_closure)
         optimizer.zero_grad()
 
         
@@ -193,59 +219,67 @@ class FilterBaseBalanced(FilterBase):
                   if ('ci' in self.hparams["regime"])
                   else self(batch.x, batch.e_radius[:,combined_indices], emb).squeeze())
 
+        if 'weighting' in self.hparams['regime']:
+            manual_weights = batch.weights[combined_indices]
+            manual_weights[batch.y[combined_indices] == 0] = 1
+        else:
+            manual_weights = None
+        
         if ('pid' in self.hparams["regime"]):
             y_pid = batch.pid[batch.e_radius[0,combined_indices]] == batch.pid[batch.e_radius[1,combined_indices]]
-            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = weight)
         else:
-            loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices], pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices].float(), weight = manual_weights, pos_weight = weight)
 
-        result = pl.TrainResult(minimize=loss)
-        result.log('train_loss', loss, prog_bar=True)
+        self.log('train_loss', loss)
 
-        return result
+        return loss
 
     def validation_step(self, batch, batch_idx):
         
-        result = self.shared_evaluation(batch, batch_idx)
+        result = self.shared_evaluation(batch, batch_idx, log=True)
         
         return result
     
     def test_step(self, batch, batch_idx):
         
-        result = self.shared_evaluation(batch, batch_idx)
+        result = self.shared_evaluation(batch, batch_idx, log=False)
         
         return result
         
         
-    def shared_evaluation(self, batch, batch_idx):
+    def shared_evaluation(self, batch, batch_idx, log=False):
         
         '''
         This method is shared between validation steps and test steps
         '''
         
-        
         emb = (None if (self.hparams["emb_channels"] == 0)
-               else batch.embedding)  # Does this work??
-
+               else batch.embedding)  # Does this work??      
+        
         sections = 8
         score_list = []
-        val_loss = torch.tensor(0).float()
+        val_loss = torch.tensor(0).to(self.device)
         for j in range(sections):
             subset_ind = torch.chunk(torch.arange(batch.e_radius.shape[1]), sections)[j]
             output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()
             scores = F.sigmoid(output) 
             score_list.append(scores)
+            
+            if 'weighting' in self.hparams['regime']:
+                manual_weights = batch.weights[subset_ind]
+                manual_weights[batch.y[subset_ind] == 0] = 1
+            else:
+                manual_weights = None
+                
             if ('pid' not in self.hparams['regime']):
-                val_loss = val_loss + F.binary_cross_entropy_with_logits(output, batch.y[subset_ind])
+                val_loss = val_loss + F.binary_cross_entropy_with_logits(output, batch.y[subset_ind].float(), weight = manual_weights)
             else:
                 y_pid = batch.pid[batch.e_radius[0, subset_ind]] == batch.pid[batch.e_radius[1, subset_ind]]
-                val_loss = val_loss + F.binary_cross_entropy_with_logits(output, y_pid)
-            
+                val_loss =+ F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights)
+                            
         score_list = torch.cat(score_list)
         cut_list = score_list > self.hparams["filter_cut"]
-        
-        result = pl.EvalResult(checkpoint_on=val_loss)
-        result.log('val_loss', val_loss)
 
         #Edge filter performance
         edge_positive = cut_list.sum().float()
@@ -253,14 +287,15 @@ class FilterBaseBalanced(FilterBase):
             y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
             edge_true = y_pid.sum()
             edge_true_positive = (y_pid & cut_list).sum().float()
-            self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+#             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
         else:
             edge_true = batch.y.sum()
             edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-            print(batch.y[:10000].sum())
-            self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+#             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
 
-
-        result.log_dict({'eff': torch.tensor(edge_true_positive/edge_true), 'pur': torch.tensor(edge_true_positive/edge_positive)})
+        current_lr = self.optimizers().param_groups[0]['lr']
         
-        return result
+        if log:
+            self.log_dict({'eff': torch.tensor(edge_true_positive/edge_true), 'pur': torch.tensor(edge_true_positive/edge_positive), 'val_loss': val_loss, 'current_lr': current_lr})
+        
+        return val_loss

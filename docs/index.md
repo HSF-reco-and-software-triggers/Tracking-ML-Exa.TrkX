@@ -12,3 +12,4 @@ Once up and running, you may want to consider more complex ML [Models](https://h
   <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/application_diagram_1.png"/>
   <figcaption>The repository through an application lens, using Pipelines for specific physics goals</figcaption>
 </figure>
+
