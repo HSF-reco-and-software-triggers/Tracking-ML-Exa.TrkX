@@ -1,15 +1,24 @@
 # Quickstart Tutorial
 
-## Install
+## 1. Install
 
-- link
+See instructions at [Install](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/#install).
 
-## Get Dataset
+## 2. Get Dataset
 
-- install kaggle
-- get 100 event training set
+The easiest way to get the TrackML dataset is to use the Kaggle API. Install it with
+```
+pip install kaggle
+```
+then grab a small toy dataset with
+```
+kaggle competitions download 
+    -c trackml-particle-identification 
+    -f train_sample.zip
+    -p /PATH/TO/DATA/DIRECTORY
+```
 
-## Running the Pipeline
+## 3. Running the Pipeline
 
 ### Configuration
 
@@ -44,10 +53,3 @@ The default settings of this run pull from the three configuration files given a
   - Artifact library: This should be a place where you can store data = checkpoints
 - Pipeline config: explain stages in it
 - Explain default model config parameters (1GeV, n_train=90, n_val/n_test = 5)
-
-## Running the pipeline
-
-
-
-- Should preprocess and train metric
-- Should produce telemetry

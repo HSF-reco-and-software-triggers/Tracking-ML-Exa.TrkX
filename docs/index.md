@@ -13,3 +13,63 @@ Once up and running, you may want to consider more complex ML [Models](https://h
   <figcaption>The repository through an application lens, using Pipelines for specific physics goals</figcaption>
 </figure>
 
+## Install
+
+The repository can be installed and run with GPU or CPU. The installation depends on this compatibility:
+
+<table style="border: 1px solid gray; border-collapse: collapse">
+<tr style="border-bottom: 1px solid gray">
+<th style="border-bottom: 1px solid gray"> CPU </th>
+<th style="border-left: 1px solid gray"> GPU </th>
+</tr>
+<tr>
+<td style="border-bottom: 1px solid gray">
+
+1. Run 
+`export CUDA=cpu`
+    
+</td>
+<td style="border-left: 1px solid gray">
+
+1a. Find the GPU version cuda XX.X with `nvcc --version`
+    
+1b. Run `export CUDA=cuXXX`, with `XXX = 92, 101, 102, 110`
+
+</td>
+</tr>
+<tr style="border-bottom: 1px solid gray">
+<td colspan="2">
+
+2. Install Pytorch and dependencies 
+
+```pip install --user -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html -f https://pytorch-geometric.com/whl/torch-1.5.0.html```
+
+</td>
+</tr>
+<tr style="border-bottom: 1px solid gray">
+<td colspan="2">
+
+3. Install local packages
+
+```pip install -e .```
+    
+</td>
+</tr>
+<tr>
+<td style="border-bottom: 1px solid gray">
+
+4. Install CPU-optimized packages
+
+```pip install faiss-cpu```
+    
+</td>
+<td style="border-left: 1px solid gray">
+
+4. Install GPU-optimized packages
+
+```pip install faiss-gpu cupy-cudaXXX```, with ```XXX```
+    
+</td>
+</tr>
+</table>
+
