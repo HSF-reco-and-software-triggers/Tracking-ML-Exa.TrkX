@@ -17,8 +17,8 @@ Once up and running, you may want to consider more complex ML [Models](https://h
 
 The repository can be installed and run with GPU or CPU. The installation depends on this compatibility:
 
-<table style="border: 1px solid gray; border-collapse: collapse">
-<tr style="border-bottom: 1px solid gray">
+<table style="border: 1px solid gray">
+<tr>
 <th style="border-bottom: 1px solid gray"> CPU </th>
 <th style="border-left: 1px solid gray"> GPU </th>
 </tr>
