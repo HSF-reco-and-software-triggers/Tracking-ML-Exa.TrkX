@@ -48,7 +48,7 @@ The repository can be installed and run with GPU or CPU. The installation depend
 </td>
 <td style="border-left: 1px solid gray">
 
-1a. Find the GPU version with `nvcc --version`
+1a. Find the GPU version cuda XX.X with `nvcc --version`
     
 1b. Run `export CUDA=cuXXX`, with `XXX = 92, 101, 102, 110`
 
@@ -82,7 +82,7 @@ The repository can be installed and run with GPU or CPU. The installation depend
 </td>
 <td style="border-left: 1px solid gray">
 
-4. Install CPU-optimized packages
+4. Install GPU-optimized packages
 
 ```pip install faiss-gpu cupy-cudaXXX```, with ```XXX```
     
