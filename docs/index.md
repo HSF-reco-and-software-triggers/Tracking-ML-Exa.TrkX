@@ -19,8 +19,8 @@ The repository can be installed and run with GPU or CPU. The installation depend
 
 <table style="border: 1px solid gray">
 <tr>
-<th style="border-bottom: 1px solid gray"> CPU </th>
-<th style="border-left: 1px solid gray"> GPU </th>
+<th> CPU </th>
+<th> GPU </th>
 </tr>
 <tr>
 <td style="border-bottom: 1px solid gray">

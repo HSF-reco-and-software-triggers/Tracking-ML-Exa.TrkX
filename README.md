@@ -32,6 +32,13 @@ Once up and running, you may want to consider more complex ML [Models](https://h
 
 ## Install
 
+It's recommended to start a conda environment before installation:
+
+```
+conda install --name exatrkx-tracking python=3.8
+conda activate exatrkx-tracking
+```
+
 The repository can be installed and run with GPU or CPU. The installation depends on this compatibility:
 
 <table style="border: 1px solid gray; border-collapse: collapse">

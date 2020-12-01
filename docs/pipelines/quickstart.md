@@ -12,9 +12,9 @@ pip install kaggle
 ```
 then grab a small toy dataset with
 ```
-kaggle competitions download 
-    -c trackml-particle-identification 
-    -f train_sample.zip
+kaggle competitions download \
+    -c trackml-particle-identification \
+    -f train_sample.zip \
     -p /PATH/TO/DATA/DIRECTORY
 ```
 
