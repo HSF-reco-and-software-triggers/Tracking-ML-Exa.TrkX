@@ -23,13 +23,13 @@ The repository can be installed and run with GPU or CPU. The installation depend
 <th> GPU </th>
 </tr>
 <tr>
-<td style="border-bottom: 1px solid gray">
+<td>
 
 1. Run 
 `export CUDA=cpu`
     
 </td>
-<td style="border-left: 1px solid gray">
+<td>
 
 1a. Find the GPU version cuda XX.X with `nvcc --version`
     
