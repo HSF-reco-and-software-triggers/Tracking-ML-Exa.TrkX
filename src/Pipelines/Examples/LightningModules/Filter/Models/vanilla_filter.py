@@ -78,9 +78,9 @@ class FilterInferenceCallback(Callback):
                     sys.stdout.flush()
                     sys.stdout.write(f'{percent:.01f}% inference complete \r')
                     if (not os.path.exists(os.path.join(self.output_dir, datatype, batch.event_file[-4:]))) or self.overwrite:
-                        batch = batch.to(pl_module.device) #Is this step necessary??
-                        batch = self.construct_downstream(batch, pl_module).to('cpu')
-                        self.save_downstream(batch, pl_module, datatype)
+                        data = batch.to(pl_module.device) #Is this step necessary??
+                        data = self.construct_downstream(data, pl_module)
+                        self.save_downstream(data, pl_module, datatype)
 
                     batch_incr += 1
 

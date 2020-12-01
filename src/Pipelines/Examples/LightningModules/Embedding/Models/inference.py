@@ -127,9 +127,9 @@ class EmbeddingInferenceCallback(Callback):
                     sys.stdout.write(f'{percent:.01f}% inference complete \r')
                     
                     if (not os.path.exists(os.path.join(self.output_dir, datatype, batch.event_file[-4:]))) or self.overwrite:
-                        batch = batch.to(pl_module.device) #Is this step necessary??
-                        batch = self.construct_downstream(batch, pl_module)
-                        self.save_downstream(batch, pl_module, datatype)
+                        data = batch.to(pl_module.device) #Is this step necessary??
+                        data = self.construct_downstream(data, pl_module)
+                        self.save_downstream(data, pl_module, datatype)
 
                     batch_incr += 1
 
@@ -146,7 +146,7 @@ class EmbeddingInferenceCallback(Callback):
         weights_bidir = torch.cat([batch.weights, batch.weights])
         
         # Build the radius graph with radius < r_test
-        e_spatial = build_edges(spatial, pl_module.hparams.r_test, 200, res) #This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
+        e_spatial = build_edges(spatial, pl_module.hparams.r_test, 500, res) #This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir, using_weights=False)
         logging.info("Constructing with radius {}, producing {} edges, eff: {}, pur: {}".format(pl_module.hparams.r_test, e_spatial.shape[1], y_cluster.sum() / e_bidir.shape[1], y_cluster.sum() / y_cluster.shape[0]))
         # Arbitrary ordering to remove half of the duplicate edges

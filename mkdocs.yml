@@ -1,7 +1,11 @@
+# Project information
 site_name: Tracking ML with Exa.trkX
 site_url: https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/
 site_author: Daniel Murnane on behalf of Exa.TrkX Collaboration
 
+# Repo
+repo_url: https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX
+repo_name: Tracking ML ExatrkX
 
 nav:
   - Home: index.md

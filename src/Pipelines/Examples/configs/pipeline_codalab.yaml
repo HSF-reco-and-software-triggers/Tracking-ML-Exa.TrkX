@@ -3,11 +3,11 @@ libraries:
     artifact_library: /global/cscratch1/sd/danieltm/ExaTrkX/lightning_checkpoints
 
 stage_list:
-#     - {set: Filter, name: VanillaFilter, config: train_coda_filter.yaml, resume_id: }
+    - {set: Filter, name: VanillaFilter, config: train_coda_filter.yaml, resume_id: }
 #     - {set: Processing, name: FeatureStore, config: prepare_coda_small_feature_store.yaml, resume_id: }
-    - {set: Embedding, name: LayerlessEmbedding, config: train_coda_small_embedding.yaml, resume_id: pbn07koj, override: {
-    output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_unweighted,
-    r_test: 1.85, overwrite: False, callbacks: EmbeddingInferenceCallback
-        }
-    }
+#     - {set: Embedding, name: LayerlessEmbedding, config: train_coda_small_embedding.yaml, resume_id: pbn07koj, override: {
+#     output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_unweighted,
+#     r_test: 1.85, overwrite: False, callbacks: EmbeddingInferenceCallback
+#         }
+#     }
     
