@@ -4,4 +4,4 @@ libraries:
 
 stage_list:
     - {set: Processing, name: FeatureStore, config: prepare_quickstart.yaml, resume_id: }
-    - {set: Embedding, name: LayerlessEmbedding, config: train_quickstart.yaml, resume_id: }
+    - {set: Embedding, name: LayerlessEmbedding, config: train_quickstart_embedding.yaml, resume_id: }

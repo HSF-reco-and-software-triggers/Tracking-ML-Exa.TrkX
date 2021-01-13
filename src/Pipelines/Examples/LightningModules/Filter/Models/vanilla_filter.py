@@ -78,9 +78,10 @@ class FilterInferenceCallback(Callback):
                     sys.stdout.flush()
                     sys.stdout.write(f'{percent:.01f}% inference complete \r')
                     if (not os.path.exists(os.path.join(self.output_dir, datatype, batch.event_file[-4:]))) or self.overwrite:
-                        data = batch.to(pl_module.device) #Is this step necessary??
-                        data = self.construct_downstream(data, pl_module)
-                        self.save_downstream(data, pl_module, datatype)
+                        batch_to_save = copy.deepcopy(batch)
+                        batch_to_save = batch_to_save.to(pl_module.device) #Is this step necessary??
+                        batch_to_save = self.construct_downstream(data, pl_module).to("cpu")
+                        self.save_downstream(batch_to_save, pl_module, datatype)
 
                     batch_incr += 1
 
@@ -95,8 +96,8 @@ class FilterInferenceCallback(Callback):
         sections = 8
         cut_list = []
         for j in range(sections):
-            subset_ind = torch.chunk(torch.arange(batch.e_radius.shape[1]), sections)[j]
-            output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()
+            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[j]
+            output = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index[:, subset_ind], emb).squeeze() if ('ci' in pl_module.hparams["regime"]) else pl_module(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             cut = F.sigmoid(output) > pl_module.hparams["filter_cut"]
             cut_list.append(cut)
             
@@ -105,9 +106,10 @@ class FilterInferenceCallback(Callback):
         if ('pid' not in pl_module.hparams['regime']):
             batch.y = batch.y[cut_list]
 
-        y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
+        y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         batch.y_pid = y_pid[cut_list]
-        batch.e_radius = batch.e_radius[:, cut_list]
+        batch.edge_index = batch.edge_index[:, cut_list]
+        batch.weights = batch.weights[cut_list]
         
         return batch
 

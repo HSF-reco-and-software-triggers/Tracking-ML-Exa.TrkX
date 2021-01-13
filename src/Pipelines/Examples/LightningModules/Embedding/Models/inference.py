@@ -1,5 +1,10 @@
-import sys, os
+import sys
+import os
+import copy
 import logging
+import tracemalloc
+import gc
+from memory_profiler import profile
 
 from pytorch_lightning.callbacks import Callback
 import torch.nn.functional as F
@@ -8,7 +13,7 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 
-from ..utils import fetch_pt, build_edges, res, graph_intersection
+from ..utils import fetch_pt, build_edges, graph_intersection
 
 '''
 Class-based Callback inference for integration with Lightning
@@ -117,24 +122,26 @@ class EmbeddingInferenceCallback(Callback):
         datasets = {"train": pl_module.trainset, "val": pl_module.valset, "test": pl_module.testset}
         total_length = sum([len(dataset) for dataset in datasets.values()])
         batch_incr = 0
-
         pl_module.eval()
+        tracemalloc.start()
         with torch.no_grad():
             for set_idx, (datatype, dataset) in enumerate(datasets.items()):
                 for batch_idx, batch in enumerate(dataset):
                     percent = (batch_incr / total_length) * 100
                     sys.stdout.flush()
                     sys.stdout.write(f'{percent:.01f}% inference complete \r')
-                    
                     if (not os.path.exists(os.path.join(self.output_dir, datatype, batch.event_file[-4:]))) or self.overwrite:
-                        data = batch.to(pl_module.device) #Is this step necessary??
-                        data = self.construct_downstream(data, pl_module)
-                        self.save_downstream(data, pl_module, datatype)
-
+                        batch_to_save = copy.deepcopy(batch)
+                        batch_to_save = batch_to_save.to(pl_module.device) #Is this step necessary??
+                        self.construct_downstream(batch_to_save, pl_module, datatype)                      
+                       
                     batch_incr += 1
 
-    def construct_downstream(self, batch, pl_module):
-
+    def construct_downstream(self, batch, pl_module, datatype):
+        
+        # Free up batch.weights for subset of embedding selection
+        batch.true_weights = batch.weights
+        
         if 'ci' in pl_module.hparams["regime"]:
             spatial = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1))
         else:
@@ -143,28 +150,31 @@ class EmbeddingInferenceCallback(Callback):
         # Make truth bidirectional
         e_bidir = torch.cat([batch.layerless_true_edges,
                        torch.stack([batch.layerless_true_edges[1], batch.layerless_true_edges[0]], axis=1).T], axis=-1)
-        weights_bidir = torch.cat([batch.weights, batch.weights])
         
         # Build the radius graph with radius < r_test
-        e_spatial = build_edges(spatial, pl_module.hparams.r_test, 500, res) #This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
-        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir, using_weights=False)
-        logging.info("Constructing with radius {}, producing {} edges, eff: {}, pur: {}".format(pl_module.hparams.r_test, e_spatial.shape[1], y_cluster.sum() / e_bidir.shape[1], y_cluster.sum() / y_cluster.shape[0]))
+        e_spatial = build_edges(spatial, pl_module.hparams.r_test, 300) #This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
+
         # Arbitrary ordering to remove half of the duplicate edges
         R_dist = torch.sqrt(batch.x[:,0]**2 + batch.x[:,2]**2)
         e_spatial = e_spatial[:, (R_dist[e_spatial[0]] <= R_dist[e_spatial[1]])]
         
-        e_spatial, y_cluster, new_weights = graph_intersection(e_spatial, e_bidir, using_weights=True, weights_bidir=weights_bidir)
+        if 'weighting' in pl_module.hparams["regime"]:
+            weights_bidir = torch.cat([batch.weights, batch.weights])
+            e_spatial, y_cluster, new_weights = graph_intersection(e_spatial, e_bidir, using_weights=True, weights_bidir=weights_bidir)
+            batch.weights = new_weights
+        else:
+            e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+            
+#         logging.info("Constructing with radius {}, producing {} edges, eff: {}, pur: {}".format(pl_module.hparams.r_test, e_spatial.shape[1], y_cluster.sum() / batch.layerless_true_edges.shape[1], y_cluster.sum() / y_cluster.shape[0]))
         
         # Re-introduce random direction, to avoid training bias
         random_flip = torch.randint(2, (e_spatial.shape[1],)).bool()
         e_spatial[0, random_flip], e_spatial[1, random_flip] = e_spatial[1, random_flip], e_spatial[0, random_flip]
         
-        batch.e_radius = e_spatial
+        batch.edge_index = e_spatial
         batch.y = y_cluster
-        batch.true_weights = batch.weights
-        batch.weights = new_weights
-
-        return batch
+                            
+        self.save_downstream(batch, pl_module, datatype)
 
     def save_downstream(self, batch, pl_module, datatype):
 

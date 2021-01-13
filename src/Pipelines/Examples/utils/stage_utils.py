@@ -79,7 +79,6 @@ def find_model(model_set, model_name, model_library):
     # Import all modules in the set/Models directory and find model_name
     imported_module_list = [importlib.import_module('.'.join([model_set, "Models", module])) for module in module_list]
     names = [mod for mod in imported_module_list if model_name in getattr(mod, '__all__', [n for n in dir(mod) if not n.startswith('_')])]
-
     # Return the class of model_name
     model_class = getattr(names[0], model_name)
     logging.info("Model found")
@@ -92,6 +91,7 @@ def build_model(model_config):
     model_library = model_config["model_library"]
     config_file = model_config["config"]
 
+    logging.info("Building model...")
     model_class = find_model(model_set, model_name, model_library)
 
     logging.info("Model built")

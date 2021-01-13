@@ -38,7 +38,7 @@ class FeatureStore(LightningDataModule):
         # Find the input files
         all_files = os.listdir(self.input_dir)
         all_events = sorted(np.unique([os.path.join(self.input_dir, event[:14]) for event in all_files]))[:self.n_files]
-
+        
         # Split the input files by number of tasks and select my chunk only
         all_events = np.array_split(all_events, self.n_tasks)[self.task]
 
@@ -55,4 +55,5 @@ class FeatureStore(LightningDataModule):
         # Process input files with a worker pool and progress bar
         process_func = partial(prepare_event, detector_orig=detector_orig, detector_proc=detector_proc, cell_features=cell_features, **self.hparams)
         process_map(process_func, all_events, max_workers = self.n_workers)
+        
 

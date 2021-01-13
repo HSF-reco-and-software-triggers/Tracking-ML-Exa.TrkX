@@ -96,6 +96,12 @@ class SliceCheckpointedResAGNN(CheckpointedResAGNN):
         elif 'delta_eta' in self.hparams.keys():
             subset_edge_ind = hard_eta_edge_slice(self.hparams["delta_eta"], batch)
         
+        if 'weighting' in self.hparams['regime']:
+            manual_weights = batch.weights[subset_edge_ind]
+            manual_weights[batch.y[subset_edge_ind] == 0] = 1
+        else:
+            manual_weights = None
+        
         output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), 
                        batch.edge_index[:, subset_edge_ind]).squeeze()
                   if ('ci' in self.hparams["regime"])
@@ -103,9 +109,9 @@ class SliceCheckpointedResAGNN(CheckpointedResAGNN):
 
         if ('pid' in self.hparams["regime"]):
             y_pid = (batch.pid[batch.edge_index[0, subset_edge_ind]] == batch.pid[batch.edge_index[1, subset_edge_ind]]).float()
-            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = weight)
         else:
-            loss = F.binary_cross_entropy_with_logits(output, batch.y[subset_edge_ind], pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, batch.y[subset_edge_ind].float(), weight = manual_weights, pos_weight = weight)
             
         self.log('train_loss', loss)
 

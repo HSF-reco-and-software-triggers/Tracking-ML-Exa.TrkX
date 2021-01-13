@@ -13,12 +13,8 @@ from torch_cluster import radius_graph
 import numpy as np
 
 # Local Imports
-from .utils import graph_intersection, split_datasets
-if torch.cuda.is_available():
-    from .utils import build_edges, res
-    device = 'cuda'
-else:
-    device = 'cpu'
+from .utils import graph_intersection, split_datasets, build_edges
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class EmbeddingBase(LightningModule):
 
@@ -99,9 +95,8 @@ class EmbeddingBase(LightningModule):
 
         # Append Hard Negative Mining (hnm) with KNN graph
         if 'hnm' in self.hparams["regime"]:
-            e_spatial = (torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"], res)], axis=-1)
-                        if torch.cuda.is_available()
-                        else torch.cat([e_spatial, radius_graph(spatial, r=self.hparams["r_train"], max_num_neighbors=self.hparams["knn"])], axis=-1))
+            e_spatial = torch.cat([e_spatial, build_edges(spatial, self.hparams["r_train"], self.hparams["knn"])], axis=-1)
+                        
 
         # Calculate truth from intersection between Prediction graph and Truth graph
         if "weighting" in self.hparams["regime"]:
@@ -113,14 +108,14 @@ class EmbeddingBase(LightningModule):
             new_weights = y_cluster * self.hparams["weight"]
         
         # Append all positive examples and their truth and weighting
-        e_spatial = torch.cat([e_spatial, e_bidir.transpose(0,1).repeat(1,1).view(-1, 2).transpose(0,1)], axis=-1)
-        y_cluster = torch.cat([y_cluster.int(), torch.ones(e_bidir.shape[1], device=self.device)])
+        e_spatial = torch.cat([e_spatial.to(self.device), e_bidir.transpose(0,1).repeat(1,1).view(-1, 2).transpose(0,1)], axis=-1)
+        y_cluster = torch.cat([y_cluster.int(), torch.ones(e_bidir.shape[1])])
         if "weighting" in self.hparams["regime"]:
             new_weights = torch.cat([new_weights, weights_bidir*self.hparams["weight"]])
         else:
             new_weights = torch.cat([new_weights, torch.ones(e_bidir.shape[1], device=self.device) * self.hparams["weight"]])
         
-        hinge = y_cluster.float()
+        hinge = y_cluster.float().to(self.device)
         hinge[hinge == 0] = -1
 
         reference = spatial.index_select(0, e_spatial[1])
@@ -147,9 +142,7 @@ class EmbeddingBase(LightningModule):
         e_bidir = torch.cat([batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1)
 
         # Build whole KNN graph
-        e_spatial = (build_edges(spatial, knn_radius, knn_num, res)
-                    if torch.cuda.is_available()
-                    else radius_graph(spatial, r = knn_radius, max_num_neighbors=500))
+        e_spatial = build_edges(spatial, knn_radius, knn_num)
 
         if "weighting" in self.hparams["regime"]:
             weights_bidir = torch.cat([batch.weights, batch.weights])
@@ -157,14 +150,15 @@ class EmbeddingBase(LightningModule):
             new_weights = new_weights.to(self.device) * self.hparams["weight"] # Weight positive examples
         else:
             e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-            new_weights = y_cluster * self.hparams["weight"]
+            new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
-        hinge = y_cluster.float()
+        hinge = y_cluster.float().to(self.device)
         hinge[hinge == 0] = -1
 
-        reference = spatial.index_select(0, e_spatial[1]).to("cpu")
-        neighbors = spatial.index_select(0, e_spatial[0]).to("cpu")
-        d = torch.sum((reference - neighbors)**2, dim=-1).to("cuda")
+        e_spatial = e_spatial.to(self.device)
+        reference = spatial.index_select(0, e_spatial[1])
+        neighbors = spatial.index_select(0, e_spatial[0])
+        d = torch.sum((reference - neighbors)**2, dim=-1)
         
         new_weights[y_cluster == -1] = 1
         d = d * new_weights
@@ -200,7 +194,7 @@ class EmbeddingBase(LightningModule):
         """
         Step to evaluate the model's performance
         """
-        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_test"], 1000, log=False)
+        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_test"], 500, log=False)
 
         return outputs
 

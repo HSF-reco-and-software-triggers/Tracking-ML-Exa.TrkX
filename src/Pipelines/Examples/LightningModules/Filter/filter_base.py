@@ -80,13 +80,13 @@ class FilterBase(LightningModule):
                       else torch.tensor(self.hparams['ratio'])) 
 
         else:
-            combined_indices = torch.range(batch.e_radius.shape[1])
+            combined_indices = torch.range(batch.edge_index.shape[1])
             positive_weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams) 
                       else torch.tensor((~batch.y.bool()).sum() / batch.y.sum())) 
 
-        output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:,combined_indices], emb).squeeze()
+        output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index[:,combined_indices], emb).squeeze()
                   if ('ci' in self.hparams["regime"])
-                  else self(batch.x, batch.e_radius[:,combined_indices], emb).squeeze())
+                  else self(batch.x, batch.edge_index[:,combined_indices], emb).squeeze())
         
         if 'weighting' in self.hparams['regime']:
             manual_weights = batch.weights[combined_indices]
@@ -95,7 +95,7 @@ class FilterBase(LightningModule):
             manual_weights = None
         
         if ('pid' in self.hparams["regime"]):
-            y_pid = batch.pid[batch.e_radius[0,combined_indices]] == batch.pid[batch.e_radius[1,combined_indices]]
+            y_pid = batch.pid[batch.edge_index[0,combined_indices]] == batch.pid[batch.edge_index[1,combined_indices]]
             loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = positive_weight)
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices].float(), weight = manual_weights, pos_weight = weight)
@@ -113,8 +113,8 @@ class FilterBase(LightningModule):
         cut_list = []
         val_loss = torch.tensor(0)
         for j in range(sections):
-            subset_ind = torch.chunk(torch.arange(batch.e_radius.shape[1]), sections)[j]
-            output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()
+            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[j]
+            output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             cut = F.sigmoid(output) > self.hparams["filter_cut"]
             cut_list.append(cut)
             
@@ -127,7 +127,7 @@ class FilterBase(LightningModule):
             if ('pid' not in self.hparams['regime']):
                 val_loss =+ F.binary_cross_entropy_with_logits(output, batch.y[subset_ind].float(), weight = manual_weights)
             else:
-                y_pid = batch.pid[batch.e_radius[0, subset_ind]] == batch.pid[batch.e_radius[1, subset_ind]]
+                y_pid = batch.pid[batch.edge_index[0, subset_ind]] == batch.pid[batch.edge_index[1, subset_ind]]
                 val_loss =+ F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights)
             
         cut_list = torch.cat(cut_list)
@@ -135,7 +135,7 @@ class FilterBase(LightningModule):
         #Edge filter performance
         edge_positive = cut_list.sum().float()
         if ('pid' in self.hparams["regime"]):
-            y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
+            y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
             edge_true = y_pid.sum()
 #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), cut_list.cpu())})
         else:
@@ -195,8 +195,8 @@ class FilterBaseBalanced(FilterBase):
             sections = 8
             cut_list = []
             for j in range(sections):
-                subset_ind = torch.chunk(torch.arange(batch.e_radius.shape[1]), sections)[j]
-                output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()
+                subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[j]
+                output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
                 cut = F.sigmoid(output) > self.hparams["filter_cut"]
                 cut_list.append(cut)
 
@@ -215,9 +215,9 @@ class FilterBaseBalanced(FilterBase):
             combined_indices[torch.randperm(len(combined_indices))]
             weight = torch.tensor(self.hparams["weight"])
 
-        output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:,combined_indices], emb).squeeze()
+        output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index[:,combined_indices], emb).squeeze()
                   if ('ci' in self.hparams["regime"])
-                  else self(batch.x, batch.e_radius[:,combined_indices], emb).squeeze())
+                  else self(batch.x, batch.edge_index[:,combined_indices], emb).squeeze())
 
         if 'weighting' in self.hparams['regime']:
             manual_weights = batch.weights[combined_indices]
@@ -226,7 +226,7 @@ class FilterBaseBalanced(FilterBase):
             manual_weights = None
         
         if ('pid' in self.hparams["regime"]):
-            y_pid = batch.pid[batch.e_radius[0,combined_indices]] == batch.pid[batch.e_radius[1,combined_indices]]
+            y_pid = batch.pid[batch.edge_index[0,combined_indices]] == batch.pid[batch.edge_index[1,combined_indices]]
             loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = weight)
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y[combined_indices].float(), weight = manual_weights, pos_weight = weight)
@@ -261,8 +261,8 @@ class FilterBaseBalanced(FilterBase):
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
         for j in range(sections):
-            subset_ind = torch.chunk(torch.arange(batch.e_radius.shape[1]), sections)[j]
-            output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.e_radius[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.e_radius[:, subset_ind], emb).squeeze()
+            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[j]
+            output = self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index[:, subset_ind], emb).squeeze() if ('ci' in self.hparams["regime"]) else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             scores = F.sigmoid(output) 
             score_list.append(scores)
             
@@ -275,7 +275,7 @@ class FilterBaseBalanced(FilterBase):
             if ('pid' not in self.hparams['regime']):
                 val_loss = val_loss + F.binary_cross_entropy_with_logits(output, batch.y[subset_ind].float(), weight = manual_weights)
             else:
-                y_pid = batch.pid[batch.e_radius[0, subset_ind]] == batch.pid[batch.e_radius[1, subset_ind]]
+                y_pid = batch.pid[batch.edge_index[0, subset_ind]] == batch.pid[batch.edge_index[1, subset_ind]]
                 val_loss =+ F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights)
                             
         score_list = torch.cat(score_list)
@@ -284,7 +284,7 @@ class FilterBaseBalanced(FilterBase):
         #Edge filter performance
         edge_positive = cut_list.sum().float()
         if ('pid' in self.hparams["regime"]):
-            y_pid = batch.pid[batch.e_radius[0]] == batch.pid[batch.e_radius[1]]
+            y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
             edge_true = y_pid.sum()
             edge_true_positive = (y_pid & cut_list).sum().float()
 #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})

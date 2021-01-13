@@ -20,17 +20,18 @@ import itertools
 # Locals
 from .cell_utils import get_one_event
 
-def get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise):
+def get_cell_information(data, cell_features, detector_orig, detector_proc, endcaps, noise):
 
     event_file = data.event_file
     evtid = event_file[-4:]
     
-    hits, truth = get_one_event(event_file,
+    angles = get_one_event(event_file,
                   detector_orig,
                   detector_proc)
-    
+    logging.info("Angles: {}".format(angles))
     hid = pd.DataFrame(data.hid.numpy(), columns = ["hit_id"])
-    cell_data = torch.from_numpy((hid.merge(hits, on="hit_id")[cell_features]).to_numpy()).float()
+    cell_data = torch.from_numpy((hid.merge(angles, on="hit_id")[cell_features]).to_numpy()).float()
+    logging.info("DF merged")
     data.cell_data = cell_data
 
     return data
@@ -113,7 +114,9 @@ def build_event(event_file, pt_min, feature_scale, adjacent=True, endcaps=False,
     edge_weights = hits.weight.to_numpy()[layerless_true_edges] if layerless else hits.weight.to_numpy()[layerwise_true_edges]
     edge_weight_average = (edge_weights[0] + edge_weights[1])/2
     edge_weight_norm = edge_weight_average / edge_weight_average.mean()
-        
+    
+    logging.info("Weights constructed")
+    
     return hits[['r', 'phi', 'z']].to_numpy() / feature_scale, hits.particle_id.to_numpy(), layers, layerless_true_edges, layerwise_true_edges, hits['hit_id'].to_numpy(), hits.pt.to_numpy(), edge_weight_norm
 
 def prepare_event(event_file, detector_orig, detector_proc, cell_features, progressbar=None, output_dir=None, pt_min=0, adjacent=True, endcaps=False, layerless=True, layerwise=True, noise=False, cell_information=True, overwrite=False, **kwargs):
@@ -139,13 +142,15 @@ def prepare_event(event_file, detector_orig, detector_proc, cell_features, progr
             )
             if layerless_true_edges is not None: data.layerless_true_edges = torch.from_numpy(layerless_true_edges)
             if layerwise_true_edges is not None: data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
-
+            logging.info("Getting cell info")
             if cell_information:
-                data = get_cell_information(data, cell_features, output_dir, detector_orig, detector_proc, endcaps, noise)
+                data = get_cell_information(data, cell_features, detector_orig, detector_proc, endcaps, noise)
 
             with open(filename, 'wb') as pickle_file:
                 torch.save(data, pickle_file)
+                
+    
         else:
-            print(evtid, "already exists")
+            logging.info(evtid, "already exists")
     except:
         print("Exception with file:", event_file)

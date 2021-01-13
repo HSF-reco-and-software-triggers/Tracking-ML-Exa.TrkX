@@ -26,7 +26,45 @@ def parse_pipeline():
     run_parsed, _ = run_parser.parse_known_args()
     model_parsed, _ = model_parser.parse_known_args()
     
-    return run_parsed, model_parsed
+    return run_parsed, model_parsed               
+
+@autocast        
+def run_stage(**model_config):
+    
+    print("Running stage, with args, and model library:", model_config["model_library"])
+    sys.path.append(model_config["model_library"])
+    
+    # Load the model and configuration file for this stage
+    model_class = build_model(model_config)
+    model = model_class(model_config)
+    logging.info("Model found")
+
+    # Test if the model is TRAINABLE (i.e. a learning stage) or NONTRAINABLE (i.e. a processing stage)
+    if callable(getattr(model, "training_step", None)):
+        train_stage(model, model_config)
+    else:
+        data_stage(model, model_config)
+    
+    
+def train_stage(model, model_config):
+    
+    # Define a logger (default: Weights & Biases)
+    logger = get_logger(model_config)
+    
+    # Load the trainer, handling any resume conditions
+    trainer = build_trainer(model_config, logger)
+
+    # Run training
+    trainer.fit(model)
+
+    # Run testing and, if requested, inference callbacks to continue the pipeline
+    trainer.test()
+
+    
+def data_stage(model, model_config):
+    logging.info("Preparing data")
+    model.prepare_data()
+    
 
 def main(args):
 
@@ -55,51 +93,14 @@ def main(args):
             if args.batch:
                 command_line_args = dict_to_args(config)
                 slurm = Slurm(**batch_config)
-                logging.info("""bash
+                slurm_command = """bash
                              conda activate exatrkx-test
-                             python run_pipeline.py --run-stage """ + command_line_args)
-                slurm.sbatch("""bash
-                             conda activate exatrkx-test
-                             python run_pipeline.py --run-stage """ + command_line_args) # REFACTOR VERBOSE FLAG INTO COMMAND_LINE_ARGS
+                             python run_pipeline.py --run-stage """ + command_line_args
+                logging.info(slurm_command)
+                slurm.sbatch(slurm_command)
             else:
                 run_stage(**config)
-                
-
-@autocast        
-def run_stage(**model_config):
     
-    print("Running stage, with args")
-    sys.path.append(model_config["model_library"])
-    
-    # Load the model and configuration file for this stage
-    model_class = build_model(model_config)
-    model = model_class(model_config)
-
-    # Test if the model is TRAINABLE (i.e. a learning stage) or NONTRAINABLE (i.e. a processing stage)
-    if callable(getattr(model, "training_step", None)):
-        train_stage(model, model_config)
-    else:
-        data_stage(model, model_config)
-    
-    
-def train_stage(model, model_config):
-    
-    # Define a logger (default: Weights & Biases)
-    logger = get_logger(model_config)
-    
-    # Load the trainer, handling any resume conditions
-    trainer = build_trainer(model_config, logger)
-
-    # Run training
-    trainer.fit(model)
-
-    # Run testing and, if requested, inference callbacks to continue the pipeline
-    trainer.test()
-
-    
-def data_stage(model, model_config):
-    
-    model.prepare_data()
     
 if __name__=="__main__":
 

@@ -27,7 +27,7 @@ class GNNBase(LightningModule):
         # Handle any subset of [train, val, test] data split, assuming that ordering
         input_dirs = [None, None, None]
         input_dirs[:len(self.hparams["datatype_names"])] = [os.path.join(self.hparams["input_dir"], datatype) for datatype in self.hparams["datatype_names"]]
-        self.trainset, self.valset, self.testset = [load_dataset(input_dir, self.hparams["datatype_split"][i]) for i, input_dir in enumerate(input_dirs)]
+        self.trainset, self.valset, self.testset = [load_dataset(input_dir, self.hparams["datatype_split"][i], self.hparams["pt_min"]) for i, input_dir in enumerate(input_dirs)]
         
     def train_dataloader(self):
         if self.trainset is not None:
@@ -49,38 +49,43 @@ class GNNBase(LightningModule):
         
     def configure_optimizers(self):
         optimizer = [torch.optim.AdamW(self.parameters(), lr=(self.hparams["lr"]), betas=(0.9, 0.999), eps=1e-08, amsgrad=True)]
-#         scheduler = [
-#             {
-#                 'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
-#                 'monitor': 'val_loss',
-#                 'interval': 'epoch',
-#                 'frequency': 1
-#             }
-#         ]
         scheduler = [
             {
-                'scheduler': torch.optim.lr_scheduler.StepLR(optimizer[0], step_size=self.hparams["patience"], gamma=self.hparams["factor"]),
+                'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
+                'monitor': 'val_loss',
                 'interval': 'epoch',
                 'frequency': 1
             }
         ]
+#         scheduler = [
+#             {
+#                 'scheduler': torch.optim.lr_scheduler.StepLR(optimizer[0], step_size=self.hparams["patience"], gamma=self.hparams["factor"]),
+#                 'interval': 'epoch',
+#                 'frequency': 1
+#             }
+#         ]
         return optimizer, scheduler
 
     def training_step(self, batch, batch_idx):
         
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
-        
+       
         output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), 
                        batch.edge_index).squeeze()
                   if ('ci' in self.hparams["regime"])
                   else self(batch.x, batch.edge_index).squeeze())
 
+        if 'weighting' in self.hparams['regime']:
+            manual_weights = batch.weights
+        else:
+            manual_weights = None
+        
         if ('pid' in self.hparams["regime"]):
             y_pid = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = weight)
         else:
-            loss = F.binary_cross_entropy_with_logits(output, batch.y, pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
             
         self.log('train_loss', loss)
 
@@ -97,7 +102,12 @@ class GNNBase(LightningModule):
         
         truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float() if 'pid' in self.hparams["regime"] else batch.y
 
-        loss = F.binary_cross_entropy_with_logits(output, truth.float(), pos_weight = weight)
+        if 'weighting' in self.hparams['regime']:
+            manual_weights = batch.weights
+        else:
+            manual_weights = None
+            
+        loss = F.binary_cross_entropy_with_logits(output, truth.float(), weight = manual_weights, pos_weight = weight)
 
         #Edge filter performance
         preds = F.sigmoid(output) > self.hparams["edge_cut"]

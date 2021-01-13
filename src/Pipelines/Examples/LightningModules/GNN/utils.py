@@ -47,7 +47,7 @@ def random_edge_slice_v2(delta_phi, batch):
     '''
     # 1. Select random phi
     random_phi = np.random.rand()*2 - 1
-    e = batch.edge_index.to('cpu').numpy()
+    e = batch.e_radius.to('cpu').numpy()
     x = batch.x.to('cpu')
 
     # 2. Find edges within delta_phi of random_phi
@@ -75,7 +75,7 @@ def random_edge_slice_v2(delta_phi, batch):
 def random_edge_slice(delta_phi, batch):
     # 1. Select random phi
     random_phi = np.random.rand()*2 - 1
-    e = batch.edge_index.to('cpu')
+    e = batch.e_radius.to('cpu')
     x = batch.x.to('cpu')
 
     # 2. Find hits within delta_phi of random_phi
@@ -95,7 +95,7 @@ def hard_random_edge_slice(delta_phi, batch):
     
     # 1. Select random phi
     random_phi = np.random.rand()*2 - 1
-    e = batch.edge_index.to('cpu')
+    e = batch.e_radius.to('cpu')
     x = batch.x.to('cpu')
     
     e_average = (x[e[0], 1] + x[e[1], 1])/2
@@ -110,7 +110,7 @@ def calc_eta(r, z):
 
 def hard_eta_edge_slice(delta_eta, batch):
     
-    e = batch.edge_index.to('cpu')
+    e = batch.e_radius.to('cpu')
     x = batch.x.to('cpu')
     
     etas = calc_eta(x[:,0], x[:,2])    

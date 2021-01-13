@@ -1,6 +1,9 @@
 import os
+import logging
+from memory_profiler import profile
 
 import faiss
+import faiss.contrib.torch_utils
 import torch
 from torch.utils.data import random_split
 import scipy as sp
@@ -8,17 +11,20 @@ import numpy as np
 import pandas as pd
 import trackml.dataset
 
-if torch.cuda.is_available():
-    res = faiss.StandardGpuResources()
-    device = 'cuda'
-else:
-    device = 'cpu'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def load_dataset(input_dir, num, pt_cut):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
-        loaded_events = [torch.load(event, map_location=torch.device('cpu')) for event in all_events[:num]]
+        loaded_events = []
+        for event in all_events[:num]:
+            try:
+                loaded_event = torch.load(event, map_location=torch.device('cpu'))
+                loaded_events.append(loaded_event)
+                logging.info('Loaded event: {}'.format(loaded_event.event_file))
+            except:
+                logging.info('Corrupted event file: {}'.format(event))
         loaded_events = filter_hit_pt(loaded_events, pt_cut)
         return loaded_events
     else:
@@ -112,7 +118,7 @@ def reset_edge_id(subset, graph):
     graph = graph[:, exist_edges]
     
     return graph, exist_edges
-    
+
 def graph_intersection(pred_graph, truth_graph, using_weights=False, weights_bidir=None):
 
     array_size = max(pred_graph.max().item(), truth_graph.max().item()) + 1
@@ -121,35 +127,43 @@ def graph_intersection(pred_graph, truth_graph, using_weights=False, weights_bid
     l2 = truth_graph.cpu().numpy()
     e_1 = sp.sparse.coo_matrix((np.ones(l1.shape[1]), l1), shape=(array_size, array_size)).tocsr()
     e_2 = sp.sparse.coo_matrix((np.ones(l2.shape[1]), l2), shape=(array_size, array_size)).tocsr()
+    del l1
     
     e_intersection = (e_1.multiply(e_2) - ((e_1 - e_2)>0))
+    del e_1
+    del e_2
     
     if using_weights:
         weights_list = weights_bidir.cpu().numpy()
         weights_sparse = sp.sparse.coo_matrix((weights_list, l2), shape=(array_size, array_size)).tocsr()
+        del weights_list
+        del l2
         new_weights = weights_sparse[e_intersection.astype('bool')]
+        del weights_sparse
         new_weights = torch.from_numpy(np.array(new_weights)[0])
     
     e_intersection = e_intersection.tocoo()    
-    new_pred_graph = torch.from_numpy(np.vstack([e_intersection.row, e_intersection.col])).long().to(device)
-    y = torch.from_numpy(e_intersection.data > 0).to(device)
+    new_pred_graph = torch.from_numpy(np.vstack([e_intersection.row, e_intersection.col])).long()#.to(device)
+    y = torch.from_numpy(e_intersection.data > 0)#.to(device)
+    del e_intersection
     
     if using_weights:
         return new_pred_graph, y, new_weights
     else:
         return new_pred_graph, y
 
-def build_edges(spatial, r_max, k_max, res, return_indices=False):
-
-    index_flat = faiss.IndexFlatL2(spatial.shape[1])
-    gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index_flat)
-    spatial_np = spatial.cpu().detach().numpy()
-    gpu_index_flat.add(spatial_np)
-
-    D, I = search_index_pytorch(gpu_index_flat, spatial, k_max)
-
+def build_edges(spatial, r_max, k_max, return_indices=False):
+    
+    if device == "cuda":
+        res = faiss.StandardGpuResources()
+        D, I = faiss.knn_gpu(res, spatial, spatial, k_max)
+    elif device == "cpu":
+        index = faiss.IndexFlatL2(spatial.shape[1])
+        index.add(spatial)
+        D, I = index.search(spatial, k_max)
+        
     D, I = D[:,1:], I[:,1:]
-    ind = torch.Tensor.repeat(torch.arange(I.shape[0]), (I.shape[1], 1), 1).T.to(device)
+    ind = torch.Tensor.repeat(torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1).T
 
     edge_list = torch.stack([ind[D <= r_max**2], I[D <= r_max**2]])
 
@@ -157,43 +171,6 @@ def build_edges(spatial, r_max, k_max, res, return_indices=False):
         return edge_list, D, I, ind
     else:
         return edge_list
-
-def search_index_pytorch(index, x, k, D=None, I=None):
-    """call the search function of an index with pytorch tensor I/O (CPU
-    and GPU supported)"""
-    assert x.is_contiguous()
-    n, d = x.size()
-    assert d == index.d
-
-    if D is None:
-        D = torch.empty((n, k), dtype=torch.float32, device=x.device)
-    else:
-        assert D.size() == (n, k)
-
-    if I is None:
-        I = torch.empty((n, k), dtype=torch.int64, device=x.device)
-    else:
-        assert I.size() == (n, k)
-    torch.cuda.synchronize()
-    xptr = swig_ptr_from_FloatTensor(x)
-    Iptr = swig_ptr_from_LongTensor(I)
-    Dptr = swig_ptr_from_FloatTensor(D)
-    index.search_c(n, xptr,
-                   k, Dptr, Iptr)
-    torch.cuda.synchronize()
-    return D, I
-
-def swig_ptr_from_FloatTensor(x):
-    assert x.is_contiguous()
-    assert x.dtype == torch.float32
-    return faiss.cast_integer_to_float_ptr(
-        x.storage().data_ptr() + x.storage_offset() * 4)
-
-def swig_ptr_from_LongTensor(x):
-    assert x.is_contiguous()
-    assert x.dtype == torch.int64, 'dtype=%s' % x.dtype
-    return faiss.cast_integer_to_long_ptr(
-        x.storage().data_ptr() + x.storage_offset() * 8)
 
 def get_best_run(run_label, wandb_save_dir):
     for (root_dir, dirs, files) in os.walk(wandb_save_dir + "/wandb"):
