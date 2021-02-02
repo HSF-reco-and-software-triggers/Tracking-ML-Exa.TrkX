@@ -12,11 +12,11 @@ stage_list:
 #     input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/feature_store_endcaps_all,
 #     output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_weighted_all,
 #     r_test: 1.95, overwrite: False, callbacks: EmbeddingInferenceCallback, max_epochs: 96, train_split: [[7000, 250, 250]]}}
-#     - {set: Filter, name: VanillaFilter, config: train_coda_filter.yaml, resume_id: eqzrkf4q, override: {filter_cut: 0.029,
-#     input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_unweighted_all, output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_endcaps_unweighted_all, 
-#     overwrite: False, max_epochs: 49, callbacks: FilterInferenceCallback, datatype_split: [[7000, 500, 500]]}}
-    - {set: Filter, name: VanillaFilter, config: train_coda_filter.yaml, resume_id: 4vvq72tn, override: {filter_cut: 0.0253,
-    input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_weighted_all, output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_endcaps_weighted_all, 
-    overwrite: False, max_epochs: 59, callbacks: FilterInferenceCallback, datatype_split: [[70, 25, 25]]}}
+    - {set: Filter, name: VanillaFilter, config: train_coda_filter.yaml, resume_id: eqzrkf4q, override: {filter_cut: 0.029,
+    input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_unweighted_all, output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_endcaps_unweighted_all, 
+    overwrite: False, max_epochs: 49, callbacks: FilterInferenceCallback, datatype_split: [[7000, 250, 250]]}}
+#     - {set: Filter, name: VanillaFilter, config: train_coda_filter.yaml, resume_id: 4vvq72tn, override: {filter_cut: 0.0253,
+#     input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_weighted_all, output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_endcaps_weighted_all, 
+#     overwrite: False, max_epochs: 59, callbacks: FilterInferenceCallback, datatype_split: [[7000, 250, 250]]}}
 #     - {set: GNN, name: SliceCheckpointedResAGNN, config: train_coda_gnn.yaml, resume_id: }
     

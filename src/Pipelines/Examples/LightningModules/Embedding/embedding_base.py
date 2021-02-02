@@ -51,10 +51,17 @@ class EmbeddingBase(LightningModule):
 
     def configure_optimizers(self):
         optimizer = [torch.optim.AdamW(self.parameters(), lr=(self.hparams["lr"]), betas=(0.9, 0.999), eps=1e-08, amsgrad=True)]
+#         scheduler = [
+#             {
+#                 'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
+#                 'monitor': 'val_loss',
+#                 'interval': 'epoch',
+#                 'frequency': 1
+#             }
+#         ]
         scheduler = [
             {
-                'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
-                'monitor': 'val_loss',
+                'scheduler': torch.optim.lr_scheduler.StepLR(optimizer[0], step_size=self.hparams["patience"], gamma=self.hparams["factor"]),
                 'interval': 'epoch',
                 'frequency': 1
             }
@@ -105,7 +112,7 @@ class EmbeddingBase(LightningModule):
             new_weights = new_weights.to(self.device) * self.hparams["weight"] # Weight positive examples
         else:
             e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-            new_weights = y_cluster * self.hparams["weight"]
+            new_weights = y_cluster.to(self.device) * self.hparams["weight"]
         
         # Append all positive examples and their truth and weighting
         e_spatial = torch.cat([e_spatial.to(self.device), e_bidir.transpose(0,1).repeat(1,1).view(-1, 2).transpose(0,1)], axis=-1)
@@ -122,7 +129,7 @@ class EmbeddingBase(LightningModule):
         neighbors = spatial.index_select(0, e_spatial[0])
         d = torch.sum((reference - neighbors)**2, dim=-1)
         
-        new_weights[y_cluster == -1] = 1 # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)        
+        new_weights[y_cluster == 0] = 1 # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)        
         d = d * new_weights
 
         loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
@@ -186,7 +193,7 @@ class EmbeddingBase(LightningModule):
         Step to evaluate the model's performance
         """
 
-        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_val"], 200, log=True)
+        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_val"], 100, log=True)
 
         return outputs["loss"]
     
@@ -194,7 +201,7 @@ class EmbeddingBase(LightningModule):
         """
         Step to evaluate the model's performance
         """
-        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_test"], 500, log=False)
+        outputs = self.shared_evaluation(batch, batch_idx, self.hparams["r_test"], 200, log=False)
 
         return outputs
 

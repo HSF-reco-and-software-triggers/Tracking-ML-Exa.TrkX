@@ -164,8 +164,6 @@ class EmbeddingInferenceCallback(Callback):
             batch.weights = new_weights
         else:
             e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-            
-#         logging.info("Constructing with radius {}, producing {} edges, eff: {}, pur: {}".format(pl_module.hparams.r_test, e_spatial.shape[1], y_cluster.sum() / batch.layerless_true_edges.shape[1], y_cluster.sum() / y_cluster.shape[0]))
         
         # Re-introduce random direction, to avoid training bias
         random_flip = torch.randint(2, (e_spatial.shape[1],)).bool()

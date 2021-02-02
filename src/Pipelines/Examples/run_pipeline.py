@@ -108,7 +108,8 @@ if __name__=="__main__":
     run_args, model_args = parse_pipeline()
     
     logging_level = logging.INFO if run_args.verbose else logging.WARNING
-    logging.basicConfig(level=logging_level)
+#     logging.basicConfig(level=logging_level)
+    logging.basicConfig(level=logging.INFO)
     logging.info("Parsed run args: {}".format(run_args))
     logging.info("Parsed model args: {}".format(model_args))
     

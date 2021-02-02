@@ -1,6 +1,7 @@
 # System imports
 import sys
 import os
+import copy
 
 # 3rd party imports
 import pytorch_lightning as pl
@@ -80,7 +81,7 @@ class FilterInferenceCallback(Callback):
                     if (not os.path.exists(os.path.join(self.output_dir, datatype, batch.event_file[-4:]))) or self.overwrite:
                         batch_to_save = copy.deepcopy(batch)
                         batch_to_save = batch_to_save.to(pl_module.device) #Is this step necessary??
-                        batch_to_save = self.construct_downstream(data, pl_module).to("cpu")
+                        batch_to_save = self.construct_downstream(batch_to_save, pl_module).to("cpu")
                         self.save_downstream(batch_to_save, pl_module, datatype)
 
                     batch_incr += 1
@@ -109,7 +110,8 @@ class FilterInferenceCallback(Callback):
         y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         batch.y_pid = y_pid[cut_list]
         batch.edge_index = batch.edge_index[:, cut_list]
-        batch.weights = batch.weights[cut_list]
+        if 'weighting' in pl_module.hparams['regime']:
+            batch.weights = batch.weights[cut_list]
         
         return batch
 
