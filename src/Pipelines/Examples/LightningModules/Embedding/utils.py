@@ -73,7 +73,10 @@ def filter_edge_pt(events, pt_cut=0):
         
     if pt_cut > 0:
         for event in events:
-            pt = fetch_pt(event)
+            if 'pt' in event.__dict__.keys():
+                pt = event.pt
+            else:
+                pt = fetch_pt(event)
             edge_subset = pt[event.edge_index] > pt_cut
             combined_subset = edge_subset[0] & edge_subset[1]
             event.edge_index = event.edge_index[:, combined_subset]
@@ -89,7 +92,10 @@ def filter_hit_pt(events, pt_cut=0):
         
     if pt_cut > 0:
         for event in events:
-            pt = fetch_pt(event)
+            if 'pt' in event.__dict__.keys():
+                pt = event.pt
+            else:
+                pt = fetch_pt(event)
             hit_subset = pt > pt_cut
             event.cell_data = event.cell_data[hit_subset]
             event.hid = event.hid[hit_subset]
