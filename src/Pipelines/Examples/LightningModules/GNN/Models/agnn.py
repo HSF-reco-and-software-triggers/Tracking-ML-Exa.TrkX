@@ -8,7 +8,6 @@ from torch.nn import Linear
 import torch.nn.functional as F
 import torch
 from torch_scatter import scatter_add
-from torch_geometric.nn.conv import MessagePassing
 from torch.utils.checkpoint import checkpoint
 
 from ..gnn_base import GNNBase
@@ -48,7 +47,7 @@ class NodeNetwork(nn.Module):
     def __init__(self, input_dim, output_dim, nb_layers, hidden_activation='Tanh',
                  layer_norm=True):
         super(NodeNetwork, self).__init__()
-        self.network = make_mlp(input_dim*3, [output_dim]*nb_layers,
+        self.network = make_mlp(input_dim*2, [output_dim]*nb_layers,
                                 hidden_activation=hidden_activation,
                                 output_activation=None,
                                 layer_norm=layer_norm)
@@ -56,9 +55,11 @@ class NodeNetwork(nn.Module):
     def forward(self, x, e, edge_index):
         start, end = edge_index
         # Aggregate edge-weighted incoming/outgoing features
-        mi = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0])
-        mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
-        node_inputs = torch.cat([mi, mo, x], dim=1)
+#         mi = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0])
+#         mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
+#         node_inputs = torch.cat([mi, mo, x], dim=1)
+        messages = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0]) + scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
+        node_inputs = torch.cat([messages, x], dim=1)
         return self.network(node_inputs)
        
         
