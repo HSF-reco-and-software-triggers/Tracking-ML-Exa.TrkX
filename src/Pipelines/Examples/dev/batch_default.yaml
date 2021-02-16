@@ -1,9 +1,0 @@
-job_name: test_slurm_library 
-qos: debug
-constraint: haswell
-nodes: 1
-time: 5
-# constraint: gpu
-# gpus: 1
-output: logs/%x-%j.out
-account: m1759
