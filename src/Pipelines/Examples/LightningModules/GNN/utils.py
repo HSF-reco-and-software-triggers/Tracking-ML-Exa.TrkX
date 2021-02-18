@@ -32,12 +32,18 @@ def filter_edge_pt(events, pt_cut=0):
     
     if pt_cut > 0:
         for event in events:
-            pt = fetch_pt(event)
-            edge_subset = pt.to_numpy()[event.edge_index] > pt_cut
+            if 'pt' in event.__dict__.keys():
+                pt = event.pt
+                edge_subset = pt.numpy()[event.edge_index] > pt_cut
+            else:
+                pt = fetch_pt(event)
+                edge_subset = pt.to_numpy()[event.edge_index] > pt_cut
             combined_subset = edge_subset[0] & edge_subset[1]
             event.edge_index = event.edge_index[:, combined_subset]
-            event.y = event.y[combined_subset]
-            event.y_pid = event.y_pid[combined_subset]
+            if 'y' in event.__dict__.keys():
+                event.y = event.y[combined_subset]
+            if 'y_pid' in event.__dict__.keys():
+                event.y_pid = event.y_pid[combined_subset]
     
     return events
     
@@ -148,3 +154,50 @@ def make_mlp(input_size, sizes,
             layers.append(nn.LayerNorm(sizes[-1]))
         layers.append(output_activation())
     return nn.Sequential(*layers)
+
+# ----------------------------- Performance Utilities ---------------------------
+
+def graph_model_evaluation(model, trainer, fom= "eff", fixed_value=0.96):
+        
+    # Seed solver with one batch, then run on full test dataset
+    sol = root(evaluate_set_root, args=(model, trainer, fixed_value, fom), x0=0.1, x1=0.2, xtol=0.001)
+    print("Seed solver complete, radius:", sol.root)
+    
+    # Return ( (efficiency, purity), radius_size)
+    return evaluate_set_metrics(sol.root, model, trainer), sol.root
+
+
+def evaluate_set_root(edge_cut, model, trainer, goal=0.96, fom="eff"):
+    eff, pur = evaluate_set_metrics(edge_cut, model, trainer)
+    
+    if fom=='eff':
+         return eff - goal
+        
+    elif fom=='pur':
+        return pur - goal
+    
+    
+def get_metrics(test_results):
+    
+    ps = [result["preds"].sum() for result in test_results[1:]]
+    ts = [result["truth"].sum() for result in test_results[1:]]
+    tps = [(result["preds"] * result["truth"]).sum() for result in test_results[1:]]
+    
+    efficiencies = [tp/t for (t, tp) in zip(ts, tps)]
+    purities = [tp/p for (p, tp) in zip(ps, tps)]
+    
+    mean_efficiency = np.mean(efficiencies)
+    mean_purity = np.mean(purities)
+    
+    return mean_efficiency, mean_purity
+
+
+def evaluate_set_metrics(edge_cut, model, trainer):
+    model.hparams.edge_cut = edge_cut
+    test_results = trainer.test(ckpt_path=None)
+    
+    mean_efficiency, mean_purity = get_metrics(test_results)
+    
+    print(mean_purity, mean_efficiency)
+    
+    return mean_efficiency, mean_purity

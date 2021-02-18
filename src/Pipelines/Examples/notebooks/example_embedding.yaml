@@ -3,7 +3,7 @@ input_dir: /project/projectdirs/m3443/data/trackml-codalab/feature_store_endcaps
 
 # Dataset parameters
 pt_min: 1
-train_split: [100, 20, 20] # Number of [training, validation, testing] examples
+train_split: [10, 20, 20] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
