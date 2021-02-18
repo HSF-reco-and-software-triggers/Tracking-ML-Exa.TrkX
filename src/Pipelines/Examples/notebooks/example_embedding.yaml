@@ -21,9 +21,9 @@ r_train: 1
 r_val: 1
 r_test: 1.5
 knn: 50
-warmup: 300
+warmup: 500
 margin: 1
-lr: 0.002
+lr: 0.001
 factor: 0.3
 patience: 8
 regime: [rp, hnm, ci]

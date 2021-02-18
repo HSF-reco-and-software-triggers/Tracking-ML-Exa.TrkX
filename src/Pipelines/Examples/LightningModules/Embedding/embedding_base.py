@@ -133,7 +133,7 @@ class EmbeddingBase(LightningModule):
         d = d * new_weights
 
         loss = torch.nn.functional.hinge_embedding_loss(d, hinge, margin=self.hparams["margin"], reduction="mean")
-
+        logs = {'train_loss':loss}
         self.log('train_loss', loss)
 
         return loss
