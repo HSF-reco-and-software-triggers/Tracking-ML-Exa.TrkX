@@ -13,3 +13,5 @@ jobs:
           python-version: 3.8
       - name: Install Docs
         run: pip install mkdocs-material mkdocstrings
+      - name: Deploy Docs
+        run: mkdocs gh-deploy --force
