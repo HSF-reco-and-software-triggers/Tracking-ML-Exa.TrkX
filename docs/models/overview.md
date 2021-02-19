@@ -22,7 +22,7 @@ Once a model is included in a Pipeline, it can included as a stage, as in the [T
 
 ## Test Model
 
-::: src.Pipelines.Examples.LightningModules.Embedding.embedding_base.EmbeddingBase
+::: src.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base.EmbeddingBase
     handler: python
     selection:
       members:
