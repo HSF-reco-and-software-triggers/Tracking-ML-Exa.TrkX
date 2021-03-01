@@ -1,0 +1,38 @@
+# Input/output configuration
+input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_weighted
+output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_endcaps_weighted
+project: FilteringStudy
+filter_cut: 0.15
+
+# Dataset parameters
+pt_min: 0
+datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [100, 25, 25] # Number of [training, validation, testing] examples
+endcaps: True
+layerwise: False
+layerless: True
+noise: False
+adjacent: False
+
+# Model parameters
+in_channels: 12
+hidden: 512
+nb_layer: 3
+emb_channels: 0
+layernorm: True
+batchnorm: False
+ratio: 1
+weight: 1
+val_subset: 0.1
+warmup: 400
+lr: 0.01
+factor: 0.3
+patience: 8
+regime: [[weighting, ci]]
+max_epochs: 10
+
+# Post-processing
+callbacks: [] #[FilterInferenceCallback]
+
+# Logging
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

@@ -1,0 +1,15 @@
+# Input/output configuration
+input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/train_all
+output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/feature_store_endcaps_SMALLTEST
+detector_path: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/detectors.csv
+n_files: 200
+n_workers: 32
+n_tasks: 1
+overwrite: False
+
+endcaps: True
+noise: False
+adjacent: True
+layerless: True
+layerwise: False
+cell_information: True
