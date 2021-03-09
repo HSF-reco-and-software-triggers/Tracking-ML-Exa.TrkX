@@ -14,7 +14,7 @@ jobs:
       - name: Install PyGeometric
         env: 
           CUDA: cpu
-        run: pip install requirements.txt -f https://download.pytorch.org/whl/torch_stable.html -f https://pytorch-geometric.com/whl/torch-1.8.0+${CUDA}.html
+        run: pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html -f https://pytorch-geometric.com/whl/torch-1.8.0+${CUDA}.html
 #       - name: Install Dependencies 1
 #         run: pip install torch==1.8.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
       - name: Install Dependencies 2
