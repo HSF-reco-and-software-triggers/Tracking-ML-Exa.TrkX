@@ -3,7 +3,7 @@ import sys
 
 def install(package, file_link=None):
     if file_link:
-        subprocess.run([sys.executable, "-m", "pip", "install", package, "-f", file_link], stdout=True, stderr=True, capture_output=True, shell=True)
+        subprocess.run([sys.executable, "-m", "pip", "install", package, "-f", file_link], capture_output=True, shell=True)
     else:
         subprocess.run([sys.executable, "-m", "pip", "install", package])
     
