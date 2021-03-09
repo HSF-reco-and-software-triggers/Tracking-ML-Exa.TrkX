@@ -3,9 +3,9 @@ import sys
 
 def install(package, file_link=None):
     if file_link:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package, "-f", file_link])
+        subprocess.run([sys.executable, "-m", "pip", "install", package, "-f", file_link], stdout=True, stderr=True, capture_output=True, shell=True)
     else:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+        subprocess.run([sys.executable, "-m", "pip", "install", package])
     
 def main():
     
