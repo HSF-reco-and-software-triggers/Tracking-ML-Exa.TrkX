@@ -21,7 +21,7 @@ def main():
     
     import_torch = "python -c \"import torch; print(torch.__version__)\""
     try:
-        output = subprocess.run([sys.executable, import_torch], capture_output=True, shell=True)
+        output = subprocess.run([sys.executable, import_torch], capture_output=True)
         print("Imported!")
         print(output)
     except ModuleNotFoundError as err:
