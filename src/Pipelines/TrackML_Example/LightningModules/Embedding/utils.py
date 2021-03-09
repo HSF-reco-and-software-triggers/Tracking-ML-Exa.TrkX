@@ -1,6 +1,5 @@
 import os
 import logging
-from memory_profiler import profile
 
 import faiss
 import faiss.contrib.torch_utils

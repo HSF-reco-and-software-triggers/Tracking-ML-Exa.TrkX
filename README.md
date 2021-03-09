@@ -11,7 +11,7 @@
 
 [Documentation](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/)
 
-![badge](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/murnanedaniel/acee2761c6c03febc3331296514ff721/raw/test.json) ![ci](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/workflows/ci/badge.svg)
+[![make_docs](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/make_docs.yml/badge.svg)](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/make_docs.yml) [![ci](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/ci.yml/badge.svg)](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/ci.yml)
 
 
 </div>
@@ -37,6 +37,7 @@ It's recommended to start a conda environment before installation:
 ```
 conda install --name exatrkx-tracking python=3.8
 conda activate exatrkx-tracking
+pip install pip --upgrade
 ```
 
 The repository can be installed and run with GPU or CPU. The installation depends on this compatibility:
