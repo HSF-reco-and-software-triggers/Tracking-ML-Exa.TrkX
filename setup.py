@@ -12,6 +12,7 @@ dependencies = [
         "matplotlib",
         'sklearn',
         'pyyaml>=5.1',
+        'pytorch3d',
         'trackml@ https://github.com/LAL/trackml-library/tarball/master#egg=trackml-3'
         ]     
 
