@@ -25,6 +25,7 @@ setup(
 
     author="Daniel Murnane",
 
+    install_requires=dependencies,
     packages=find_packages(include=['src', 'src.*']),
 
     long_description=read('README.md'),
