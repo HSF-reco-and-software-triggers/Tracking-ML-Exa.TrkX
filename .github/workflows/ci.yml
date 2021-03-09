@@ -25,8 +25,10 @@ jobs:
 #         run: pip install torch-geometric
       - name: Install TrackML
         run: pip install git+https://github.com/LAL/trackml-library
-      - name: Install Setup.py
-        run: pip install -e .
+#       - name: Install Setup.py
+#         run: pip install -e .
+      - name: Install pytorch3D
+        run: conda install pytorch3d -c pytorch3d
       - name: Test Import
         run: python -c 'from src.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
       - name: Make Success Badge  
