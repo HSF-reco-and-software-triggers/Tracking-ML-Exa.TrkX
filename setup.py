@@ -18,7 +18,7 @@ dependencies = [
 setup(
     name="TrackingMLExatrkx",
     
-    version='0.1.0',
+    version='0.2.0',
 
     description="Models, pipelines, and utilities for solving tracking problems with machine learning.",
 

@@ -1,0 +1,6 @@
+torch==1.8.0+${CUDA} --find-links https://download.pytorch.org/whl/torch_stable.html
+torch-scatter -f https://pytorch-geometric.com/whl/torch-1.8.0+${CUDA}.html
+torch-sparse -f https://pytorch-geometric.com/whl/torch-1.8.0+${CUDA}.html
+torch-cluster -f https://pytorch-geometric.com/whl/torch-1.8.0+${CUDA}.html
+torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.8.0+${CUDA}.html
+torch-geometric
