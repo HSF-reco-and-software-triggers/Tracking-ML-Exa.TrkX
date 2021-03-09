@@ -19,5 +19,11 @@ def main():
     except ModuleNotFoundError as err:
         print(err)
     
+    import_torch = "python -c \"import torch; print(torch.__version__)\""
+    try:
+        subprocess.run([sys.executable, import_torch], capture_output=True, shell=True)
+        print("Imported!")
+    except ModuleNotFoundError as err:
+        print(err)
 if __name__=="__main__":
     main()
