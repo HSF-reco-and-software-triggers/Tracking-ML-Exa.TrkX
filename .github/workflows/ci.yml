@@ -28,7 +28,7 @@ jobs:
 #       - name: Install Setup.py
 #         run: pip install -e .
       - name: Install pytorch3D
-        run: pip install pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py38_cpu_pyt180/download.html
+        run: pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"
       - name: Test Import
         run: python -c 'from src.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
       - name: Make Success Badge  
