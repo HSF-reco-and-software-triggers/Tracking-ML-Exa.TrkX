@@ -30,7 +30,9 @@ def main():
     hardware = get_cuda_version()
     os.environ["CUDA"] = hardware
     # Install requirements
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], capture_output=True)
+    
+    print(output)
     
     # Install faiss
     # Install pytorch3d
