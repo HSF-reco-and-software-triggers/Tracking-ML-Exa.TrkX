@@ -34,19 +34,20 @@ def main():
     os.environ["CUDA"] = hardware
     # Install requirements
 #     output = install("-r requirements.txt", file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware))
-    package = "requirements.txt"
-    file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware)
-    output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package, "-f", file_link], capture_output=True)
-    print(output)
+#     package = "requirements.txt"
+#     file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware)
+#     output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package, "-f", file_link], capture_output=True)
+#     print(output)
     
     # Install faiss
     # Install pytorch3d
     
     # Install setup
     
-#     cuda = "cpu"
-#     torch_version = "torch==1.8.0"+cuda
-#     install("torch_version", "https://download.pytorch.org/whl/torch_stable.html")
+
+    torch_version = "torch==1.8.0+"+cuda
+    output = install(torch_version, "https://download.pytorch.org/whl/torch_stable.html")
+    print(output)
     
 #     try:
 #         import torch
