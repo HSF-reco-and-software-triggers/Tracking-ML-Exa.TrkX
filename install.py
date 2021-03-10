@@ -36,7 +36,7 @@ def main():
 #     output = install("-r requirements.txt", file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware))
     package = "requirements.txt"
     file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware)
-    subprocess.run([sys.executable, "-m", "pip", "install", "-r", package, "-f", file_link], capture_output=True)
+    output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package, "-f", file_link], capture_output=True)
     print(output)
     
     # Install faiss
