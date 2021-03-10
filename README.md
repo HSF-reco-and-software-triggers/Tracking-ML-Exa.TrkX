@@ -40,7 +40,17 @@ conda activate exatrkx-tracking
 pip install pip --upgrade
 ```
 
-The repository can be installed and run with GPU or CPU. The installation depends on this compatibility:
+If you have a CUDA GPU available, load the toolkit or [install it](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) now.  
+
+```
+python install.py
+```
+
+will **attempt** to negotiate a path through the packages required, using `nvcc --version` to automatically find the correct wheels. 
+
+You should be ready for the [Quickstart](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/quickstart)!
+
+If this doesn't work, you can step through the process manually:
 
 <table style="border: 1px solid gray; border-collapse: collapse">
 <tr style="border-bottom: 1px solid gray">
@@ -67,7 +77,7 @@ The repository can be installed and run with GPU or CPU. The installation depend
 
 2. Install Pytorch and dependencies 
 
-```pip install --user -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html -f https://pytorch-geometric.com/whl/torch-1.5.0.html```
+```pip install --user -r requirements.txt```
 
 </td>
 </tr>
@@ -85,14 +95,22 @@ The repository can be installed and run with GPU or CPU. The installation depend
 
 4. Install CPU-optimized packages
 
-```pip install faiss-cpu```
+```pip install faiss-cpu
+ pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"``` 
     
 </td>
 <td style="border-left: 1px solid gray">
 
 4. Install GPU-optimized packages
 
-```pip install faiss-gpu cupy-cudaXXX```, with ```XXX```
+```pip install faiss-gpu cupy-cudaXXX```, with `XXX`
+    
+```pip install pytorch3d 
+    -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py3{Y}_cu{XXX}_pyt{ZZZ}/download.html```
+    
+where `{Y}` is the minor version of Python 3.{Y}, `{XXX}` is as above, and `{ZZZ}` is the version of Pytorch {Z.ZZ}.
+
+    e.g. `py36_cu101_pyt170` is Python 3.6, Cuda 10.1, Pytorch 1.70.
     
 </td>
 </tr>

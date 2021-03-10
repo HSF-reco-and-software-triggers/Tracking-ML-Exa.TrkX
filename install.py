@@ -54,25 +54,16 @@ def main():
         output = install("cupy-cuda{}".format(hardware[2:]))
         print(output)
     
-    # Install pytorch3d
-    # If using cuda, pip install SHOULD work
+    # Install Pytorch3d
+    
     if hardware == "cpu":
         output = install("git+https://github.com/facebookresearch/pytorch3d.git@stable")
     else:
+        # If using cuda, pip install SHOULD work
         output = install("pytorch3d", file_link="https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py3{}_{}_pyt180/download.html".format(sys.version_info.minor, hardware))
-    
-    
-
-#     torch_version = "torch==1.8.0+"+hardware
-#     output = install(torch_version, "https://download.pytorch.org/whl/torch_stable.html")
-#     print(output)
-    
-#     try:
-#         import torch
-#         print("Imported!")
-#     except ModuleNotFoundError as err:
-#         print(err)    
-    
+        
+    print(output)
+        
         
 if __name__=="__main__":
     main()
