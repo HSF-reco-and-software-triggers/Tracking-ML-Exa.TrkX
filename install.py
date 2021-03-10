@@ -45,8 +45,9 @@ def main():
     print(output)
     
     # Install FAISS
-    if hardware is "cpu":
+    if hardware == "cpu":
         output = install("faiss-cpu")
+        print(output)
     else:   
         output = install("faiss-gpu")
         print(output)
@@ -54,6 +55,11 @@ def main():
         print(output)
     
     # Install pytorch3d
+    # If using cuda, pip install SHOULD work
+    if hardware == "cpu":
+        output = install("git+https://github.com/facebookresearch/pytorch3d.git@stable")
+    else:
+        output = install("pytorch3d", file_link="https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py3{}_{}_pyt180/download.html".format(sys.version_info.minor, hardware))
     
     
 
