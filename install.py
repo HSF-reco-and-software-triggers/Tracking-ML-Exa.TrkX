@@ -34,7 +34,7 @@ def main():
     os.environ["CUDA"] = hardware
     # Install requirements
 #     output = install("-r requirements.txt", file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware))
-    package = "torch_requirement.txt"
+    package = "requirements.txt"
     file_link_1 = "https://download.pytorch.org/whl/torch_stable.html"
     file_link_2 = "https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware)
     output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package, "-f", file_link_1], capture_output=True)
