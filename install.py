@@ -2,9 +2,13 @@ import subprocess
 import sys
 import os
 
-def install(package, file_link=None):
+def install(package, file_link=None, r=False, e=False):
     if file_link:
         output = subprocess.run([sys.executable, "-m", "pip", "install", package, "-f", file_link], capture_output=True)
+    elif r:
+        output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package], capture_output=True)
+    elif e:
+        output = subprocess.run([sys.executable, "-m", "pip", "install", "-e", package], capture_output=True)
     else:
         output = subprocess.run([sys.executable, "-m", "pip", "install", package], capture_output=True)
     
@@ -33,21 +37,24 @@ def main():
     hardware = get_cuda_version()
     os.environ["CUDA"] = hardware
     # Install requirements
-#     output = install("-r requirements.txt", file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware))
-    package_1 = "requirements.txt"
-    package_2 = "geometric_requirements.txt"
-    file_link_1 = "https://download.pytorch.org/whl/torch_stable.html"
-    file_link_2 = "https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware)
-    output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package_1], capture_output=True)
+    output = install("requirements.txt", r=True)
+    print(output)
+        
+    # Install setup
+    output = install(".", e=True)
     print(output)
     
-#     output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package_2, "-f", file_link_2], capture_output=True)
-#     print(output)
+    # Install FAISS
+    if hardware is "cpu":
+        output = install("faiss-cpu")
+    else:   
+        output = install("faiss-gpu")
+        print(output)
+        output = install("cupy-cuda{}".format(hardware[2:]))
+        print(output)
     
-    # Install faiss
     # Install pytorch3d
     
-    # Install setup
     
 
 #     torch_version = "torch==1.8.0+"+hardware
