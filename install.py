@@ -11,6 +11,7 @@ def install(package, file_link=None):
 def get_cuda_version():
         
     output = subprocess.run("nvcc --version", shell=True, capture_output=True)
+    print(output)
     
     if output.returncode > 0:
         hardware="cpu"
