@@ -1,7 +1,6 @@
 import subprocess
 import sys
 import os
-import torch
 
 def install(package, file_link=None):
     if file_link:
