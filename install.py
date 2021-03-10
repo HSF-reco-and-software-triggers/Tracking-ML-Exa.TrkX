@@ -45,7 +45,7 @@ def main():
     # Install setup
     
 
-    torch_version = "torch==1.8.0+"+cuda
+    torch_version = "torch==1.8.0+"+hardware
     output = install(torch_version, "https://download.pytorch.org/whl/torch_stable.html")
     print(output)
     
