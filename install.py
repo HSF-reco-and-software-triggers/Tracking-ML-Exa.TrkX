@@ -38,7 +38,7 @@ def main():
     file_link_1 = "https://download.pytorch.org/whl/torch_stable.html"
     file_link_2 = "https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware)
     output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", package, "-f", file_link_1], capture_output=True)
-#     print(output)
+    print(output)
     
     # Install faiss
     # Install pytorch3d
