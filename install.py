@@ -4,9 +4,11 @@ import os
 
 def install(package, file_link=None):
     if file_link:
-        subprocess.run([sys.executable, "-m", "pip", "install", package, "-f", file_link], capture_output=True)
+        output = subprocess.run([sys.executable, "-m", "pip", "install", package, "-f", file_link], capture_output=True)
     else:
-        subprocess.run([sys.executable, "-m", "pip", "install", package])
+        output subprocess.run([sys.executable, "-m", "pip", "install", package], capture_output=True)
+    
+    return output
 
 def get_cuda_version():
         
@@ -31,7 +33,7 @@ def main():
     hardware = get_cuda_version()
     os.environ["CUDA"] = hardware
     # Install requirements
-    output = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], capture_output=True)
+    output = install("-r requirements.txt", file_link = "https://download.pytorch.org/whl/torch_stable.html https://pytorch-geometric.com/whl/torch-1.8.0+{}.html".format(hardware))
     
     print(output)
     
