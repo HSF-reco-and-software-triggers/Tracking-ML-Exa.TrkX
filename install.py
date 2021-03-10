@@ -6,7 +6,7 @@ def install(package, file_link=None):
     if file_link:
         output = subprocess.run([sys.executable, "-m", "pip", "install", package, "-f", file_link], capture_output=True)
     else:
-        output subprocess.run([sys.executable, "-m", "pip", "install", package], capture_output=True)
+        output = subprocess.run([sys.executable, "-m", "pip", "install", package], capture_output=True)
     
     return output
 
