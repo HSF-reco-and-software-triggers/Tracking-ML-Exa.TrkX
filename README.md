@@ -40,7 +40,7 @@ conda activate exatrkx-tracking
 pip install pip --upgrade
 ```
 
-If you have a CUDA GPU available, load the toolkit or [install it](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) now.  
+If you have a CUDA GPU available, load the toolkit or [install it](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) now. You should check that this is done by running `nvcc --version`. Then, running:
 
 ```
 python install.py
@@ -117,3 +117,11 @@ where `{Y}` is the minor version of Python 3.{Y}, `{XXX}` is as above, and `{ZZZ
 </td>
 </tr>
 </table>
+
+### Vintage Errors
+
+A very possible error will be
+```
+OSError: libcudart.so.XX.X: cannot open shared object file: No such file or directory
+```
+This indicates a mismatch between CUDA versions. Identify the library that called the error, and ensure there are no versions of this library installed in parallel, e.g. from a previous `pip --user` install.

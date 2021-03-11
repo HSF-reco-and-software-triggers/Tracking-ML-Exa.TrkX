@@ -6,30 +6,30 @@ See instructions at [Install](https://hsf-reco-and-software-triggers.github.io/T
 
 ## 2. Get Dataset
 
-The easiest way to get the TrackML dataset is to use the Kaggle API. Install it with
+For now, let's keep our data in a directory, with a location saved to `export EXATRKX_DATA=/my/data/path`. The easiest way to get the TrackML dataset is to use the Kaggle API. Install it with
 ```
 pip install kaggle
 ```
-then grab a small toy dataset with
+and grab a small toy dataset with
 ```
 kaggle competitions download \
     -c trackml-particle-identification \
     -f train_sample.zip \
-    -p /PATH/TO/DATA/DIRECTORY
+    -p $EXATRKX_DATA
 ```
 
 ## 3. Running the Pipeline
 
 ### Configuration
 
-A pipeline runs at three layers of configuration, to allow for as much flexibility as possible. To get running immediately however, you needn't change any of the defaults. From the `src/Pipelines/Examples/` directory, we run
+A pipeline runs at three layers of configuration, to allow for as much flexibility as possible. To get running immediately however, you needn't change any of the defaults. From the `src/Pipelines/TrackML_Example/` directory, we run
 
 ```
 python run_pipeline.py config/pipeline_quickstart.yaml
 ```
-which loads the pipeline specified in `config/pipeline_quickstart`. 
+which loads the pipeline specified in `configs/pipeline_quickstart`. 
 
-While it's running, get a cup of tea and a Tim-Tam, and let's see what it's doing.
+While it's running, get a cup of tea and a Tim-Tam, and let's see what it's doing:
 
 ### Default behaviour
 

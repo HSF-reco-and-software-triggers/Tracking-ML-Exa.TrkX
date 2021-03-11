@@ -13,6 +13,9 @@ dependencies = [
         'pyyaml>=5.1',
         'pytorch-lightning',
         'decorator',
+        'more_itertools',
+        'simple_slurm',
+        'memory_profiler',
         'trackml@ https://github.com/LAL/trackml-library/tarball/master#egg=trackml-3'
         ]     
 

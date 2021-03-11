@@ -34,36 +34,44 @@ def get_cuda_version():
 
 def main():
     
+    # Get CUDA version
     hardware = get_cuda_version()
     os.environ["CUDA"] = hardware
+        
+    # Install Pytorch
+    if hardware == "cu102":
+        output=install("torch")
+    else:
+        file_link = "https://download.pytorch.org/whl/torch_stable.html"
+        output=install("torch==1.8.0+{}".format(hardware), file_link = file_link)
+    print(output.stdout.decode("utf-8"))
+
     # Install requirements
     output = install("requirements.txt", r=True)
-    print(output)
+    print(output.stdout.decode("utf-8"))
         
     # Install setup
     output = install(".", e=True)
-    print(output)
-    
+    print(output.stdout.decode("utf-8"))
+
     # Install FAISS
     if hardware == "cpu":
         output = install("faiss-cpu")
-        print(output)
+        print(output.stdout.decode("utf-8"))
     else:   
         output = install("faiss-gpu")
-        print(output)
+        print(output.stdout.decode("utf-8"))
         output = install("cupy-cuda{}".format(hardware[2:]))
-        print(output)
+        print(output.stdout.decode("utf-8"))
     
     # Install Pytorch3d
-    
     if hardware == "cpu":
         output = install("git+https://github.com/facebookresearch/pytorch3d.git@stable")
     else:
         # If using cuda, pip install SHOULD work
         output = install("pytorch3d", file_link="https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py3{}_{}_pyt180/download.html".format(sys.version_info.minor, hardware))
         
-    print(output)
-        
+    print(output.stdout.decode("utf-8"))
         
 if __name__=="__main__":
     main()

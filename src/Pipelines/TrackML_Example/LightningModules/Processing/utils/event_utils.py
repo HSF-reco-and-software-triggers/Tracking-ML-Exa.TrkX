@@ -151,6 +151,6 @@ def prepare_event(event_file, detector_orig, detector_proc, cell_features, progr
                 
     
         else:
-            logging.info(evtid, "already exists")
+            logging.info("{} already exists".format(evtid))
     except:
         print("Exception with file:", event_file)

@@ -3,7 +3,9 @@ import argparse
 import yaml
 import logging
 
-from utils.stage_utils import get_resume_id, load_config, combo_config, get_logger, build_model, build_trainer, autocast, submit_batch
+from utils.config_utils import  load_config, combo_config, submit_batch
+from utils.data_utils import autocast
+from utils.model_utils import get_resume_id, get_logger, build_model, build_trainer
 
 
 def parse_pipeline():
@@ -71,11 +73,9 @@ def main(args):
     
     with open("configs/project_config.yaml") as f:
         project_config = yaml.load(f, Loader=yaml.FullLoader)
-    
-    libraries = project_config["libraries"]   
 
     # Make models available to the pipeline
-    sys.path.append(libraries["model_library"]) #  !!  TEST WITHOUT THIS LINE IN MAIN()
+    sys.path.append(project_config["libraries"]["model_library"]) #  !!  TEST WITHOUT THIS LINE IN MAIN()
 
     for stage in pipeline_config["stage_list"]:
 
@@ -83,7 +83,7 @@ def main(args):
         resume_id = get_resume_id(stage)
 
         # Get config file, from given location OR from ckpnt
-        model_config = load_config(stage, resume_id, libraries, project_config)   
+        model_config = load_config(stage, resume_id, project_config)
         logging.info("Single config: {}".format(model_config))
         
         model_config_combos = combo_config(model_config) if resume_id is None else [model_config]
@@ -102,8 +102,8 @@ if __name__=="__main__":
     run_args, model_args = parse_pipeline()
     
     logging_level = logging.INFO if run_args.verbose else logging.WARNING
-#     logging.basicConfig(level=logging_level)
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging_level)
+#     logging.basicConfig(level=logging.INFO)
     logging.info("Parsed run args: {}".format(run_args))
     logging.info("Parsed model args: {}".format(model_args))
     

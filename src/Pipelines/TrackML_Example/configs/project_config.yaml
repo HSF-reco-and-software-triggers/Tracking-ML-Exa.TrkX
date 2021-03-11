@@ -1,6 +1,6 @@
 # Location of libraries
 libraries:
-    model_library: /global/homes/d/danieltm/ExaTrkX/Tracking-ML-Exa.TrkX/src/Pipelines/Examples/LightningModules
+    model_library: /global/homes/d/danieltm/ExaTrkX/Tracking-ML-Exa.TrkX/src/Pipelines/TrackML_Example/LightningModules
     artifact_library: /global/cscratch1/sd/danieltm/ExaTrkX/lightning_checkpoints
 
 # The lines you would like/need in a batch script before the call to pipeline.py
@@ -9,4 +9,4 @@ custom_batch_script:
     - conda activate exatrkx-test
     
 # Which logger to use - options are Weights & Biases [wandb], TensorBoard [tb], or [None]
-logger: wandb
+logger: tb
