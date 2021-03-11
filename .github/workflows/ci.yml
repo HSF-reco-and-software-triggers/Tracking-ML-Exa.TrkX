@@ -15,28 +15,26 @@ jobs:
         run: pip install pip --upgrade
       - name: Install script
         run: python install.py
-#       - name: Install TrackML
-#         run: pip install git+https://github.com/LAL/trackml-library
       - name: Test Import
         run: python -c 'from src.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
-      - name: Make Success Badge  
-        if: success()
-        uses: schneegans/dynamic-badges-action@v1.0.0
-        with:
-          auth: ${{ secrets.GIST_SECRET }}
-          gistID: acee2761c6c03febc3331296514ff721
-          filename: test.json
-          label: build
-          message: passing
-          color: green
-      - name: Make Failure Badge
-        if: failure()
-        uses: schneegans/dynamic-badges-action@v1.0.0
-        with:
-          auth: ${{ secrets.GIST_SECRET }}
-          gistID: acee2761c6c03febc3331296514ff721
-          filename: test.json
-          isError: true
-          label: build
-          message: failing
-          color: orange
+#       - name: Make Success Badge  
+#         if: success()
+#         uses: schneegans/dynamic-badges-action@v1.0.0
+#         with:
+#           auth: ${{ secrets.GIST_SECRET }}
+#           gistID: acee2761c6c03febc3331296514ff721
+#           filename: test.json
+#           label: build
+#           message: passing
+#           color: green
+#       - name: Make Failure Badge
+#         if: failure()
+#         uses: schneegans/dynamic-badges-action@v1.0.0
+#         with:
+#           auth: ${{ secrets.GIST_SECRET }}
+#           gistID: acee2761c6c03febc3331296514ff721
+#           filename: test.json
+#           isError: true
+#           label: build
+#           message: failing
+#           color: orange
