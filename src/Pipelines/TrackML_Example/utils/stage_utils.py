@@ -7,8 +7,10 @@ from more_itertools import collapse
 
 import torch
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+
+from simple_slurm import Slurm
 
 def handle_config_cases(some_config):
     
@@ -22,6 +24,18 @@ def handle_config_cases(some_config):
     else:
         return [some_config]
 
+def submit_batch(config, project_config):
+    
+    with open(config.batch) as f:
+        batch_config = yaml.load(f, Loader=yaml.FullLoader)
+        
+    command_line_args = dict_to_args(config)
+    slurm = Slurm(**batch_config)
+    custom_batch_setup = project_config["custom_batch_setup"]
+    slurm_command = "\n".join(custom_batch_setup) + """\n python run_pipeline.py --run-stage """ + command_line_args
+    logging.info(slurm_command)
+    slurm.sbatch(slurm_command)
+    
 def find_config(name, path):
     for root, dirs, files in os.walk(path):
         if name in files:
@@ -33,10 +47,11 @@ def find_checkpoint(run_id, path):
             latest_run_path = os.path.join(root_dir, run_id, "last.ckpt")
             return latest_run_path
 
-def load_config(stage, resume_id, libraries):
+def load_config(stage, resume_id, libraries, project_config):
     if resume_id is None:
         with open(find_config(stage["config"], os.path.join(libraries["model_library"], stage["set"]))) as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
+        config["logger"] = project_config["logger"]
 
     else:
         ckpnt_path = find_checkpoint(resume_id, libraries["artifact_library"])
@@ -99,10 +114,14 @@ def build_model(model_config):
 
 def get_logger(model_config):
 
-    wandb_logger = WandbLogger(project=model_config["project"], save_dir = model_config["wandb_save_dir"], id=model_config["resume_id"])
+    if model_config["logger"] == "wandb":
+        logger = WandbLogger(project=model_config["project"], save_dir = model_config["wandb_save_dir"], id=model_config["resume_id"])
 
+    elif model_config["logger"] == "tb":
+        logger = TensorBoardLogger(name=model_config["project"], save_dir = model_config["wandb_save_dir"], version=model_config["resume_id"])
+        
     logging.info("Logger retrieved")
-    return wandb_logger
+    return logger
 
 
 def callback_objects(model_config, lr_logger=False):

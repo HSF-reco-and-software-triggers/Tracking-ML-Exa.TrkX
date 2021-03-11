@@ -3,9 +3,7 @@ import argparse
 import yaml
 import logging
 
-from simple_slurm import Slurm
-
-from utils.stage_utils import get_resume_id, load_config, combo_config, dict_to_args, get_logger, build_model, build_trainer, autocast
+from utils.stage_utils import get_resume_id, load_config, combo_config, get_logger, build_model, build_trainer, autocast, submit_batch
 
 
 def parse_pipeline():
@@ -71,10 +69,10 @@ def main(args):
     with open(args.pipeline_config) as f:
         pipeline_config = yaml.load(f, Loader=yaml.FullLoader)
     
-    libraries = pipeline_config["libraries"]
+    with open("configs/project_config.yaml") as f:
+        project_config = yaml.load(f, Loader=yaml.FullLoader)
     
-    with open(args.batch_config) as f:
-        batch_config = yaml.load(f, Loader=yaml.FullLoader)
+    libraries = project_config["libraries"]   
 
     # Make models available to the pipeline
     sys.path.append(libraries["model_library"]) #  !!  TEST WITHOUT THIS LINE IN MAIN()
@@ -85,19 +83,15 @@ def main(args):
         resume_id = get_resume_id(stage)
 
         # Get config file, from given location OR from ckpnt
-        model_config = load_config(stage, resume_id, libraries)   
+        model_config = load_config(stage, resume_id, libraries, project_config)   
         logging.info("Single config: {}".format(model_config))
+        
         model_config_combos = combo_config(model_config) if resume_id is None else [model_config]
         logging.info("Combo configs: {}".format(model_config_combos))
+        
         for config in model_config_combos:
             if args.batch:
-                command_line_args = dict_to_args(config)
-                slurm = Slurm(**batch_config)
-                slurm_command = """bash
-                             conda activate exatrkx-test
-                             python run_pipeline.py --run-stage """ + command_line_args
-                logging.info(slurm_command)
-                slurm.sbatch(slurm_command)
+                submit_batch(config, project_config)
             else:
                 run_stage(**config)
     
