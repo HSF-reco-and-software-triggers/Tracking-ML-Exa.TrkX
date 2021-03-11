@@ -35,7 +35,7 @@ Once up and running, you may want to consider more complex ML [Models](https://h
 It's recommended to start a conda environment before installation:
 
 ```
-conda install --name exatrkx-tracking python=3.8
+conda create --name exatrkx-tracking python=3.8
 conda activate exatrkx-tracking
 pip install pip --upgrade
 ```
