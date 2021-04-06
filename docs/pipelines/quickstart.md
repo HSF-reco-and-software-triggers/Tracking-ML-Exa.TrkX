@@ -6,7 +6,14 @@ See instructions at [Install](https://hsf-reco-and-software-triggers.github.io/T
 
 ## 2. Get Dataset
 
-For now, let's keep our data in a directory, with a location saved to `export EXATRKX_DATA=/my/data/path`. The easiest way to get the TrackML dataset is to use the Kaggle API. Install it with
+For now, let's keep our data in a directory, with a location saved to `/my/data/path`: 
+```
+export EXATRKX_DATA=/my/data/path
+export EXATRKX_PIPELINE=$(pwd)
+```
+(you can hard-code these into your custom configs later).
+
+The easiest way to get the TrackML dataset is to use the Kaggle API. Install it with
 ```
 pip install kaggle
 ```

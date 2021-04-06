@@ -1,7 +1,7 @@
 # Location of libraries
 libraries:
-    model_library: /global/homes/d/danieltm/ExaTrkX/Tracking-ML-Exa.TrkX/src/Pipelines/TrackML_Example/LightningModules
-    artifact_library: /global/cscratch1/sd/danieltm/ExaTrkX/lightning_checkpoints
+    model_library: ${EXATRKX_PIPELINE}/LightningModules
+    artifact_library: ${EXATRKX_DATA}/lightning_checkpoints
 
 # The lines you would like/need in a batch script before the call to pipeline.py
 custom_batch_script:
