@@ -27,7 +27,7 @@ A pipeline runs at three layers of configuration, to allow for as much flexibili
 ```
 python run_pipeline.py config/pipeline_quickstart.yaml
 ```
-which loads the pipeline specified in `configs/pipeline_quickstart`. 
+which loads the pipeline specified in `config/pipeline_quickstart`. 
 
 While it's running, get a cup of tea and a Tim-Tam, and let's see what it's doing:
 

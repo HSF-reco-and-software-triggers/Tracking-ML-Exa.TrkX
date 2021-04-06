@@ -77,7 +77,9 @@ If this doesn't work, you can step through the process manually:
 
 2. Install Pytorch and dependencies 
 
-```pip install --user -r requirements.txt```
+```
+    pip install --user -r requirements.txt
+```
 
 </td>
 </tr>
@@ -95,8 +97,10 @@ If this doesn't work, you can step through the process manually:
 
 4. Install CPU-optimized packages
 
-```pip install faiss-cpu
- pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable"``` 
+```
+pip install faiss-cpu
+pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable" 
+``` 
     
     
 </td>
@@ -106,8 +110,10 @@ If this doesn't work, you can step through the process manually:
 4. Install GPU-optimized packages
 
 ```pip install faiss-gpu cupy-cudaXXX```, with `XXX`    
-```pip install pytorch3d 
-    -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py3{Y}_cu{XXX}_pyt{ZZZ}/download.html```
+
+```
+pip install pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py3{Y}_cu{XXX}_pyt{ZZZ}/download.html
+```
     
 where `{Y}` is the minor version of Python 3.{Y}, `{XXX}` is as above, and `{ZZZ}` is the version of Pytorch {Z.ZZ}.
 
