@@ -34,6 +34,3 @@ max_epochs: 20
 
 # Postprocessing
 callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 
-
-# Logging
-wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
