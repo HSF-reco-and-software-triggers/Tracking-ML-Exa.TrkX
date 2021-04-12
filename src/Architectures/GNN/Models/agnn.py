@@ -13,6 +13,7 @@ from torch.utils.checkpoint import checkpoint
 from ..gnn_base import GNNBase
 from ..utils import make_mlp
 
+
 class EdgeNetwork(nn.Module):
     """
     A module which computes weights for edges of the graph.
@@ -20,14 +21,23 @@ class EdgeNetwork(nn.Module):
     and applies some fully-connected network layers with a final
     sigmoid activation.
     """
-    def __init__(self, input_dim, hidden_dim, nb_layers, hidden_activation='Tanh',
-                 layer_norm=True):
+
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        nb_layers,
+        hidden_activation="Tanh",
+        layer_norm=True,
+    ):
         super(EdgeNetwork, self).__init__()
-        self.network = make_mlp(input_dim*2,
-                                [hidden_dim]*nb_layers+[1],
-                                hidden_activation=hidden_activation,
-                                output_activation=None,
-                                layer_norm=layer_norm)
+        self.network = make_mlp(
+            input_dim * 2,
+            [hidden_dim] * nb_layers + [1],
+            hidden_activation=hidden_activation,
+            output_activation=None,
+            layer_norm=layer_norm,
+        )
 
     def forward(self, x, edge_index):
         # Select the features of the associated nodes
@@ -35,6 +45,7 @@ class EdgeNetwork(nn.Module):
         x1, x2 = x[start], x[end]
         edge_inputs = torch.cat([x[start], x[end]], dim=1)
         return self.network(edge_inputs).squeeze(-1)
+
 
 class NodeNetwork(nn.Module):
     """
@@ -44,43 +55,67 @@ class NodeNetwork(nn.Module):
     them with the node's previous features in a fully-connected
     network to compute the new features.
     """
-    def __init__(self, input_dim, output_dim, nb_layers, hidden_activation='Tanh',
-                 layer_norm=True):
+
+    def __init__(
+        self,
+        input_dim,
+        output_dim,
+        nb_layers,
+        hidden_activation="Tanh",
+        layer_norm=True,
+    ):
         super(NodeNetwork, self).__init__()
-        self.network = make_mlp(input_dim*2, [output_dim]*nb_layers,
-                                hidden_activation=hidden_activation,
-                                output_activation=None,
-                                layer_norm=layer_norm)
+        self.network = make_mlp(
+            input_dim * 2,
+            [output_dim] * nb_layers,
+            hidden_activation=hidden_activation,
+            output_activation=None,
+            layer_norm=layer_norm,
+        )
 
     def forward(self, x, e, edge_index):
         start, end = edge_index
         # Aggregate edge-weighted incoming/outgoing features
-#         mi = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0])
-#         mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
-#         node_inputs = torch.cat([mi, mo, x], dim=1)
-        messages = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0]) + scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
+        #         mi = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0])
+        #         mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
+        #         node_inputs = torch.cat([mi, mo, x], dim=1)
+        messages = scatter_add(
+            e[:, None] * x[start], end, dim=0, dim_size=x.shape[0]
+        ) + scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
         node_inputs = torch.cat([messages, x], dim=1)
         return self.network(node_inputs)
-       
-        
-class ResAGNN(GNNBase):
 
+
+class ResAGNN(GNNBase):
     def __init__(self, hparams):
         super().__init__(hparams)
-        '''
+        """
         Initialise the Lightning Module that can scan over different GNN training regimes
-        '''
+        """
 
         # Setup input network
-        self.input_network = make_mlp(hparams["in_channels"], [hparams["hidden"]],
-                                      output_activation=hparams["hidden_activation"],
-                                      layer_norm=hparams["layernorm"])
+        self.input_network = make_mlp(
+            hparams["in_channels"],
+            [hparams["hidden"]],
+            output_activation=hparams["hidden_activation"],
+            layer_norm=hparams["layernorm"],
+        )
         # Setup the edge network
-        self.edge_network = EdgeNetwork(hparams["in_channels"] + hparams["hidden"], hparams["in_channels"] + hparams["hidden"],
-                                        hparams["nb_edge_layer"], hparams["hidden_activation"], hparams["layernorm"])
+        self.edge_network = EdgeNetwork(
+            hparams["in_channels"] + hparams["hidden"],
+            hparams["in_channels"] + hparams["hidden"],
+            hparams["nb_edge_layer"],
+            hparams["hidden_activation"],
+            hparams["layernorm"],
+        )
         # Setup the node layers
-        self.node_network = NodeNetwork(hparams["in_channels"] + hparams["hidden"], hparams["hidden"],
-                                        hparams["nb_node_layer"], hparams["hidden_activation"], hparams["layernorm"])
+        self.node_network = NodeNetwork(
+            hparams["in_channels"] + hparams["hidden"],
+            hparams["hidden"],
+            hparams["nb_node_layer"],
+            hparams["hidden_activation"],
+            hparams["layernorm"],
+        )
 
     def forward(self, x, edge_index):
         input_x = x

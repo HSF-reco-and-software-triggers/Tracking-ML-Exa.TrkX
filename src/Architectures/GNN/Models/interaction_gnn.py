@@ -14,6 +14,7 @@ from torch.utils.checkpoint import checkpoint
 from ..gnn_base import GNNBase
 from ..utils import make_mlp
 
+
 class InteractionGNN(GNNBase):
 
     """
@@ -27,38 +28,48 @@ class InteractionGNN(GNNBase):
         """
 
         # Setup input network
-        self.node_encoder = make_mlp(hparams["in_channels"], [hparams["hidden"]],
-                                      output_activation=hparams["hidden_activation"],
-                                      layer_norm=hparams["layernorm"])
+        self.node_encoder = make_mlp(
+            hparams["in_channels"],
+            [hparams["hidden"]],
+            output_activation=hparams["hidden_activation"],
+            layer_norm=hparams["layernorm"],
+        )
 
         # The edge network computes new edge features from connected nodes
-        self.edge_encoder = make_mlp(2*(hparams["hidden"]),
-                                     [hparams["hidden"]]*hparams["nb_edge_layer"],
-                                     layer_norm=hparams["layernorm"],
-                                     output_activation=None,
-                                     hidden_activation = hparams["hidden_activation"])
+        self.edge_encoder = make_mlp(
+            2 * (hparams["hidden"]),
+            [hparams["hidden"]] * hparams["nb_edge_layer"],
+            layer_norm=hparams["layernorm"],
+            output_activation=None,
+            hidden_activation=hparams["hidden_activation"],
+        )
 
         # The edge network computes new edge features from connected nodes
-        self.edge_network = make_mlp(4*hparams["hidden"],
-                                     [hparams["hidden"]]*hparams["nb_edge_layer"],
-                                     layer_norm=hparams["layernorm"],
-                                     output_activation=None,
-                                     hidden_activation = hparams["hidden_activation"])
+        self.edge_network = make_mlp(
+            4 * hparams["hidden"],
+            [hparams["hidden"]] * hparams["nb_edge_layer"],
+            layer_norm=hparams["layernorm"],
+            output_activation=None,
+            hidden_activation=hparams["hidden_activation"],
+        )
 
         # The node network computes new node features
-        self.node_network = make_mlp(4*hparams["hidden"],
-                                     [hparams["hidden"]]*hparams["nb_node_layer"],
-                                     layer_norm=hparams["layernorm"],
-                                     output_activation=None,
-                                     hidden_activation = hparams["hidden_activation"])
+        self.node_network = make_mlp(
+            4 * hparams["hidden"],
+            [hparams["hidden"]] * hparams["nb_node_layer"],
+            layer_norm=hparams["layernorm"],
+            output_activation=None,
+            hidden_activation=hparams["hidden_activation"],
+        )
 
         # Final edge output classification network
-        self.output_edge_classifier = make_mlp(3*hparams["hidden"],
-                                     [hparams["hidden"], 1],
-                                     layer_norm=hparams["layernorm"],
-                                     output_activation=None,
-                                     hidden_activation = hparams["hidden_activation"])
-
+        self.output_edge_classifier = make_mlp(
+            3 * hparams["hidden"],
+            [hparams["hidden"], 1],
+            layer_norm=hparams["layernorm"],
+            output_activation=None,
+            hidden_activation=hparams["hidden_activation"],
+        )
 
     def forward(self, x, edge_index):
 
@@ -70,7 +81,7 @@ class InteractionGNN(GNNBase):
         input_x = x
         input_e = e
 
-#         edge_outputs = []
+        #         edge_outputs = []
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
 
@@ -79,19 +90,21 @@ class InteractionGNN(GNNBase):
             e = torch.cat([e, input_e], dim=-1)
 
             # Compute new node features
-            edge_messages = scatter_add(e, end, dim=0, dim_size=x.shape[0]) + scatter_add(e, start, dim=0, dim_size=x.shape[0])
+            edge_messages = scatter_add(
+                e, end, dim=0, dim_size=x.shape[0]
+            ) + scatter_add(e, start, dim=0, dim_size=x.shape[0])
             node_inputs = torch.cat([x, edge_messages], dim=-1)
             x = checkpoint(self.node_network, node_inputs)
-          
-            # Compute new edge features            
+
+            # Compute new edge features
             edge_inputs = torch.cat([x[start], x[end], e], dim=-1)
             e = checkpoint(self.edge_network, edge_inputs)
             e = torch.sigmoid(e)
 
-#             classifier_inputs = torch.cat([x[start], x[end], e], dim=1)
-#             edge_outputs.append(self.output_edge_classifier(classifier_inputs).squeeze(-1))
+        #             classifier_inputs = torch.cat([x[start], x[end], e], dim=1)
+        #             edge_outputs.append(self.output_edge_classifier(classifier_inputs).squeeze(-1))
 
         # Compute final edge scores; use original edge directions only
-#         return edge_outputs
+        #         return edge_outputs
         classifier_inputs = torch.cat([x[start], x[end], e], dim=1)
         return self.output_edge_classifier(classifier_inputs).squeeze(-1)
