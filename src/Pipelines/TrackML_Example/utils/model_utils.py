@@ -15,13 +15,6 @@ from simple_slurm import Slurm
 from .config_utils import handle_config_cases
 
 
-def find_checkpoint(run_id, path):  # M
-    for (root_dir, dirs, files) in os.walk(path):
-        if run_id in dirs:
-            latest_run_path = os.path.join(root_dir, run_id, "last.ckpt")
-            return latest_run_path
-
-
 def find_model(model_set, model_name, model_library):  # M
 
     # List all modules in the set/ and set/Models directories

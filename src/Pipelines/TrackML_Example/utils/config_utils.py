@@ -12,6 +12,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 from simple_slurm import Slurm
 
+def find_checkpoint(run_id, path):  # M
+    for (root_dir, dirs, files) in os.walk(path):
+        if run_id in dirs:
+            latest_run_path = os.path.join(root_dir, run_id, "last.ckpt")
+            return latest_run_path
 
 def handle_config_cases(some_config):  # C
 

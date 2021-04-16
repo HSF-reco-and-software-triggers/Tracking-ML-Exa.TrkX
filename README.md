@@ -16,7 +16,16 @@
 
 </div>
 
-Welcome to repository and documentation for ML pipelines and techniques by the ExatrkX Collaboration. Here we present a set of templates, best practices and results gathered from significant trial and error, to speed up the development of others in the domain of machine learning for high energy physics. We focus on applications specific to detector physics, but many tools can be applied to other areas, and these are collected in an application-agnostic way in the [Tools](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/tools/overview/) section.
+Welcome to repository and documentation for ML pipelines and techniques by the ExatrkX Collaboration. 
+
+## Objectives
+
+1. To abstract away the engineering required to run multiple stages of training and inference with combinations of hyperparameter configurations. [Pytorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning) is used for this, and is a good start, but this library extends Lightning to multiple modules run in series in some dependent way.
+2. To present a set of templates, best practices and results gathered from significant trial and error, to speed up the development of others in the domain of machine learning for high energy physics. We focus on applications specific to detector physics, but many tools can be applied to other areas, and these are collected in an application-agnostic way in the [Tools](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/tools/overview/) section.
+
+### Disclaimer:
+
+This repository has been functional, but ugly. It is moving to an "alpha" version which follows many conventions and should be considerably more stable and user-friendly. This transition is expected before May 2021. Please be a little patient if using before then, and if something is broken, pull first to make sure it's not already solved, then post an issue second.
 
 ## Intro
 

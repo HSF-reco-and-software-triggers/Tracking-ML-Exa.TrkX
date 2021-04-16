@@ -1,3 +1,14 @@
+"""The base classes for the embedding process.
+
+The embedding process here is both the embedding models (contained in Models/) and the training procedure, which is a Siamese network strategy. Here, the network is run on all points, and then pairs (or triplets) are formed by one of several strategies (e.g. random pairs (rp), hard negative mining (hnm)) upon which some sort of contrastive loss is applied. The default here is a hinge margin loss, but other loss functions can work, including cross entropy-style losses. Also available are triplet loss approaches.
+
+Example:
+    See Quickstart for a concrete example of this process.
+    
+Todo:
+    * Refactor the training & validation pipeline, since the use of the different regimes (rp, hnm, etc.) looks very messy
+"""
+
 # System imports
 import sys
 import os
@@ -89,9 +100,6 @@ class EmbeddingBase(LightningModule):
     def training_step(self, batch, batch_idx):
 
         """
-        Example:
-        TODO - Explain how the embedding training step works by example!
-
         Args:
             batch (``list``, required): A list of ``torch.tensor`` objects
             batch (``int``, required): The index of the batch
