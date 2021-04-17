@@ -9,7 +9,6 @@ See instructions at [Install](https://hsf-reco-and-software-triggers.github.io/T
 For now, let's keep our data in a directory, with a location saved to `/my/data/path`: 
 ```
 export EXATRKX_DATA=/my/data/path
-export EXATRKX_PIPELINE=$(pwd)
 ```
 (you can hard-code these into your custom configs later).
 

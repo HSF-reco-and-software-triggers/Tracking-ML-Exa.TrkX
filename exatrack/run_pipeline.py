@@ -3,9 +3,14 @@ import argparse
 import yaml
 import logging
 
-from utils.config_utils import load_config, combo_config, submit_batch
-from utils.data_utils import autocast
-from utils.model_utils import get_resume_id, get_logger, build_model, build_trainer
+from exatrack.utils.config_utils import load_config, combo_config, submit_batch
+from exatrack.utils.data_utils import autocast
+from exatrack.utils.model_utils import (
+    get_resume_id,
+    get_logger,
+    build_model,
+    build_trainer,
+)
 
 
 def parse_pipeline():
@@ -19,8 +24,7 @@ def parse_pipeline():
     add_run_arg, add_model_arg = run_parser.add_argument, model_parser.add_argument
     add_run_arg("--batch", action="store_true")
     add_run_arg("--verbose", action="store_true")
-    add_run_arg("--run-stage", action="store_true")
-    add_run_arg("pipeline_config", nargs="?", default="configs/pipeline_default.yaml")
+    add_run_arg("pipeline_config", nargs="?", default="configs/pipeline_test.yaml")
     add_run_arg("batch_config", nargs="?", default="configs/batch_gpu_default.yaml")
 
     run_parsed, model_to_parse = run_parser.parse_known_args()
@@ -34,6 +38,19 @@ def parse_pipeline():
     model_parsed, _ = model_parser.parse_known_args()
 
     return run_parsed, model_parsed
+
+
+def batch_stage():
+    print("Running batch from top with args:", sys.argv)
+    run_args, model_args = parse_pipeline()
+
+    logging_level = logging.INFO if run_args.verbose else logging.WARNING
+    logging.basicConfig(level=logging_level)
+    #     logging.basicConfig(level=logging.INFO)
+    logging.info("Parsed run args: {}".format(run_args))
+    logging.info("Parsed model args: {}".format(model_args))
+
+    run_stage(**vars(model_args))
 
 
 @autocast
@@ -74,19 +91,23 @@ def data_stage(model, model_config):
     model.prepare_data()
 
 
-def main(args):
+def start(args):
+
+    print(args)
 
     with open(args.pipeline_config) as f:
         pipeline_config = yaml.load(f, Loader=yaml.FullLoader)
 
     with open("configs/project_config.yaml") as f:
-        project_config = yaml.load(f, Loader=yaml.FullLoader)
+        project_config = yaml.load(os.path.expandvars(f.read()), Loader=yaml.FullLoader)
 
     # Make models available to the pipeline
     sys.path.append(
         project_config["libraries"]["model_library"]
     )  #  !!  TEST WITHOUT THIS LINE IN MAIN()
 
+    # This is the current slurm ID to handle serial dependency
+    running_id = None
     for stage in pipeline_config["stage_list"]:
 
         # Set resume_id if it is given, else it is None and new model is built
@@ -103,23 +124,8 @@ def main(args):
 
         for config in model_config_combos:
             if args.batch:
-                submit_batch(config, project_config)
+                running_id = submit_batch(
+                    args.batch_config, config, project_config, running_id
+                )
             else:
                 run_stage(**config)
-
-
-if __name__ == "__main__":
-
-    print("Running from top with args:", sys.argv)
-    run_args, model_args = parse_pipeline()
-
-    logging_level = logging.INFO if run_args.verbose else logging.WARNING
-    logging.basicConfig(level=logging_level)
-    #     logging.basicConfig(level=logging.INFO)
-    logging.info("Parsed run args: {}".format(run_args))
-    logging.info("Parsed model args: {}".format(model_args))
-
-    if run_args.run_stage:
-        run_stage(**vars(model_args))
-    else:
-        main(run_args)

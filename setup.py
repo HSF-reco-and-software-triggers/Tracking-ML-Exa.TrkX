@@ -22,12 +22,18 @@ dependencies = [
 ]
 
 setup(
-    name="TrackingMLExatrkx",
-    version="0.2.0",
+    name="ExaTrack",
+    version="0.3.0",
     description="Models, pipelines, and utilities for solving tracking problems with machine learning.",
     author="Daniel Murnane",
     install_requires=dependencies,
-    packages=find_packages(include=["src", "src.*"]),
+    packages=find_packages(include=["exatrack", "src", "src.*"]),
+    entry_points={
+        "console_scripts": [
+            "exapipe=exatrack.command_line_pipe:main",
+            "exabatch=exatrack.run_pipeline:batch_stage",
+        ]
+    },
     long_description=read("README.md"),
     license="Apache License, Version 2.0",
     keywords=[

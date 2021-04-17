@@ -111,7 +111,7 @@ def filter_hit_pt(events, pt_cut=0):
             else:
                 pt = fetch_pt(event)
             hit_subset = pt > pt_cut
-            if "cell_data" in event.__dict___.keys():
+            if "cell_data" in event.__dict__.keys():
                 event.cell_data = event.cell_data[hit_subset]
             event.hid = event.hid[hit_subset]
             event.x = event.x[hit_subset]
