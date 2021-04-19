@@ -19,7 +19,7 @@ Once up and running, you may want to consider more complex ML [Models](https://h
 It's recommended to start a conda environment before installation:
 
 ```
-conda install --name exatrkx-tracking python=3.8
+conda create --name exatrkx-tracking python=3.8
 conda activate exatrkx-tracking
 pip install pip --upgrade
 ```
@@ -30,7 +30,7 @@ If you have a CUDA GPU available, load the toolkit or [install it](https://docs.
 python install.py
 ```
 
-will **attempt** to negotiate a path through the packages required, using `nvcc --version` to automatically find the correct wheels. 
+will **attempt** to negotiate a path through the packages required, using `nvcc --version` to automatically find the correct wheels. **Warning**: If you are installing with cpu, this may take up to 15 minutes due to an unfortunately slow installation of Pytorch3D from source.
 
 You should be ready for the [Quickstart](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/quickstart)!
 

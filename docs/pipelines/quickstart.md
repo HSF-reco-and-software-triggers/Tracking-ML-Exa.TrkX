@@ -28,18 +28,18 @@ kaggle competitions download \
 
 ### Configuration
 
-A pipeline runs at three layers of configuration, to allow for as much flexibility as possible. To get running immediately however, you needn't change any of the defaults. From the `src/Pipelines/TrackML_Example/` directory, we run
+A pipeline runs at three layers of configuration, to allow for as much flexibility as possible. To get running immediately however, you needn't change any of the defaults. From the `Pipelines/TrackML_Example/` directory, we run
 
 ```
-python run_pipeline.py config/pipeline_quickstart.yaml
+traintrack
 ```
-which loads the pipeline specified in `config/pipeline_quickstart`. 
+which by default loads the pipeline specified in `configs/pipeline_test`. 
 
 While it's running, get a cup of tea and a Tim-Tam, and let's see what it's doing:
 
 ### Default behaviour
 
-Our quickstart pipeline is running **three** stages, with a single configuration for each. You can see in `config/pipeline_quickstart.yaml` that the three stages are:
+Our quickstart pipeline is running **three** stages, with a single configuration for each. You can see in `config/pipeline_test.yaml` that the three stages are:
 
 - A **Processing** stage with the class `FeatureStore` and config `prepare_small_feature_store.yaml`;
 - An **Embedding** stage with the class `LayerlessEmbedding` and config `train_small_embedding.yaml`; and
