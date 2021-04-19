@@ -16,7 +16,7 @@ jobs:
       - name: Install script
         run: python install.py
       - name: Test Import
-        run: python -c 'from src.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
+        run: python -c 'from examples.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
 #       - name: Make Success Badge  
 #         if: success()
 #         uses: schneegans/dynamic-badges-action@v1.0.0
