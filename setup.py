@@ -29,10 +29,7 @@ setup(
     author="Daniel Murnane",
     install_requires=dependencies,
     packages=find_packages(include=["examples", "src", "src.*"]),
-    entry_points={
-        "console_scripts": [
-        ]
-    },
+    entry_points={"console_scripts": []},
     long_description=read("README.md"),
     license="Apache License, Version 2.0",
     keywords=[
