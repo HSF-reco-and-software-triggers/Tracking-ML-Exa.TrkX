@@ -16,25 +16,4 @@ jobs:
       - name: Install script
         run: python install.py
       - name: Test Import
-        run: python -c 'from examples.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
-#       - name: Make Success Badge  
-#         if: success()
-#         uses: schneegans/dynamic-badges-action@v1.0.0
-#         with:
-#           auth: ${{ secrets.GIST_SECRET }}
-#           gistID: acee2761c6c03febc3331296514ff721
-#           filename: test.json
-#           label: build
-#           message: passing
-#           color: green
-#       - name: Make Failure Badge
-#         if: failure()
-#         uses: schneegans/dynamic-badges-action@v1.0.0
-#         with:
-#           auth: ${{ secrets.GIST_SECRET }}
-#           gistID: acee2761c6c03febc3331296514ff721
-#           filename: test.json
-#           isError: true
-#           label: build
-#           message: failing
-#           color: orange
+        run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
