@@ -12,7 +12,7 @@ import torch
 from .utils import load_dataset, random_edge_slice_v2
 
 
-class GNNBase(LightningModule):
+class GNNContract(LightningModule):
 
     def __init__(self, hparams):
         super().__init__()
@@ -67,15 +67,14 @@ class GNNBase(LightningModule):
         return optimizer, scheduler
 
     def training_step(self, batch, batch_idx):
-        print("Testing batch {}".format(batch_idx))
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
        
-        output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), 
+        edge_scores, output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), 
                        batch.edge_index).squeeze()
                   if ('ci' in self.hparams["regime"])
-                  else self(batch.x, batch.edge_index).squeeze())
-
+                  else self(batch.x, batch.edge_index))
+        
         if 'weighting' in self.hparams['regime']:
             manual_weights = batch.weights
         else:
@@ -83,7 +82,12 @@ class GNNBase(LightningModule):
         
         if ('pid' in self.hparams["regime"]):
             y_pid = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-            loss = F.binary_cross_entropy_with_logits(output, y_pid.float(), weight = manual_weights, pos_weight = weight)
+            
+            truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
+           
+            edge_scores -= edge_scores.min(0, keepdim=True)[0]
+            edge_scores /= edge_scores.max(0, keepdim=True)[0]
+            loss = F.binary_cross_entropy_with_logits(edge_scores, truth.float(), weight = manual_weights, pos_weight = weight)
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
             
@@ -92,43 +96,43 @@ class GNNBase(LightningModule):
         return loss
 
     def shared_evaluation(self, batch, batch_idx):
-        print("Evaluating batch {}".format(batch_idx))
+        
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
 
-        output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index).squeeze()
+        edge_scores, output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index).squeeze()
                   if ('ci' in self.hparams["regime"])
-                  else self(batch.x, batch.edge_index).squeeze())
+                  else self(batch.x, batch.edge_index))
         
-        truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float() if 'pid' in self.hparams["regime"] else batch.y
+        cluster = output.cluster
+        
+        clustered_edges = batch.edge_index[:,(cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]])]
+        clustered_edges_truth = (batch.pid[clustered_edges[0]] == batch.pid[clustered_edges[1]]).float()
+        cluster_vals,cluster_counts = torch.unique(cluster,return_counts=True)
+        cluster_num = torch.sum(torch.where(cluster_counts==2,1,0)).item() #count the number of clusters of size 2, or the number of edges contracted
+        
+        
+        truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
+        
+        #normalize edge scores to [0,1]
+        edge_scores -= edge_scores.min(0, keepdim=True)[0]
+        edge_scores /= edge_scores.max(0, keepdim=True)[0]
+        
         
         if 'weighting' in self.hparams['regime']:
             manual_weights = batch.weights
         else:
             manual_weights = None
             
-        loss = F.binary_cross_entropy_with_logits(output, truth.float(), weight = manual_weights, pos_weight = weight)
-
-        #Edge filter performance
-        preds = F.sigmoid(output) > self.hparams["edge_cut"]
-        edge_positive = preds.sum().float()
-
-        edge_true = truth.sum().float()
-        edge_true_positive = (truth.bool() & preds).sum().float()
-    
-        eff = torch.tensor(edge_true_positive/edge_true)
-        pur = torch.tensor(edge_true_positive/edge_positive)
-        
-        if (eff > 0.99) and (pur > 0.99) and not self.hparams["posted_alert"] and self.hparams["slack_alert"]:
-            self.logger.experiment.alert(title="High Performance", 
-                        text="Efficiency and purity have both cracked 99%. Great job, Dan! You're having a great Thursday, and I think you've earned a celebratory beer.",
-                        wait_duration=timedelta(minutes=60))
-            self.hparams["posted_alert"] = True
+        loss = F.binary_cross_entropy_with_logits(edge_scores, truth.float(), weight = manual_weights, pos_weight = weight)
         
         current_lr = self.optimizers().param_groups[0]['lr']
-        self.log_dict({'val_loss': loss, 'eff': eff, 'pur': pur, "current_lr": current_lr})
         
-        return {"loss": loss, "preds": preds.cpu().numpy(), "truth": truth.cpu().numpy()}
+        #edges of the same particle clustered / total edges clustered
+        eff = torch.sum(clustered_edges_truth).item()/cluster_num
+        self.log_dict({'val_loss': loss, 'eff': eff, "current_lr": current_lr})
+        
+        return {"loss": loss,"eff":eff, "truth": truth.cpu().numpy()}
 
     def validation_step(self, batch, batch_idx):
         

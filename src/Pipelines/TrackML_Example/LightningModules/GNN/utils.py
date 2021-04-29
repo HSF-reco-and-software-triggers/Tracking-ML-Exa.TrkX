@@ -186,8 +186,8 @@ def get_metrics(test_results):
     efficiencies = [tp/t for (t, tp) in zip(ts, tps)]
     purities = [tp/p for (p, tp) in zip(ps, tps)]
     
-    mean_efficiency = np.mean(efficiencies)
-    mean_purity = np.mean(purities)
+    mean_efficiency = test_results[0]["eff"]
+    mean_purity = test_results[0]["pur"]
     
     return mean_efficiency, mean_purity
 
