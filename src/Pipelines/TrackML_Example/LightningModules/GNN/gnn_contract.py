@@ -81,17 +81,18 @@ class GNNContract(LightningModule):
             manual_weights = None
         
         if ('pid' in self.hparams["regime"]):
-            y_pid = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
             
             truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
            
             edge_scores -= edge_scores.min(0, keepdim=True)[0]
+            cluster = output.cluster
+            ratio = torch.unique(cluster).size(0) / cluster.size(0)
             edge_scores /= edge_scores.max(0, keepdim=True)[0]
             loss = F.binary_cross_entropy_with_logits(edge_scores, truth.float(), weight = manual_weights, pos_weight = weight)
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
             
-        self.log('train_loss', loss)
+        self.log_dict({'train_loss': loss,'ratio':ratio})
 
         return loss
 
@@ -105,6 +106,7 @@ class GNNContract(LightningModule):
                   else self(batch.x, batch.edge_index))
         
         cluster = output.cluster
+        ratio = torch.unique(cluster).size(0) / cluster.size(0)
         
         clustered_edges = batch.edge_index[:,(cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]])]
         clustered_edges_truth = (batch.pid[clustered_edges[0]] == batch.pid[clustered_edges[1]]).float()
@@ -130,9 +132,10 @@ class GNNContract(LightningModule):
         
         #edges of the same particle clustered / total edges clustered
         eff = torch.sum(clustered_edges_truth).item()/cluster_num
-        self.log_dict({'val_loss': loss, 'eff': eff, "current_lr": current_lr})
         
-        return {"loss": loss,"eff":eff, "truth": truth.cpu().numpy()}
+        self.log_dict({'val_loss': loss, 'eff': eff, "current_lr": current_lr,"ratio":ratio})
+        
+        return {"loss": loss,"eff":eff, "truth": truth.cpu().numpy(),"ratio":ratio}
 
     def validation_step(self, batch, batch_idx):
         

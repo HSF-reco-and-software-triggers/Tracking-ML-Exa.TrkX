@@ -2,7 +2,7 @@ from collections import namedtuple
 
 import torch
 import torch.nn.functional as F
-from torch_scatter import scatter_add
+from torch_scatter import scatter_add,scatter_max
 from torch_sparse import coalesce
 from torch_geometric.utils import softmax
 from .utils import make_mlp
@@ -59,7 +59,7 @@ class EdgePooling(torch.nn.Module):
         self.add_to_edge_score = add_to_edge_score
         self.dropout = dropout
 
-        self.lin = make_mlp(2 * in_channels,[2 * in_channels] * 4 + [1])
+        self.lin = make_mlp(2 * in_channels,[2 * in_channels] * 8 + [1])
 
         self.lin.apply(self.reset_parameters)
 
@@ -108,54 +108,100 @@ class EdgePooling(torch.nn.Module):
         return x, edge_index, batch, unpool_info, e
 
     def __merge_edges__(self, x, edge_index, batch, edge_score):
-        
-        nodes_remaining = set(range(x.size(0)))
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        nodes = torch.arange(x.shape[0])
+        nodes = nodes.to(device)
 
-        cluster = torch.empty_like(batch, device=torch.device('cuda:0'))
-        edge_argsort = torch.argsort(edge_score, descending=True)
-
-        # Iterate through all edges, selecting it if it is not incident to
-        # another already chosen edge.
+        nodes_remaining = torch.ones_like(nodes,dtype = torch.bool)
+        nodes_remaining = nodes_remaining.to(device)
+        edges_remaining = torch.ones_like(edge_index[0],dtype=torch.bool)
+        edges_remaining = edges_remaining.to(device)
+        ratio = 1.0
         i = 0
-        new_edge_indices = []
-       # edge_index_cpu = edge_index.cpu()
-        for edge_idx in edge_argsort.tolist():
-            source = edge_index[0, edge_idx].item()
-            if source not in nodes_remaining:
-                continue
+        old_edge_score = edge_score[:]
+        while i < 10 and ratio > 0.05:    
+            #get max edge score for each node and edge index where it occurs
+            max_score_0, max_indices_0 = scatter_max(edge_score, edge_index[0], dim=0, dim_size=x.shape[0])
+            max_score_1, max_indices_1 = scatter_max(edge_score, edge_index[1], dim=0, dim_size=x.shape[0])
 
-            target = edge_index[1, edge_idx].item()
-            if target not in nodes_remaining:
-                continue
+            #stack scores for each direction
+            stacked_score, stacked_indices = torch.stack([max_score_0, max_score_1]), torch.stack([max_indices_0, max_indices_1]).T
+            top_score , _ = torch.max(stacked_score, dim=0)
+            top_score = top_score.to(device)
 
-            new_edge_indices.append(edge_idx)
+            #get max neighbor for each node
+            max_indices = torch.zeros(len(top_score), dtype=torch.long, device=device)
+            max_indices[max_score_0 > max_score_1] = edge_index[1][max_indices_0[max_score_0 > max_score_1]]
+            max_indices[max_score_1 > max_score_0] = edge_index[0][max_indices_1[max_score_1 > max_score_0]]
 
-            cluster[source] = i
-            nodes_remaining.remove(source)
+            #find edges where each node is the other's max index
+            edge_index_match_0 = max_indices[edge_index[1]] == edge_index[0]
+            edge_index_match_1 = max_indices[edge_index[0]] == edge_index[1]
+            node_0_valid = nodes_remaining[edge_index[0]]
+            node_1_valid = nodes_remaining[edge_index[1]]
+            edge_index_match = edge_index_match_0 & edge_index_match_1 & node_0_valid & node_1_valid
 
-            if source != target:
-                cluster[target] = i
-                nodes_remaining.remove(target)
+            #update the remaining edges based on which ones should be removed
+            edges_remaining &= ~edge_index_match
+            edges_contracted = edge_index[:,edge_index_match]
 
+            #update the remaining nodes based on which ones should be removed
+            nodes_removed = torch.flatten(edges_contracted)
+            nodes_remaining[nodes_removed] = 0.0
+
+            #zero out the edge scores of every edge that has >= 1 node being removed
+            edge_score_zero_mask = (edge_index[..., None] == nodes[nodes_removed]).any(-1).any(0)
+            edge_score *= ~edge_score_zero_mask
+            ratio = (torch.sum(nodes_remaining)/nodes_remaining.shape[0]).item()
             i += 1
-
-        # The remaining nodes are simply kept.
-        for node_idx in nodes_remaining:
-            cluster[node_idx] = i
-            i += 1
-        cluster = cluster.to(x.device)
-
-        # We compute the new features as an addition of the old ones.
-        new_x = scatter_add(x, cluster, dim=0, dim_size=i)
-        new_edge_score = edge_score[new_edge_indices]
-        if len(nodes_remaining) > 0:
-            remaining_score = x.new_ones(
-                (new_x.size(0) - len(new_edge_indices), ))
-            new_edge_score = torch.cat([new_edge_score, remaining_score])
-        new_x = new_x * new_edge_score.view(-1, 1)
-
+            
+        #split into edges removed and edges not removed
+        edges_contracted = edge_index[:,~edges_remaining]
+        new_e = edge_index[:,edges_remaining]
+        
+        #sort nodes into new ordering by cluster
+        clustered_indices = torch.arange(edges_contracted.shape[1]).to(device)
+        remaining_indices = edges_contracted.shape[1] + torch.arange(torch.sum(nodes_remaining)).to(device)
+        new_node_index_map = torch.cat([
+            torch.stack([edges_contracted[0],clustered_indices]),
+            torch.stack([edges_contracted[1],clustered_indices]),
+            torch.stack([nodes[nodes_remaining],remaining_indices])],dim=-1)
+        new_node_index_map = new_node_index_map[:,torch.argsort(new_node_index_map[0])]
+        cluster = new_node_index_map[1,:]
+        
+        
+        #count the number of occurences of each node to find duplicates
+        _, counts = torch.unique(new_node_index_map[0], return_counts=True)
+        duplicates = torch.where(counts >= 2)
+        cluster_mask = torch.ones_like(cluster,dtype=torch.bool)
+        
+        #if it finds a duplicate node, remove it from the cluster map
+        if duplicates[0].size(0) > 0:
+            d = duplicates[0]
+            for i in d:
+                #find the multiple cluster indices in the node index map and get the minimum index to keep
+                duplicate_mask = (i == new_node_index_map[0])
+                duplicate_cluster_indices = cluster[duplicate_mask]
+                valid_cluster_index = torch.min(duplicate_cluster_indices)
+                
+                #mask all cluster indices that need removing
+                cluster_remove_mask = ~(duplicate_mask & (cluster != valid_cluster_index))
+                cluster_mask &= cluster_remove_mask
+            
+            #get all unique clusters that are being removed, and decrease all clusters greater than that index by 1 to account for each cluster removal
+            clusters_to_remove = torch.unique(cluster[~cluster_mask])
+            cluster = cluster[cluster_mask]
+            for c in clusters_to_remove:
+                cluster[cluster > c] -= 1
+                
+        #create new node features and edge index based on clustering
+        new_x = scatter_add(x, cluster, dim=0, dim_size=torch.unique(cluster).shape[0])
         N = new_x.size(0)
-        new_edge_index, _ = coalesce(cluster[edge_index], None, N, N)
+        new_edge_index, _ = coalesce(cluster[new_e], None, N, N)
+        contracted_scores = old_edge_score[~edges_remaining]
+        remaining_scores = torch.ones(N - edges_contracted.size(1),device=device)
+        new_edge_score = torch.cat([contracted_scores,remaining_scores])
+        new_x = new_x * new_edge_score.view(-1,1)
     
         new_batch = x.new_empty(new_x.size(0), dtype=torch.long)
         batch = batch.to(x.device)
