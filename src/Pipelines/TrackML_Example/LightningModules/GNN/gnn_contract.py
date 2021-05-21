@@ -9,7 +9,7 @@ from torch_geometric.data import DataLoader
 from torch.nn import Linear
 import torch
 
-from .utils import load_dataset, random_edge_slice_v2
+from .utils import load_dataset
 
 
 class GNNContract(LightningModule):
@@ -20,7 +20,7 @@ class GNNContract(LightningModule):
         Initialise the Lightning Module that can scan over different GNN training regimes
         '''
         # Assign hyperparameters
-        self.hparams = hparams
+        self.hparams.update(hparams)
         self.hparams["posted_alert"] = False
         
     def setup(self, stage):
@@ -31,19 +31,19 @@ class GNNContract(LightningModule):
         
     def train_dataloader(self):
         if self.trainset is not None:
-            return DataLoader(self.trainset, batch_size=1, num_workers=1)
+            return DataLoader(self.trainset, batch_size=1, num_workers=8)
         else:
             return None
 
     def val_dataloader(self):
         if self.valset is not None:
-            return DataLoader(self.valset, batch_size=1, num_workers=1)
+            return DataLoader(self.valset, batch_size=1, num_workers=8)
         else:
             return None
 
     def test_dataloader(self):
         if self.testset is not None:
-            return DataLoader(self.testset, batch_size=1, num_workers=1)
+            return DataLoader(self.testset, batch_size=1, num_workers=8)
         else:
             return None
         
@@ -85,7 +85,7 @@ class GNNContract(LightningModule):
             truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
            
             edge_scores -= edge_scores.min(0, keepdim=True)[0]
-            cluster = output.cluster
+            cluster = output[0].cluster
             ratio = torch.unique(cluster).size(0) / cluster.size(0)
             edge_scores /= edge_scores.max(0, keepdim=True)[0]
             loss = F.binary_cross_entropy_with_logits(edge_scores, truth.float(), weight = manual_weights, pos_weight = weight)
@@ -105,7 +105,7 @@ class GNNContract(LightningModule):
                   if ('ci' in self.hparams["regime"])
                   else self(batch.x, batch.edge_index))
         
-        cluster = output.cluster
+        cluster = output[0].cluster
         ratio = torch.unique(cluster).size(0) / cluster.size(0)
         
         clustered_edges = batch.edge_index[:,(cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]])]
