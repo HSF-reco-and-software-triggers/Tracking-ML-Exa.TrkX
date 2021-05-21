@@ -12,7 +12,7 @@ import torch
 from .utils import load_dataset, random_edge_slice_v2
 
 
-class GNNBase(LightningModule):
+class RegressionBase(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         """
@@ -64,14 +64,6 @@ class GNNBase(LightningModule):
                 amsgrad=True,
             )
         ]
-        #         scheduler = [
-        #             {
-        #                 'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
-        #                 'monitor': 'val_loss',
-        #                 'interval': 'epoch',
-        #                 'frequency': 1
-        #             }
-        #         ]
         scheduler = [
             {
                 "scheduler": torch.optim.lr_scheduler.StepLR(
@@ -93,30 +85,34 @@ class GNNBase(LightningModule):
             else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
         )
 
-        output = (
+        node_output, _ = (
             self(
                 torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
-            ).squeeze()
+            )
             if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index).squeeze()
+            else self(batch.x, batch.edge_index)
         )
+        edge_truth = (
+            (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
+            if "pid" in self.hparams["regime"]
+            else batch.y
+        )
+        node_truth = batch.pt
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights
         else:
             manual_weights = None
 
-        if "pid" in self.hparams["regime"]:
-            y_pid = (
-                batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            ).float()
-            loss = F.binary_cross_entropy_with_logits(
-                output, y_pid.float(), weight=manual_weights, pos_weight=weight
-            )
-        else:
-            loss = F.binary_cross_entropy_with_logits(
-                output, batch.y, weight=manual_weights, pos_weight=weight
-            )
+        loss = F.mse_loss(
+            node_output.squeeze(), node_truth.float()
+        )
+        
+        if "hybrid" in self.hparams["regime"]:
+            loss += F.binary_cross_entropy_with_logits(
+            output, truth.float(), weight=manual_weights, pos_weight=weight
+        )
+        
 
         self.log("train_loss", loss)
 
@@ -130,64 +126,59 @@ class GNNBase(LightningModule):
             else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
         )
 
-        output = (
+        node_output, edge_output = (
             self(
                 torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
-            ).squeeze()
+            )
             if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index).squeeze()
+            else self(batch.x, batch.edge_index)
         )
 
-        truth = (
+        edge_truth = (
             (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
             if "pid" in self.hparams["regime"]
             else batch.y
         )
+        node_truth = batch.pt
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights
         else:
             manual_weights = None
 
-        loss = F.binary_cross_entropy_with_logits(
-            output, truth.float(), weight=manual_weights, pos_weight=weight
+        loss = F.mse_loss(
+            node_output.squeeze(), node_truth.float()
         )
+        
+        # Node regression performance
+        # True positive defined as prediction being within 10% of true pT
+        node_error = torch.abs(node_output.squeeze() - node_truth)/node_truth
+        node_true_positive = (node_error < 0.1).sum()
+        
+        node_accuracy = node_true_positive / node_truth.shape[0]
 
-        # Edge filter performance
-        preds = F.sigmoid(output) > self.hparams["edge_cut"]
-        edge_positive = preds.sum().float()
+        # Edge classification performance
+        edge_preds = F.sigmoid(edge_output) > self.hparams["edge_cut"]
+        
+        edge_positive = edge_preds.sum().float()
+        edge_true = edge_truth.sum().float()
+        edge_true_positive = (edge_truth.bool() & edge_preds).sum().float()
 
-        edge_true = truth.sum().float()
-        edge_true_positive = (truth.bool() & preds).sum().float()
-
-        eff = torch.tensor(edge_true_positive / edge_true)
-        pur = torch.tensor(edge_true_positive / edge_positive)
-
-        if (
-            (eff > 0.99)
-            and (pur > 0.99)
-            and not self.hparams["posted_alert"]
-            and self.hparams["slack_alert"]
-        ):
-            self.logger.experiment.alert(
-                title="High Performance",
-                text="Efficiency and purity have both cracked 99%. Great job, Dan! You're having a great Thursday, and I think you've earned a celebratory beer.",
-                wait_duration=timedelta(minutes=60),
-            )
-            self.hparams["posted_alert"] = True
+        edge_eff = torch.tensor(edge_true_positive / edge_true)
+        edge_pur = torch.tensor(edge_true_positive / edge_positive)
 
         current_lr = self.optimizers().param_groups[0]["lr"]
+        
         self.log_dict(
-            {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
+            {"val_loss": loss, "edge_eff": edge_eff, "edge_pur": edge_pur, "node_accuracy": node_accuracy, "current_lr": current_lr}
         )
 
         return {
             "loss": loss,
-            "preds": preds.cpu().numpy(),
-            "truth": truth.cpu().numpy(),
+            "edge_preds": edge_preds.cpu().numpy(),
+            "edge_truth": edge_truth.cpu().numpy(),
+            "node_accuracy": node_accuracy
         }
-
-    #         return {"loss": loss, "preds": preds, "truth": truth}
 
     def validation_step(self, batch, batch_idx):
 

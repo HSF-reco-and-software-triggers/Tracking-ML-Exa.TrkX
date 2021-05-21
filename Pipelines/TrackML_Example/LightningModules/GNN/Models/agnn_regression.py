@@ -10,7 +10,7 @@ import torch
 from torch_scatter import scatter_add
 from torch.utils.checkpoint import checkpoint
 
-from ..gnn_base import GNNBase
+from ..regression_base import RegressionBase
 from ..utils import make_mlp
 
 
@@ -75,10 +75,6 @@ class NodeNetwork(nn.Module):
 
     def forward(self, x, e, edge_index):
         start, end = edge_index
-        # Aggregate edge-weighted incoming/outgoing features
-        #         mi = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0])
-        #         mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
-        #         node_inputs = torch.cat([mi, mo, x], dim=1)
         messages = scatter_add(
             e[:, None] * x[start], end, dim=0, dim_size=x.shape[0]
         ) + scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
@@ -86,7 +82,7 @@ class NodeNetwork(nn.Module):
         return self.network(node_inputs)
 
 
-class ResAGNN(GNNBase):
+class AGNNRegression(RegressionBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
@@ -96,7 +92,7 @@ class ResAGNN(GNNBase):
         # Setup input network
         self.input_network = make_mlp(
             hparams["in_channels"],
-            [hparams["hidden"]],
+            [hparams["hidden"]]*hparams["nb_node_layer"],
             output_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
         )
@@ -115,6 +111,12 @@ class ResAGNN(GNNBase):
             hparams["nb_node_layer"],
             hparams["hidden_activation"],
             hparams["layernorm"],
+        )
+        # The output network has the structure of the input network, with a final single track param output (hardcoded for now!)
+        self.output_network = make_mlp(
+            hparams["in_channels"]+hparams["hidden"],
+            [hparams["hidden"]]*hparams["nb_node_layer"] + [1],
+            output_activation=None
         )
 
     def forward(self, x, edge_index):
@@ -141,4 +143,5 @@ class ResAGNN(GNNBase):
             # Residual connection
             x = x_inital + x
 
-        return self.edge_network(x, edge_index)
+        # Output both node regression and edge classification
+        return self.output_network(x), self.edge_network(x, edge_index)
