@@ -123,7 +123,7 @@ class EdgeNetwork(nn.Module):
             edge_score_zero_mask = (edge_index[..., None] == nodes[nodes_removed]).any(-1).any(0)
             updated_edge_weights *= ~edge_score_zero_mask
             ratio = (torch.sum(nodes_remaining)/nodes_remaining.shape[0]).item()
-            print(ratio)
+            #print(ratio)
             i += 1
 
         #split into edges removed and edges not removed
@@ -166,8 +166,9 @@ class EdgeNetwork(nn.Module):
                 cluster[cluster > c] -= 1
 
         #create new node features and edge index based on clustering
-        new_x = scatter_add(x, cluster, dim=0, dim_size=torch.unique(cluster).shape[0])
+        new_x = scatter_add(x, cluster, dim=0, dim_size=torch.unique(cluster).size(0))
         N = new_x.size(0)
+        print(new_x.shape)
         new_e = cluster[new_e]
 
         #reorder new edge index so smaller node index value is always on top
@@ -193,6 +194,13 @@ class EdgeNetwork(nn.Module):
         remaining_weights = torch.ones(N - edges_contracted.size(1),device=device)
         new_node_weights = torch.cat([contracted_weights,remaining_weights])
         new_x = new_x * new_node_weights.view(-1,1)
+        print("new x", new_x.shape)
+        
+        new_batch = x.new_empty(new_x.size(0), dtype=torch.long)
+        batch = batch.to(x.device)
+        new_batch = new_batch.scatter_(0, cluster, batch)
+        
+        unpool_info = self.unpool_description(edge_index=edge_index, cluster=cluster, batch=batch, new_node_weights=new_node_weights)
         
         return new_x, new_edge_index, new_batch, new_edge_score, unpool_info
     
@@ -245,19 +253,21 @@ class ECGNN(GNNContract):
             x = x_inital + x
 
         edge_scores = torch.sigmoid(self.edge_network(x, edge_index))
-        new_edge_scores = edge_scores.detach()
+        new_edge_scores = edge_scores.clone().detach()
+        new_edge_scores.requires_grad = False
         unpool = []
         for i in range(self.hparams["n_contract_iters"]):
             batch = torch.zeros(x.size()[0],dtype=torch.int64)
         
+            #perform a round of edge contraction
             x, edge_index, batch, new_edge_scores, unpool_info = self.edge_network.merge_edges(x,edge_index,batch,new_edge_scores)
             unpool.append(unpool_info)
-            input_x = x
-
-            x = self.input_network(x)
-
-            # Shortcut connect the inputs onto the hidden representation
-            x = torch.cat([x, input_x], dim=-1)
+            cluster = unpool_info.cluster
+            node_weights = unpool_info.new_node_weights
+            
+            #update input_x to reflect the clustering
+            input_x = scatter_add(input_x,cluster,dim=0,dim_size=torch.unique(cluster).size(0))
+            input_x = input_x * node_weights.unsqueeze(-1)
             
             x_inital = x
 
