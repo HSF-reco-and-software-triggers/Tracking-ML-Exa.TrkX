@@ -28,7 +28,6 @@ The `set` key defines the type of ML model (to help avoid naming ambiguity), the
 I found that my two forms of R&D fell into breadth and depth. Much of the time, I would play at length with hyperparameters and model definitions, in which case I want that all to live in one place: The model's config file. Thus the pipeline config can remain untouched if we have one for each choice of (model, config) , or only changed occasionally if we choose to have only one. At other times, development would require a series of models, where successive results depend on hyperparameter choices earlier in the chain. Then I can play with the higher level pipeline config and try difference (model, config) stages, while the whole chain of hyperparameters is committed to each step via a logging platform (Weights & Biases in my case).
 
 
-
 ## Pytorch Lightning & MLFlow
 
 This repository uses Pytorch Lightning, which allows us to encapsulate all training and model logic into a module object. This module is what is being specified by the pipeline config, with `name`. Combined with callbacks in the model config file, all pipeline logic is contained in each module. A callback object integrates with the module and knows about telemetry and post-processing steps. Rather than a monolithic function that passes data through the pipeline (whereby mistakes could be made), the pipeline asks each model how it should be treated, and then acts with the model's own methods.
@@ -36,4 +35,4 @@ This repository uses Pytorch Lightning, which allows us to encapsulate all train
 
 ## Data Processing & Modularity
 
-Define clearly the data structure of each modular section
+**Todo**: Define clearly the data structure of each modular section

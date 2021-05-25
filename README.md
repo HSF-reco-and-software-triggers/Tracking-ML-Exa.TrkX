@@ -11,12 +11,21 @@
 
 [Documentation](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/)
 
-![badge](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/murnanedaniel/acee2761c6c03febc3331296514ff721/raw/test.json) ![ci](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/workflows/ci/badge.svg)
+[![make_docs](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/make_docs.yml/badge.svg)](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/make_docs.yml) [![ci](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/ci.yml/badge.svg)](https://github.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/actions/workflows/ci.yml) [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 
 </div>
 
-Welcome to repository and documentation for ML pipelines and techniques by the ExatrkX Collaboration. Here we present a set of templates, best practices and results gathered from significant trial and error, to speed up the development of others in the domain of machine learning for high energy physics. We focus on applications specific to detector physics, but many tools can be applied to other areas, and these are collected in an application-agnostic way in the [Tools](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/tools/overview/) section.
+Welcome to repository and documentation for ML pipelines and techniques by the ExatrkX Collaboration. 
+
+## Objectives
+
+1. To present the ExaTrkX Project pipeline for track reconstruction of TrackML and ITk data in a clear and simple way
+2. To present a set of templates, best practices and results gathered from significant trial and error, to speed up the development of others in the domain of machine learning for high energy physics. We focus on applications specific to detector physics, but many tools can be applied to other areas, and these are collected in an application-agnostic way in the [Tools](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/tools/overview/) section.
+
+### Disclaimer:
+
+This repository has been functional, but ugly. It is moving to an "alpha" version whereby the abstract engineering for running the pipeline has been moved to a new library [TrainTrack](https://github.com/murnanedaniel/train-track/), and keeping physics-specific research code in this repository. This transition is expected before May 2021. Please be a little patient if using before then, and if something is broken, pull first to make sure it's not already solved, then post an issue second.
 
 ## Intro
 
@@ -35,11 +44,22 @@ Once up and running, you may want to consider more complex ML [Models](https://h
 It's recommended to start a conda environment before installation:
 
 ```
-conda install --name exatrkx-tracking python=3.8
+conda create --name exatrkx-tracking python=3.8
 conda activate exatrkx-tracking
+pip install pip --upgrade
 ```
 
-The repository can be installed and run with GPU or CPU. The installation depends on this compatibility:
+If you have a CUDA GPU available, load the toolkit or [install it](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html) now. You should check that this is done by running `nvcc --version`. Then, running:
+
+```
+python install.py
+```
+
+will **attempt** to negotiate a path through the packages required, using `nvcc --version` to automatically find the correct wheels. **Warning**: If you are installing with cpu, this may take up to 15 minutes due to an unfortunately slow installation of Pytorch3D from source.
+
+You should be ready for the [Quickstart](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/pipelines/quickstart)!
+
+If this doesn't work, you can step through the process manually:
 
 <table style="border: 1px solid gray; border-collapse: collapse">
 <tr style="border-bottom: 1px solid gray">
@@ -66,7 +86,9 @@ The repository can be installed and run with GPU or CPU. The installation depend
 
 2. Install Pytorch and dependencies 
 
-```pip install --user -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html -f https://pytorch-geometric.com/whl/torch-1.5.0.html```
+```
+    pip install --user -r requirements.txt
+```
 
 </td>
 </tr>
@@ -84,15 +106,37 @@ The repository can be installed and run with GPU or CPU. The installation depend
 
 4. Install CPU-optimized packages
 
-```pip install faiss-cpu```
+```
+pip install faiss-cpu
+pip install "git+https://github.com/facebookresearch/pytorch3d.git@stable" 
+``` 
+    
     
 </td>
 <td style="border-left: 1px solid gray">
 
+    
 4. Install GPU-optimized packages
 
-```pip install faiss-gpu cupy-cudaXXX```, with ```XXX```
+```pip install faiss-gpu cupy-cudaXXX```, with `XXX`    
+
+```
+pip install pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py3{Y}_cu{XXX}_pyt{ZZZ}/download.html
+```
+    
+where `{Y}` is the minor version of Python 3.{Y}, `{XXX}` is as above, and `{ZZZ}` is the version of Pytorch {Z.ZZ}.
+
+    e.g. `py36_cu101_pyt170` is Python 3.6, Cuda 10.1, Pytorch 1.70.
+   
     
 </td>
 </tr>
 </table>
+
+### Vintage Errors
+
+A very possible error will be
+```
+OSError: libcudart.so.XX.X: cannot open shared object file: No such file or directory
+```
+This indicates a mismatch between CUDA versions. Identify the library that called the error, and ensure there are no versions of this library installed in parallel, e.g. from a previous `pip --user` install.
