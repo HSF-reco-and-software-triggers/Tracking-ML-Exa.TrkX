@@ -54,7 +54,7 @@ class EdgeNetwork(nn.Module):
     
     unpool_description = namedtuple(
         "UnpoolDescription",
-        ["edge_index", "cluster", "batch", "new_node_weights"])
+        ["cluster","node_weights"])
     
     def __init__(self, input_dim, hidden_dim, nb_layers, hidden_activation='Tanh',
                  layer_norm=True):
@@ -72,26 +72,24 @@ class EdgeNetwork(nn.Module):
         edge_inputs = torch.cat([x[start], x[end]], dim=1)
         return self.network(edge_inputs).squeeze(-1)
     
-    def merge_edges(self, x, edge_index, batch, edge_score):
+    def merge_edges(self, x, edge_index, batch, edge_score,e_original):
         #used for comparing against max_indices
         device = "cuda" if torch.cuda.is_available() else "cpu"
         nodes = torch.arange(x.shape[0])
         nodes = nodes.to(device)
-
+      #  print("beginning of merge",e_original._version)
         nodes_remaining = torch.ones_like(nodes,dtype = torch.bool)
         nodes_remaining = nodes_remaining.to(device)
         edges_remaining = torch.ones_like(edge_index[0],dtype=torch.bool)
         edges_remaining = edges_remaining.to(device)
         ratio = 1.0
         i = 0
-        updated_edge_weights = torch.ones_like(edge_score)
-        updated_edge_weights.copy_(edge_score)
 
         while i < 10 and ratio > 0.05:   
             #get max edge score for each node and edge index where it occurs
-            max_score_0, max_indices_0 = scatter_max(updated_edge_weights, edge_index[0], dim=0, dim_size=x.shape[0])
-            max_score_1, max_indices_1 = scatter_max(updated_edge_weights, edge_index[1], dim=0, dim_size=x.shape[0])
-
+            max_score_0, max_indices_0 = scatter_max(edge_score, edge_index[0], dim=0, dim_size=x.shape[0])
+            max_score_1, max_indices_1 = scatter_max(edge_score, edge_index[1], dim=0, dim_size=x.shape[0])
+     #       print("after max",i,e_original._version)
             #stack scores for each direction
             stacked_score, stacked_indices = torch.stack([max_score_0, max_score_1]), torch.stack([max_indices_0, max_indices_1]).T
             top_score , _ = torch.max(stacked_score, dim=0)
@@ -111,6 +109,7 @@ class EdgeNetwork(nn.Module):
             edge_index_match = edge_index_match_0 & edge_index_match_1 & node_0_valid & node_1_valid;
             edge_index_match &= edge_score > 0.3
 
+#            print("after matching",i,e_original._version)
             #update the remaining edges based on which ones should be removed
             edges_remaining &= ~edge_index_match
             edges_contracted = edge_index[:,edge_index_match]
@@ -121,7 +120,8 @@ class EdgeNetwork(nn.Module):
 
             #zero out the edge scores of every edge that has >= 1 node being removed
             edge_score_zero_mask = (edge_index[..., None] == nodes[nodes_removed]).any(-1).any(0)
-            updated_edge_weights *= ~edge_score_zero_mask
+            edge_score *= ~edge_score_zero_mask
+            #print("after zeroing",i,e_original._version)
             ratio = (torch.sum(nodes_remaining)/nodes_remaining.shape[0]).item()
             #print(ratio)
             i += 1
@@ -145,10 +145,12 @@ class EdgeNetwork(nn.Module):
         _, counts = torch.unique(new_node_index_map[0], return_counts=True)
         duplicates = torch.where(counts >= 2)
         cluster_mask = torch.ones_like(cluster,dtype=torch.bool)
-
+        found_duplicate=False
         #if it finds a duplicate node, remove it from the cluster map
         if duplicates[0].size(0) > 0:
+            found_duplicate=True
             d = duplicates[0]
+            print(d.size(0))
             for i in d:
                 #find the multiple cluster indices in the node index map and get the minimum index to keep
                 duplicate_mask = (i == new_node_index_map[0])
@@ -161,14 +163,20 @@ class EdgeNetwork(nn.Module):
 
             #get all unique clusters that are being removed, and decrease all clusters greater than that index by 1 to account for each cluster removal
             clusters_to_remove = torch.unique(cluster[~cluster_mask])
+            clusters_to_remove,_ = torch.sort(clusters_to_remove,descending=True)
+            print(clusters_to_remove)
             cluster = cluster[cluster_mask]
             for c in clusters_to_remove:
+                print(c)
                 cluster[cluster > c] -= 1
-
+        if found_duplicate:
+            print(torch.unique(cluster).size(0),cluster.size(0))
+            print(cluster.max())
+            
         #create new node features and edge index based on clustering
         new_x = scatter_add(x, cluster, dim=0, dim_size=torch.unique(cluster).size(0))
         N = new_x.size(0)
-        print(new_x.shape)
+        #print(new_x.shape)
         new_e = cluster[new_e]
 
         #reorder new edge index so smaller node index value is always on top
@@ -194,13 +202,12 @@ class EdgeNetwork(nn.Module):
         remaining_weights = torch.ones(N - edges_contracted.size(1),device=device)
         new_node_weights = torch.cat([contracted_weights,remaining_weights])
         new_x = new_x * new_node_weights.view(-1,1)
-        print("new x", new_x.shape)
         
         new_batch = x.new_empty(new_x.size(0), dtype=torch.long)
         batch = batch.to(x.device)
         new_batch = new_batch.scatter_(0, cluster, batch)
         
-        unpool_info = self.unpool_description(edge_index=edge_index, cluster=cluster, batch=batch, new_node_weights=new_node_weights)
+        unpool_info = self.unpool_description(cluster=cluster,node_weights = new_node_weights)
         
         return new_x, new_edge_index, new_batch, new_edge_score, unpool_info
     
@@ -241,10 +248,10 @@ class ECGNN(GNNContract):
             x_inital = x
 
             # Apply edge network
-            e = torch.sigmoid(self.edge_network(x, edge_index))
+            edge_scores = torch.sigmoid(self.edge_network(x, edge_index))
 
             # Apply node network
-            x = self.node_network(x, e, edge_index)
+            x = self.node_network(x, edge_scores, edge_index)
 
             # Shortcut connect the inputs onto the hidden representation
             x = torch.cat([x, input_x], dim=-1)
@@ -253,20 +260,21 @@ class ECGNN(GNNContract):
             x = x_inital + x
 
         edge_scores = torch.sigmoid(self.edge_network(x, edge_index))
-        new_edge_scores = edge_scores.clone().detach()
-        new_edge_scores.requires_grad = False
-        unpool = []
+        #print("before detach ",edge_scores._version)
+        new_edge_scores = torch.ones_like(edge_scores)
+        new_edge_scores.copy_(edge_scores)
+        #new_edge_scores = edge_scores.detach()
+        cluster = torch.arange(x.size(0))
         for i in range(self.hparams["n_contract_iters"]):
             batch = torch.zeros(x.size()[0],dtype=torch.int64)
-        
+            #print("round ",i,edge_scores._version,new_edge_scores._version)
             #perform a round of edge contraction
-            x, edge_index, batch, new_edge_scores, unpool_info = self.edge_network.merge_edges(x,edge_index,batch,new_edge_scores)
-            unpool.append(unpool_info)
-            cluster = unpool_info.cluster
-            node_weights = unpool_info.new_node_weights
+            x, edge_index, batch, new_edge_scores, unpool_info = self.edge_network.merge_edges(x,edge_index,batch,new_edge_scores,edge_scores)
+            cluster = unpool_info.cluster[cluster]
+            node_weights = unpool_info.node_weights
             
             #update input_x to reflect the clustering
-            input_x = scatter_add(input_x,cluster,dim=0,dim_size=torch.unique(cluster).size(0))
+            input_x = scatter_add(input_x,unpool_info.cluster,dim=0,dim_size=torch.unique(unpool_info.cluster).size(0))
             input_x = input_x * node_weights.unsqueeze(-1)
             
             x_inital = x
@@ -279,10 +287,11 @@ class ECGNN(GNNContract):
 
             # Shortcut connect the inputs onto the hidden representation
             x = torch.cat([x, input_x], dim=-1)
-
+            #print(new_edge_scores.shape,edge_scores.shape)
             # Residual connection
             x = x_inital + x
         
-        return edge_scores, unpool
+        #print(edge_scores._version)
+        return edge_scores, cluster
     
     
