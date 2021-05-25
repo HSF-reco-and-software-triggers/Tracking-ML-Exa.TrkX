@@ -9,7 +9,7 @@ from torch_geometric.data import DataLoader
 from torch.nn import Linear
 import torch
 
-from .utils import load_dataset, random_edge_slice_v2
+from .utils import load_dataset
 
 
 class GNNContract(LightningModule):
@@ -20,7 +20,7 @@ class GNNContract(LightningModule):
         Initialise the Lightning Module that can scan over different GNN training regimes
         '''
         # Assign hyperparameters
-        self.hparams = hparams
+        self.hparams.update(hparams)
         self.hparams["posted_alert"] = False
         
     def setup(self, stage):
@@ -31,19 +31,19 @@ class GNNContract(LightningModule):
         
     def train_dataloader(self):
         if self.trainset is not None:
-            return DataLoader(self.trainset, batch_size=1, num_workers=1)
+            return DataLoader(self.trainset, batch_size=1, num_workers=8)
         else:
             return None
 
     def val_dataloader(self):
         if self.valset is not None:
-            return DataLoader(self.valset, batch_size=1, num_workers=1)
+            return DataLoader(self.valset, batch_size=1, num_workers=8)
         else:
             return None
 
     def test_dataloader(self):
         if self.testset is not None:
-            return DataLoader(self.testset, batch_size=1, num_workers=1)
+            return DataLoader(self.testset, batch_size=1, num_workers=8)
         else:
             return None
         
@@ -70,10 +70,7 @@ class GNNContract(LightningModule):
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
        
-        edge_scores, output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), 
-                       batch.edge_index).squeeze()
-                  if ('ci' in self.hparams["regime"])
-                  else self(batch.x, batch.edge_index))
+        edge_scores, cluster = self(batch.x, batch.edge_index)
         
         if 'weighting' in self.hparams['regime']:
             manual_weights = batch.weights
@@ -83,11 +80,15 @@ class GNNContract(LightningModule):
         if ('pid' in self.hparams["regime"]):
             
             truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-           
-            edge_scores -= edge_scores.min(0, keepdim=True)[0]
-            cluster = output.cluster
+            
             ratio = torch.unique(cluster).size(0) / cluster.size(0)
-            edge_scores /= edge_scores.max(0, keepdim=True)[0]
+            e_min = edge_scores.min(0, keepdim=True)[0].item()
+            e_max = edge_scores.max(0, keepdim=True)[0].item()
+            if e_min < 0:
+                print(e_min)
+            if e_max > 1:
+                print(e_max)
+            
             loss = F.binary_cross_entropy_with_logits(edge_scores, truth.float(), weight = manual_weights, pos_weight = weight)
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
@@ -101,37 +102,35 @@ class GNNContract(LightningModule):
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
 
-        edge_scores, output = (self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index).squeeze()
-                  if ('ci' in self.hparams["regime"])
-                  else self(batch.x, batch.edge_index))
+        edge_scores, cluster = self(batch.x, batch.edge_index)
         
-        cluster = output.cluster
         ratio = torch.unique(cluster).size(0) / cluster.size(0)
         
-        clustered_edges = batch.edge_index[:,(cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]])]
+        clustered_edges_mask = (cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]])
+        clustered_edges = batch.edge_index[:,clustered_edges_mask]
+        clustered_edge_score = edge_scores[clustered_edges_mask]
         clustered_edges_truth = (batch.pid[clustered_edges[0]] == batch.pid[clustered_edges[1]]).float()
-        cluster_vals,cluster_counts = torch.unique(cluster,return_counts=True)
-        cluster_num = torch.sum(torch.where(cluster_counts==2,1,0)).item() #count the number of clusters of size 2, or the number of edges contracted
+        correct_edges_contracted = torch.sum(clustered_edges_truth).item() #total number of edges contracted that were supposed to be contracted
+        edges_contracted = torch.sum(clustered_edges_mask).item() #total number of edges contracted
         
         
         truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-        
-        #normalize edge scores to [0,1]
-        edge_scores -= edge_scores.min(0, keepdim=True)[0]
-        edge_scores /= edge_scores.max(0, keepdim=True)[0]
-        
+        e_min = edge_scores.min(0, keepdim=True)[0].item()
+        e_max = edge_scores.max(0, keepdim=True)[0].item()
+        if e_min < 0:
+            print(e_min)
+        if e_max > 1:
+            print(e_max)
         
         if 'weighting' in self.hparams['regime']:
             manual_weights = batch.weights
         else:
             manual_weights = None
             
-        loss = F.binary_cross_entropy_with_logits(edge_scores, truth.float(), weight = manual_weights, pos_weight = weight)
-        
+        loss = F.binary_cross_entropy_with_logits(edge_scores, truth, weight = manual_weights, pos_weight = weight)
         current_lr = self.optimizers().param_groups[0]['lr']
         
-        #edges of the same particle clustered / total edges clustered
-        eff = torch.sum(clustered_edges_truth).item()/cluster_num
+        eff = correct_edges_contracted/edges_contracted
         
         self.log_dict({'val_loss': loss, 'eff': eff, "current_lr": current_lr,"ratio":ratio})
         

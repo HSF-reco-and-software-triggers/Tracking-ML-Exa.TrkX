@@ -1,0 +1,16 @@
+# Location of libraries
+libraries:
+    model_library: LightningModules
+    artifact_library: ${EXATRKX_DATA}/lightning_checkpoints
+    
+
+# The lines you would like/need in a batch script before the call to pipeline.py
+custom_batch_setup:
+    - conda activate exatrkx-test
+    
+# If you need to set up some environment before a batch is submitted, define it here in order of commands to run
+command_line_setup:
+    - module load cgpu
+
+# Which logger to use - options are Weights & Biases [wandb], TensorBoard [tb], or [None]
+logger: tb
