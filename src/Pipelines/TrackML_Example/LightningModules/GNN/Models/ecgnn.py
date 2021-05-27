@@ -10,7 +10,6 @@ import torch.nn.functional as F
 import torch
 from torch_scatter import scatter_add,scatter_max, scatter_mean
 from torch.utils.checkpoint import checkpoint
-from torch_sparse import coalesce
 
 from ..gnn_contract import GNNContract
 from ..utils import make_mlp
@@ -85,7 +84,7 @@ class EdgeNetwork(nn.Module):
         ratio = 1.0
         i = 0
 
-        while i < 10 and ratio > 0.05:   
+        while i < 4 and ratio > 0.05:   
             #get max edge score for each node and edge index where it occurs
             max_score_0, max_indices_0 = scatter_max(edge_score, edge_index[0], dim=0, dim_size=x.shape[0])
             max_score_1, max_indices_1 = scatter_max(edge_score, edge_index[1], dim=0, dim_size=x.shape[0])

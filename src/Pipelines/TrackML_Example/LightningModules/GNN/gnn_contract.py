@@ -80,16 +80,15 @@ class GNNContract(LightningModule):
         if ('pid' in self.hparams["regime"]):
             
             truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-            
+            edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1,cluster]]
+            edges_clustered = cluster[batch.edge_index[:,edge_cluster_mask]]
+            truth_clustered = truth[edge_cluster_mask].float()
+            scores_clustered = edge_scores[edge_cluster_mask]
+            truth_sum = scatter_add(truth_clustered,edges_clustered[0])
+            score_sum = scatter_add(scores_clustered,edges_clustered[0])
             ratio = torch.unique(cluster).size(0) / cluster.size(0)
-            e_min = edge_scores.min(0, keepdim=True)[0].item()
-            e_max = edge_scores.max(0, keepdim=True)[0].item()
-            if e_min < 0:
-                print(e_min)
-            if e_max > 1:
-                print(e_max)
             
-            loss = F.binary_cross_entropy_with_logits(edge_scores, truth.float(), weight = manual_weights, pos_weight = weight)
+            loss = F.binary_cross_entropy_with_logits(score_sum, truth_sum, weight = manual_weights, pos_weight = weight)
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
             
@@ -104,30 +103,17 @@ class GNNContract(LightningModule):
 
         edge_scores, cluster = self(batch.x, batch.edge_index)
         
-        ratio = torch.unique(cluster).size(0) / cluster.size(0)
-        
-        clustered_edges_mask = (cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]])
-        clustered_edges = batch.edge_index[:,clustered_edges_mask]
-        clustered_edge_score = edge_scores[clustered_edges_mask]
-        clustered_edges_truth = (batch.pid[clustered_edges[0]] == batch.pid[clustered_edges[1]]).float()
-        correct_edges_contracted = torch.sum(clustered_edges_truth).item() #total number of edges contracted that were supposed to be contracted
-        edges_contracted = torch.sum(clustered_edges_mask).item() #total number of edges contracted
-        
         
         truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-        e_min = edge_scores.min(0, keepdim=True)[0].item()
-        e_max = edge_scores.max(0, keepdim=True)[0].item()
-        if e_min < 0:
-            print(e_min)
-        if e_max > 1:
-            print(e_max)
-        
-        if 'weighting' in self.hparams['regime']:
-            manual_weights = batch.weights
-        else:
-            manual_weights = None
-            
-        loss = F.binary_cross_entropy_with_logits(edge_scores, truth, weight = manual_weights, pos_weight = weight)
+        edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1,cluster]]
+        edges_clustered = cluster[batch.edge_index[:,edge_cluster_mask]]
+        truth_clustered = truth[edge_cluster_mask].float()
+        scores_clustered = edge_scores[edge_cluster_mask]
+        truth_sum = scatter_add(truth_clustered,edges_clustered[0])
+        score_sum = scatter_add(scores_clustered,edges_clustered[0])
+        ratio = torch.unique(cluster).size(0) / cluster.size(0)
+
+        loss = F.binary_cross_entropy_with_logits(score_sum, truth_sum, weight = manual_weights, pos_weight = weight)
         current_lr = self.optimizers().param_groups[0]['lr']
         
         eff = correct_edges_contracted/edges_contracted
