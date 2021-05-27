@@ -291,6 +291,6 @@ class ECGNN(GNNContract):
             x = x_inital + x
         
         #print(edge_scores._version)
-        return edge_scores, cluster
+        return x, edge_scores, cluster
     
     

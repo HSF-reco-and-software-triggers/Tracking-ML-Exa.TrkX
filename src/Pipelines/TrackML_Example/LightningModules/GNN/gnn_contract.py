@@ -70,7 +70,7 @@ class GNNContract(LightningModule):
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
        
-        edge_scores, cluster = self(batch.x, batch.edge_index)
+        nodes, edge_scores, cluster = self(batch.x, batch.edge_index)
         
         if 'weighting' in self.hparams['regime']:
             manual_weights = batch.weights
@@ -81,14 +81,15 @@ class GNNContract(LightningModule):
             
             truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
             edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1,cluster]]
+            node_truth = scatter_mean(batch.pt,cluster)
             edges_clustered = cluster[batch.edge_index[:,edge_cluster_mask]]
             truth_clustered = truth[edge_cluster_mask].float()
             scores_clustered = edge_scores[edge_cluster_mask]
             truth_sum = scatter_add(truth_clustered,edges_clustered[0])
             score_sum = scatter_add(scores_clustered,edges_clustered[0])
             ratio = torch.unique(cluster).size(0) / cluster.size(0)
-            
-            loss = F.binary_cross_entropy_with_logits(score_sum, truth_sum, weight = manual_weights, pos_weight = weight)
+            loss = F.mse_loss(nodes,node_truth)
+            loss += F.binary_cross_entropy_with_logits(score_sum, truth_sum, weight = manual_weights, pos_weight = weight)
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
             
