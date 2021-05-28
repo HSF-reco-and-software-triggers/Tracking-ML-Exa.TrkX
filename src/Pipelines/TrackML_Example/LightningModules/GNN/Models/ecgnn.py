@@ -71,12 +71,12 @@ class EdgeNetwork(nn.Module):
         edge_inputs = torch.cat([x[start], x[end]], dim=1)
         return self.network(edge_inputs).squeeze(-1)
     
-    def merge_edges(self, x, edge_index, batch, edge_score,e_original):
+    def merge_edges(self, x, edge_index, batch, edge_score, e_original,edge_cut,contract_stop_cut,contract_iters):
         #used for comparing against max_indices
         device = "cuda" if torch.cuda.is_available() else "cpu"
         nodes = torch.arange(x.shape[0])
         nodes = nodes.to(device)
-      #  print("beginning of merge",e_original._version)
+      
         nodes_remaining = torch.ones_like(nodes,dtype = torch.bool)
         nodes_remaining = nodes_remaining.to(device)
         edges_remaining = torch.ones_like(edge_index[0],dtype=torch.bool)
@@ -84,11 +84,11 @@ class EdgeNetwork(nn.Module):
         ratio = 1.0
         i = 0
 
-        while i < 4 and ratio > 0.05:   
+        while i < contract_iters and ratio > contract_stop_cut:   
             #get max edge score for each node and edge index where it occurs
             max_score_0, max_indices_0 = scatter_max(edge_score, edge_index[0], dim=0, dim_size=x.shape[0])
             max_score_1, max_indices_1 = scatter_max(edge_score, edge_index[1], dim=0, dim_size=x.shape[0])
-     #       print("after max",i,e_original._version)
+
             #stack scores for each direction
             stacked_score, stacked_indices = torch.stack([max_score_0, max_score_1]), torch.stack([max_indices_0, max_indices_1]).T
             top_score , _ = torch.max(stacked_score, dim=0)
@@ -106,7 +106,7 @@ class EdgeNetwork(nn.Module):
             node_0_valid = nodes_remaining[edge_index[0]]
             node_1_valid = nodes_remaining[edge_index[1]]
             edge_index_match = edge_index_match_0 & edge_index_match_1 & node_0_valid & node_1_valid;
-            edge_index_match &= edge_score > 0.3
+            edge_index_match &= edge_score > edge_cut
 
 #            print("after matching",i,e_original._version)
             #update the remaining edges based on which ones should be removed
@@ -144,12 +144,10 @@ class EdgeNetwork(nn.Module):
         _, counts = torch.unique(new_node_index_map[0], return_counts=True)
         duplicates = torch.where(counts >= 2)
         cluster_mask = torch.ones_like(cluster,dtype=torch.bool)
-        found_duplicate=False
         #if it finds a duplicate node, remove it from the cluster map
         if duplicates[0].size(0) > 0:
-            found_duplicate=True
             d = duplicates[0]
-            print(d.size(0))
+            #print(d.size(0))
             for i in d:
                 #find the multiple cluster indices in the node index map and get the minimum index to keep
                 duplicate_mask = (i == new_node_index_map[0])
@@ -163,14 +161,9 @@ class EdgeNetwork(nn.Module):
             #get all unique clusters that are being removed, and decrease all clusters greater than that index by 1 to account for each cluster removal
             clusters_to_remove = torch.unique(cluster[~cluster_mask])
             clusters_to_remove,_ = torch.sort(clusters_to_remove,descending=True)
-            print(clusters_to_remove)
             cluster = cluster[cluster_mask]
             for c in clusters_to_remove:
-                print(c)
                 cluster[cluster > c] -= 1
-        if found_duplicate:
-            print(torch.unique(cluster).size(0),cluster.size(0))
-            print(cluster.max())
             
         #create new node features and edge index based on clustering
         new_x = scatter_add(x, cluster, dim=0, dim_size=torch.unique(cluster).size(0))
@@ -230,6 +223,13 @@ class ECGNN(GNNContract):
         self.edge_network = EdgeNetwork(hparams["in_channels"] + hparams["hidden"], hparams["in_channels"] + hparams["hidden"],
                                         hparams["nb_edge_layer"], hparams["hidden_activation"], hparams["layernorm"])
         
+        # The output network has the structure of the input network, with a final single track param output (hardcoded for now!)
+        self.output_network = make_mlp(
+            hparams["in_channels"]+hparams["hidden"],
+            [hparams["hidden"]]*hparams["nb_node_layer"] + [1],
+            output_activation=None
+        )
+        
         #array for storing unpooling results
         self.unpool = []
 
@@ -264,11 +264,11 @@ class ECGNN(GNNContract):
         new_edge_scores.copy_(edge_scores)
         #new_edge_scores = edge_scores.detach()
         cluster = torch.arange(x.size(0))
-        for i in range(self.hparams["n_contract_iters"]):
+        for i in range(self.hparams["outer_contract_iters"]):
             batch = torch.zeros(x.size()[0],dtype=torch.int64)
             #print("round ",i,edge_scores._version,new_edge_scores._version)
             #perform a round of edge contraction
-            x, edge_index, batch, new_edge_scores, unpool_info = self.edge_network.merge_edges(x,edge_index,batch,new_edge_scores,edge_scores)
+            x, edge_index, batch, new_edge_scores, unpool_info = self.edge_network.merge_edges(x,edge_index,batch,new_edge_scores,edge_scores, self.hparams["contract_edge_cut"],self.hparams["contract_stop_cut"],self.hparams["inner_contract_iters"])
             cluster = unpool_info.cluster[cluster]
             node_weights = unpool_info.node_weights
             
@@ -291,6 +291,6 @@ class ECGNN(GNNContract):
             x = x_inital + x
         
         #print(edge_scores._version)
-        return x, edge_scores, cluster
+        return self.output_network(x), edge_scores, cluster
     
     

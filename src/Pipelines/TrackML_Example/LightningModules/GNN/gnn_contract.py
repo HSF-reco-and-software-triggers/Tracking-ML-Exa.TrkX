@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch_geometric.data import DataLoader
 from torch.nn import Linear
 import torch
-
+from torch_scatter import scatter_add,scatter_max, scatter_mean
 from .utils import load_dataset
 
 
@@ -80,16 +80,27 @@ class GNNContract(LightningModule):
         if ('pid' in self.hparams["regime"]):
             
             truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-            edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1,cluster]]
-            node_truth = scatter_mean(batch.pt,cluster)
+            edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]]
+            print(nodes.size(0),batch.pt.size(0))
+            node_truth = scatter_mean(batch.pt,cluster).float()
             edges_clustered = cluster[batch.edge_index[:,edge_cluster_mask]]
             truth_clustered = truth[edge_cluster_mask].float()
             scores_clustered = edge_scores[edge_cluster_mask]
             truth_sum = scatter_add(truth_clustered,edges_clustered[0])
             score_sum = scatter_add(scores_clustered,edges_clustered[0])
             ratio = torch.unique(cluster).size(0) / cluster.size(0)
-            loss = F.mse_loss(nodes,node_truth)
-            loss += F.binary_cross_entropy_with_logits(score_sum, truth_sum, weight = manual_weights, pos_weight = weight)
+            clustered_loss = 0.0
+            edge_loss = 0.0
+            node_loss = 0.0
+            if "node" not in self.hparams["regime"]:
+                clustered_loss = F.mse_loss(score_sum, truth_sum)
+                #edge_loss = F.binary_cross_entropy_with_logits(edge_scores,truth,weight=manual_weights,pos_weight=weight)
+            if "hybrid" in self.hparams["regime"] or "node" in self.hparams["regime"]:
+                nodes = nodes.squeeze()
+                print(cluster._version)
+                print(node_truth._version)
+                node_loss = F.mse_loss(nodes,node_truth.float())
+            loss = clustered_loss + node_loss + edge_loss
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
             
@@ -102,26 +113,43 @@ class GNNContract(LightningModule):
         weight = (torch.tensor(self.hparams["weight"]) if ("weight" in self.hparams)
                       else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum()))
 
-        edge_scores, cluster = self(batch.x, batch.edge_index)
+        nodes, edge_scores, cluster = self(batch.x, batch.edge_index)
         
+        if 'weighting' in self.hparams['regime']:
+            manual_weights = batch.weights
+        else:
+            manual_weights = None
         
-        truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-        edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1,cluster]]
-        edges_clustered = cluster[batch.edge_index[:,edge_cluster_mask]]
-        truth_clustered = truth[edge_cluster_mask].float()
-        scores_clustered = edge_scores[edge_cluster_mask]
-        truth_sum = scatter_add(truth_clustered,edges_clustered[0])
-        score_sum = scatter_add(scores_clustered,edges_clustered[0])
+        node_truth = scatter_mean(batch.pt,cluster)
+        edge_truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
+        edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]]
+        edge_pred_clustered = cluster[batch.edge_index[:,edge_cluster_mask]]
+        edge_truth_clustered = edge_truth[edge_cluster_mask].float()
+        edge_scores_clustered = edge_scores[edge_cluster_mask]
+        edge_truth_sum = scatter_add(edge_truth_clustered,edge_pred_clustered[0])
+        edge_score_sum = scatter_add(edge_scores_clustered,edge_pred_clustered[0])
+        
         ratio = torch.unique(cluster).size(0) / cluster.size(0)
-
-        loss = F.binary_cross_entropy_with_logits(score_sum, truth_sum, weight = manual_weights, pos_weight = weight)
+        clustered_loss = 0.0
+        edge_loss = 0.0
+        node_loss = 0.0
+        if "node" not in self.hparams["regime"]:
+            clustered_loss = F.mse_loss(edge_score_sum, edge_truth_sum)
+            #edge_loss = F.binary_cross_entropy_with_logits(edge_scores,truth,weight=manual_weights,pos_weight=weight)
+        if "hybrid" in self.hparams["regime"] or "node" in self.hparams["regime"]:
+            node_loss = F.mse_loss(nodes.squeeze(),node_truth)
+        loss = clustered_loss + node_loss + edge_loss
+        num_edges_contracted = torch.sum(edge_cluster_mask)
+        true_pred_edges = torch.sum(edge_truth_clustered)
+        true_total_edges = torch.sum(edge_truth)
+    
         current_lr = self.optimizers().param_groups[0]['lr']
         
-        eff = correct_edges_contracted/edges_contracted
+        pur = true_pred_edges / num_edges_contracted
+        eff = true_pred_edges / true_total_edges
+        self.log_dict({'val_loss': loss, 'eff': eff, "pur":pur,"current_lr": current_lr,"ratio":ratio})
         
-        self.log_dict({'val_loss': loss, 'eff': eff, "current_lr": current_lr,"ratio":ratio})
-        
-        return {"loss": loss,"eff":eff, "truth": truth.cpu().numpy(),"ratio":ratio}
+        return {"loss": loss,"eff":eff, "truth": edge_truth.cpu().numpy(),"ratio":ratio}
 
     def validation_step(self, batch, batch_idx):
         

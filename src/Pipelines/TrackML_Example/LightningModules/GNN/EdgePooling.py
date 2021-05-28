@@ -118,7 +118,7 @@ class EdgePooling(torch.nn.Module):
         edges_remaining = edges_remaining.to(device)
         ratio = 1.0
         i = 0
-        old_edge_score = edge_score[:]
+        
         while i < 10 and ratio > 0.05:    
             #get max edge score for each node and edge index where it occurs
             max_score_0, max_indices_0 = scatter_max(edge_score, edge_index[0], dim=0, dim_size=x.shape[0])
@@ -175,21 +175,27 @@ class EdgePooling(torch.nn.Module):
         duplicates = torch.where(counts >= 2)
         cluster_mask = torch.ones_like(cluster,dtype=torch.bool)
         
+        #count the number of occurences of each node to find duplicates
+        _, counts = torch.unique(new_node_index_map[0], return_counts=True)
+        duplicates = torch.where(counts >= 2)
+        cluster_mask = torch.ones_like(cluster,dtype=torch.bool)
         #if it finds a duplicate node, remove it from the cluster map
         if duplicates[0].size(0) > 0:
             d = duplicates[0]
+            print(d.size(0))
             for i in d:
                 #find the multiple cluster indices in the node index map and get the minimum index to keep
                 duplicate_mask = (i == new_node_index_map[0])
                 duplicate_cluster_indices = cluster[duplicate_mask]
                 valid_cluster_index = torch.min(duplicate_cluster_indices)
-                
+
                 #mask all cluster indices that need removing
                 cluster_remove_mask = ~(duplicate_mask & (cluster != valid_cluster_index))
                 cluster_mask &= cluster_remove_mask
-            
+
             #get all unique clusters that are being removed, and decrease all clusters greater than that index by 1 to account for each cluster removal
             clusters_to_remove = torch.unique(cluster[~cluster_mask])
+            clusters_to_remove,_ = torch.sort(clusters_to_remove,descending=True)
             cluster = cluster[cluster_mask]
             for c in clusters_to_remove:
                 cluster[cluster > c] -= 1
