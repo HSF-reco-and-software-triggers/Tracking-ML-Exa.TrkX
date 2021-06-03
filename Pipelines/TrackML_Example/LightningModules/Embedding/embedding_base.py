@@ -35,9 +35,7 @@ class EmbeddingBase(LightningModule):
         """
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
-        self.save_hyperparameters()
-        # Assign hyperparameters
-        self.hparams = hparams
+        self.save_hyperparameters(hparams)
 
     def setup(self, stage):
         if stage == "fit":
@@ -280,7 +278,7 @@ class EmbeddingBase(LightningModule):
         Step to evaluate the model's performance
         """
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_test"], 200, log=False
+            batch, batch_idx, self.hparams["r_test"], 200, log=True
         )
 
         return outputs
