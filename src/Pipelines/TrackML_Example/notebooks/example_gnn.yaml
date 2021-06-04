@@ -12,10 +12,10 @@ noise: False
 
 # Model parameters
 edge_cut: 0.5
-contract_edge_cut: 0.4
+contract_edge_cut: 0.15
 contract_stop_cut: 0.05
-inner_contract_iters: 3
-outer_contract_iters: 20
+inner_contract_iters: 4
+outer_contract_iters: 15
 in_channels: 3
 hidden: 64
 n_graph_iters: 4

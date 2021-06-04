@@ -105,24 +105,22 @@ class EdgeNetwork(nn.Module):
             edge_index_match_1 = max_indices[edge_index[0]] == edge_index[1]
             node_0_valid = nodes_remaining[edge_index[0]]
             node_1_valid = nodes_remaining[edge_index[1]]
-            edge_index_match = edge_index_match_0 & edge_index_match_1 & node_0_valid & node_1_valid;
+            edge_index_match = edge_index_match_0 & edge_index_match_1 & node_0_valid & node_1_valid
             edge_index_match &= edge_score > edge_cut
 
-#            print("after matching",i,e_original._version)
             #update the remaining edges based on which ones should be removed
-            edges_remaining &= ~edge_index_match
+            edges_remaining_new = edges_remaining & ~edge_index_match
+            edges_remaining = edges_remaining_new
             edges_contracted = edge_index[:,edge_index_match]
-
             #update the remaining nodes based on which ones should be removed
             nodes_removed = torch.flatten(edges_contracted)
             nodes_remaining[nodes_removed] = 0.0
 
             #zero out the edge scores of every edge that has >= 1 node being removed
             edge_score_zero_mask = (edge_index[..., None] == nodes[nodes_removed]).any(-1).any(0)
-            edge_score *= ~edge_score_zero_mask
-            #print("after zeroing",i,e_original._version)
+            edge_score_1 = edge_score * ~edge_score_zero_mask
+            edge_score = edge_score_1
             ratio = (torch.sum(nodes_remaining)/nodes_remaining.shape[0]).item()
-            #print(ratio)
             i += 1
 
         #split into edges removed and edges not removed
@@ -147,7 +145,6 @@ class EdgeNetwork(nn.Module):
         #if it finds a duplicate node, remove it from the cluster map
         if duplicates[0].size(0) > 0:
             d = duplicates[0]
-            #print(d.size(0))
             for i in d:
                 #find the multiple cluster indices in the node index map and get the minimum index to keep
                 duplicate_mask = (i == new_node_index_map[0])
@@ -168,7 +165,6 @@ class EdgeNetwork(nn.Module):
         #create new node features and edge index based on clustering
         new_x = scatter_add(x, cluster, dim=0, dim_size=torch.unique(cluster).size(0))
         N = new_x.size(0)
-        #print(new_x.shape)
         new_e = cluster[new_e]
 
         #reorder new edge index so smaller node index value is always on top
@@ -197,10 +193,8 @@ class EdgeNetwork(nn.Module):
         
         new_batch = x.new_empty(new_x.size(0), dtype=torch.long)
         batch = batch.to(x.device)
-        new_batch = new_batch.scatter_(0, cluster, batch)
-        
+        new_batch = torch.scatter(new_batch,0, cluster, batch)
         unpool_info = self.unpool_description(cluster=cluster,node_weights = new_node_weights)
-        
         return new_x, new_edge_index, new_batch, new_edge_score, unpool_info
     
 class ECGNN(GNNContract):
@@ -259,17 +253,17 @@ class ECGNN(GNNContract):
             x = x_inital + x
 
         edge_scores = torch.sigmoid(self.edge_network(x, edge_index))
-        #print("before detach ",edge_scores._version)
         new_edge_scores = torch.ones_like(edge_scores)
         new_edge_scores.copy_(edge_scores)
         #new_edge_scores = edge_scores.detach()
         cluster = torch.arange(x.size(0))
         for i in range(self.hparams["outer_contract_iters"]):
             batch = torch.zeros(x.size()[0],dtype=torch.int64)
-            #print("round ",i,edge_scores._version,new_edge_scores._version)
             #perform a round of edge contraction
+            
             x, edge_index, batch, new_edge_scores, unpool_info = self.edge_network.merge_edges(x,edge_index,batch,new_edge_scores,edge_scores, self.hparams["contract_edge_cut"],self.hparams["contract_stop_cut"],self.hparams["inner_contract_iters"])
-            cluster = unpool_info.cluster[cluster]
+            cluster_next = unpool_info.cluster[cluster]
+            cluster = cluster_next
             node_weights = unpool_info.node_weights
             
             #update input_x to reflect the clustering
@@ -286,11 +280,9 @@ class ECGNN(GNNContract):
 
             # Shortcut connect the inputs onto the hidden representation
             x = torch.cat([x, input_x], dim=-1)
-            #print(new_edge_scores.shape,edge_scores.shape)
             # Residual connection
             x = x_inital + x
         
-        #print(edge_scores._version)
         return self.output_network(x), edge_scores, cluster
     
     

@@ -78,14 +78,19 @@ class GNNContract(LightningModule):
             manual_weights = None
         
         if ('pid' in self.hparams["regime"]):
-            
-            truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
+            #print("nodes",nodes._version)
+            edge_truth = (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
             edge_cluster_mask = cluster[batch.edge_index[0]] == cluster[batch.edge_index[1]]
-            print(nodes.size(0),batch.pt.size(0))
-            node_truth = scatter_mean(batch.pt,cluster).float()
+            node_truth = scatter_mean(batch.pt,cluster,dim_size = nodes.size(0))
+            #print("cluster",cluster.shape)
+            #print("node truth",node_truth.shape)
+            #print("pt",batch.pt.shape)
+            
             edges_clustered = cluster[batch.edge_index[:,edge_cluster_mask]]
-            truth_clustered = truth[edge_cluster_mask].float()
+            truth_clustered = edge_truth[edge_cluster_mask].float()
+            #print("truth clustered",truth_clustered.shape)
             scores_clustered = edge_scores[edge_cluster_mask]
+            #print("scores clustered",scores_clustered.shape)
             truth_sum = scatter_add(truth_clustered,edges_clustered[0])
             score_sum = scatter_add(scores_clustered,edges_clustered[0])
             ratio = torch.unique(cluster).size(0) / cluster.size(0)
@@ -94,12 +99,12 @@ class GNNContract(LightningModule):
             node_loss = 0.0
             if "node" not in self.hparams["regime"]:
                 clustered_loss = F.mse_loss(score_sum, truth_sum)
-                #edge_loss = F.binary_cross_entropy_with_logits(edge_scores,truth,weight=manual_weights,pos_weight=weight)
+                edge_loss = F.mse_loss(edge_scores,edge_truth)
             if "hybrid" in self.hparams["regime"] or "node" in self.hparams["regime"]:
                 nodes = nodes.squeeze()
-                print(cluster._version)
-                print(node_truth._version)
-                node_loss = F.mse_loss(nodes,node_truth.float())
+                #print(cluster._version)
+                #print(node_truth._version)
+                node_loss = F.mse_loss(nodes.squeeze(),node_truth)
             loss = clustered_loss + node_loss + edge_loss
         else:
             loss = F.binary_cross_entropy_with_logits(output, batch.y, weight = manual_weights, pos_weight = weight)
@@ -135,8 +140,9 @@ class GNNContract(LightningModule):
         node_loss = 0.0
         if "node" not in self.hparams["regime"]:
             clustered_loss = F.mse_loss(edge_score_sum, edge_truth_sum)
-            #edge_loss = F.binary_cross_entropy_with_logits(edge_scores,truth,weight=manual_weights,pos_weight=weight)
+            edge_loss = F.mse_loss(edge_scores,edge_truth)
         if "hybrid" in self.hparams["regime"] or "node" in self.hparams["regime"]:
+            #print(nodes._version)
             node_loss = F.mse_loss(nodes.squeeze(),node_truth)
         loss = clustered_loss + node_loss + edge_loss
         num_edges_contracted = torch.sum(edge_cluster_mask)
