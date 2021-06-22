@@ -17,7 +17,7 @@ adjacent: False
 # Model parameters
 in_channels: 3
 hidden: 64
-n_graph_iters: 8
+n_graph_iters: 6
 nb_node_layer: 2
 nb_edge_layer: 2
 emb_channels: 0
