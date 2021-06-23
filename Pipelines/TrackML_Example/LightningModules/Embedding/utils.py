@@ -204,7 +204,7 @@ def build_edges(spatial, r_max, k_max, return_indices=False):
     edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
     if return_indices:
-        return edge_list, dists, I, ind
+        return edge_list, dists, idxs, ind
     else:
         return edge_list
 
