@@ -94,12 +94,9 @@ class ResAGNN(GNNBase):
         """
 
         # Setup input network
-        self.input_network = make_mlp(
-            hparams["in_channels"],
-            [hparams["hidden"]],
-            output_activation=hparams["hidden_activation"],
-            layer_norm=hparams["layernorm"],
-        )
+        self.input_network = make_mlp(hparams["in_channels"], [hparams["hidden"]],
+                                      output_activation=hparams["hidden_activation"],
+                                      layer_norm=hparams["layernorm"])
         # Setup the edge network
         self.edge_network = EdgeNetwork(
             hparams["in_channels"] + hparams["hidden"],

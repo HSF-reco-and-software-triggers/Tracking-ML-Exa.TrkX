@@ -83,3 +83,7 @@ venv.bak/
 
 # W&B
 *wandb*
+
+#extra plots
+src/Pipelines/Examples/notebooks/*.png
+

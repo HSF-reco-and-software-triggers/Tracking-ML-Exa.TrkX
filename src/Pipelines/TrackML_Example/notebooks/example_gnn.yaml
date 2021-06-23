@@ -4,7 +4,7 @@ input_dir: /project/projectdirs/m3443/data/trackml-codalab/embedding_processed_1
 # Dataset parameters
 pt_min: 1.
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [80, 10, 10] # Number of [training, validation, testing] examples
+datatype_split: [20, 20, 20] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
@@ -12,10 +12,13 @@ noise: False
 
 # Model parameters
 edge_cut: 0.5
+contract_edge_cut: 0.15
+contract_stop_cut: 0.05
+inner_contract_iters: 4
+outer_contract_iters: 15
 in_channels: 3
 hidden: 64
-n_graph_iters: 8
-n_contract_iters: 4
+n_graph_iters: 4
 nb_node_layer: 3
 nb_edge_layer: 3
 emb_channels: 0
@@ -26,5 +29,5 @@ warmup: 500
 lr: 0.006
 factor: 0.3
 patience: 8
-regime: [pid]
+regime: [pid,hybrid]
 max_epochs: 1
