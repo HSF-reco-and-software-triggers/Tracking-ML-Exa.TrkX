@@ -1,3 +1,11 @@
+"""Utilities for processing the overall event.
+
+The module contains useful functions for handling data at the event level. More fine-grained utilities are 
+reserved for `detector_utils` and `cell_utils`.
+    
+Todo:
+    * Pull module IDs out into a csv file for readability """
+
 # System
 import os
 import argparse

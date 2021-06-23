@@ -151,8 +151,10 @@ def graph_intersection(
 
     array_size = max(pred_graph.max().item(), truth_graph.max().item()) + 1
 
-    l1 = pred_graph.cpu().numpy()
-    l2 = truth_graph.cpu().numpy()
+    if torch.is_tensor(l1):
+        l1 = pred_graph.cpu().numpy()
+    if torch.is_tensor(l2):
+        l2 = truth_graph.cpu().numpy()
     e_1 = sp.sparse.coo_matrix(
         (np.ones(l1.shape[1]), l1), shape=(array_size, array_size)
     ).tocsr()
