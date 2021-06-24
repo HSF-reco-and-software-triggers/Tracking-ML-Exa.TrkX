@@ -13,6 +13,7 @@ Todo:
 import sys
 import os
 import logging
+import random
 
 # 3rd party imports
 import pytorch_lightning as pl
@@ -112,6 +113,10 @@ class EmbeddingBase(LightningModule):
         else:
             spatial = self(batch.x)
 
+        indices = torch.tensor(random.sample(range(0, int(spatial.shape[0])), int(spatial.shape[0]/2)))
+        query = spatial[indices]
+        database = spatial
+        
         # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
         e_bidir = torch.cat(
             [batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1
@@ -138,7 +143,7 @@ class EmbeddingBase(LightningModule):
             e_spatial = torch.cat(
                 [
                     e_spatial,
-                    build_edges(spatial, self.hparams["r_train"], self.hparams["knn"]),
+                    build_edges(query, database, indices, self.hparams["r_train"], self.hparams["knn"]),
                 ],
                 axis=-1,
             )
@@ -208,9 +213,16 @@ class EmbeddingBase(LightningModule):
         e_bidir = torch.cat(
             [batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1
         )
+        
+        indices = torch.tensor(random.sample(range(0, int(spatial.shape[0])), int(spatial.shape[0]/2)))
+        query = spatial[indices]
+        database = spatial
 
+        check = np.isin(e_bidir[0].cpu().numpy(), indices)
+        e_bidir = e_bidir[:, check]
+        
         # Build whole KNN graph
-        e_spatial = build_edges(spatial, knn_radius, knn_num)
+        e_spatial = build_edges(query, database, indices, knn_radius, knn_num)
 
         if "weighting" in self.hparams["regime"]:
             weights_bidir = torch.cat([batch.weights, batch.weights])

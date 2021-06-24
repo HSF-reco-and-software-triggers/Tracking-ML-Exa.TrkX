@@ -1,6 +1,7 @@
 import os
 import logging
 
+import frnn
 import faiss
 import faiss.contrib.torch_utils
 from pytorch3d import ops
@@ -190,38 +191,24 @@ def graph_intersection(
         return new_pred_graph, y
 
 
-def build_edges(spatial, r_max, k_max, return_indices=False):
-
-    #   Choose which algorithm to use: FAISS for larger searches, Pytorch3D for smaller searches
-    if k_max > 35:
-        if device == "cuda":
-            res = faiss.StandardGpuResources()
-            D, I = faiss.knn_gpu(res, spatial, spatial, k_max)
-        elif device == "cpu":
-            index = faiss.IndexFlatL2(spatial.shape[1])
-            index.add(spatial)
-            D, I = index.search(spatial, k_max)
-
-    else:
-        knn_object = ops.knn_points(
-            spatial.unsqueeze(0), spatial.unsqueeze(0), K=k_max, return_sorted=False
-        )
-        I = knn_object.idx[0]
-        D = knn_object.dists[0]
-
-    # Overlay the "source" hit ID onto each neighbour ID (this is necessary as the FAISS algo does some shortcuts)
-    ind = torch.Tensor.repeat(
-        torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
-    ).T
-    edge_list = torch.stack([ind[D <= r_max ** 2], I[D <= r_max ** 2]])
+def build_edges(query, database, indices, r_max, k_max, return_indices=False):
+    
+    dists, idxs, nn, grid = frnn.frnn_grid_points(points1=query.unsqueeze(0), points2=database.unsqueeze(0), lengths1=None, lengths2=None, K=k_max, r=r_max, grid=None, return_nn=False, return_sorted=True)
+    
+    idxs = idxs.squeeze()
+    ind = torch.Tensor.repeat(torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1).T
+    positive_idxs = idxs >= 0
+    edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]])
 
     # Remove self-loops
+    edge_list[0] = indices[edge_list[0]]
     edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
     if return_indices:
-        return edge_list, D, I, ind
+        return edge_list, dists, idxs, ind
     else:
         return edge_list
+
 
 
 def build_knn(spatial, k):
