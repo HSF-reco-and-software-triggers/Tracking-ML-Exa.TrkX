@@ -1,0 +1,2 @@
+stage_list:
+    - {set: Processing, name: FeatureStore, config: prepare_feature_store.yaml, batch: batch_cpu_default.yaml}

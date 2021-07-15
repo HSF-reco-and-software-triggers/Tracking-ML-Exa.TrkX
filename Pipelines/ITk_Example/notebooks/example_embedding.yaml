@@ -1,0 +1,31 @@
+# Input/output configuration
+input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store_modulewise
+
+# Dataset parameters
+pt_min: 1000
+train_split: [100, 10, 10] # Number of [training, validation, testing] examples
+
+# Model parameters
+in_channels: 14
+emb_hidden: 64
+nb_layer: 4
+emb_dim: 8
+weight: 2
+randomisation: 2
+r_train: 1
+r_val: 1
+r_test: 1.5
+knn: 50
+warmup: 30
+margin: 1
+lr: 0.001
+factor: 0.3
+patience: 8
+regime: [rp, hnm, ci]
+max_epochs: 10
+
+# Postprocessing
+callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 
+
+# Logging
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
