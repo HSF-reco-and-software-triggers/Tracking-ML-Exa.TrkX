@@ -1,9 +1,9 @@
 import os
 import logging
 
+import frnn
 import faiss
 import faiss.contrib.torch_utils
-from pytorch3d import ops
 import torch
 from torch.utils.data import random_split
 import scipy as sp
@@ -26,7 +26,7 @@ def load_dataset(input_dir, num, pt_cut):
                 logging.info("Loaded event: {}".format(loaded_event.event_file))
             except:
                 logging.info("Corrupted event file: {}".format(event))
-        loaded_events = filter_hit_pt(loaded_events, pt_cut)
+        loaded_events = filter_edge_pt(loaded_events, pt_cut)
         return loaded_events
     else:
         return None
@@ -79,7 +79,7 @@ def fetch_type(event):
     return p_type
 
 
-def filter_edge_pt(events, pt_cut=0):
+def filter_edge_pt(events, pt_cut=0, nhits=0, primary_only=False):
     # Handle event in batched form
     if type(events) is not list:
         events = [events]
@@ -90,12 +90,30 @@ def filter_edge_pt(events, pt_cut=0):
                 pt = event.pt
             else:
                 pt = fetch_pt(event)
-            edge_subset = pt[event.edge_index] > pt_cut
-            combined_subset = edge_subset[0] & edge_subset[1]
-            event.edge_index = event.edge_index[:, combined_subset]
-            event.y = event.y[combined_subset]
-            event.y_pid = event.y_pid[combined_subset]
+            
+            if "modulewise_true_edges" in event.__dict__.keys():
+                edge_subset = pt[event.modulewise_true_edges] > pt_cut
+                combined_subset = edge_subset[0] & edge_subset[1]
+                event.modulewise_true_edges = event.modulewise_true_edges[:, combined_subset]
 
+    if nhits > 0:
+        for event in events:
+            particle_num, particle_count = np.unique(event.pid, return_counts=True)
+            particle_cut = particle_num[particle_count >= nhits]
+            hits_cut = np.isin(event.pid, particle_cut)
+                        
+            if "modulewise_true_edges" in event.__dict__.keys():
+                edge_subset = hits_cut[event.modulewise_true_edges]
+                combined_subset = edge_subset[0] & edge_subset[1]
+                event.modulewise_true_edges = event.modulewise_true_edges[:, combined_subset]
+    
+    if primary_only:
+        for event in events:
+            if "modulewise_true_edges" in event.__dict__.keys():
+                edge_subset = event.primary[event.modulewise_true_edges]
+                combined_subset = edge_subset[0] & edge_subset[1]
+                event.modulewise_true_edges = event.modulewise_true_edges[:, combined_subset]
+    
     return events
 
 
@@ -116,7 +134,8 @@ def filter_hit_pt(events, pt_cut=0):
             event.hid = event.hid[hit_subset]
             event.x = event.x[hit_subset]
             event.pid = event.pid[hit_subset]
-            event.layers = event.layers[hit_subset]
+            if "layers" in event.__dict__.keys():
+                event.layers = event.layers[hit_subset]
             if "pt" in event.__dict__.keys():
                 event.pt = event.pt[hit_subset]
             if "layerless_true_edges" in event.__dict__.keys():
@@ -197,35 +216,19 @@ def graph_intersection(
 
 
 def build_edges(spatial, r_max, k_max, return_indices=False):
-
-    #   Choose which algorithm to use: FAISS for larger searches, Pytorch3D for smaller searches
-    if k_max > 200:
-        if device == "cuda":
-            res = faiss.StandardGpuResources()
-            D, I = faiss.knn_gpu(res, spatial, spatial, k_max)
-        elif device == "cpu":
-            index = faiss.IndexFlatL2(spatial.shape[1])
-            index.add(spatial)
-            D, I = index.search(spatial, k_max)
-
-    else:
-        knn_object = ops.knn_points(
-            spatial.unsqueeze(0), spatial.unsqueeze(0), K=k_max, return_sorted=True
-        )
-        I = knn_object.idx[0]
-        D = knn_object.dists[0]
-
-    # Overlay the "source" hit ID onto each neighbour ID (this is necessary as the FAISS algo does some shortcuts)
-    ind = torch.Tensor.repeat(
-        torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
-    ).T
-    edge_list = torch.stack([ind[(D > 0) & (D <= r_max ** 2)], I[(D > 0) & (D <= r_max ** 2)]])
+    
+    dists, idxs, nn, grid = frnn.frnn_grid_points(points1=spatial.unsqueeze(0), points2=spatial.unsqueeze(0), lengths1=None, lengths2=None, K=k_max, r=r_max, grid=None, return_nn=False, return_sorted=True)
+    
+    idxs = idxs.squeeze()
+    ind = torch.Tensor.repeat(torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1).T
+    positive_idxs = idxs >= 0
+    edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]])
 
     # Remove self-loops
     edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
     if return_indices:
-        return edge_list, D, I, ind
+        return edge_list, dists, idxs, ind
     else:
         return edge_list
 

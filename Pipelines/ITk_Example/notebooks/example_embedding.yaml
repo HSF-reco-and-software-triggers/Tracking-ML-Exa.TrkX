@@ -2,13 +2,8 @@
 input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store_modulewise
 
 # Dataset parameters
-pt_min: 1
+pt_min: 1000
 train_split: [100, 10, 10] # Number of [training, validation, testing] examples
-endcaps: True
-layerwise: False
-layerless: True
-noise: False
-adjacent: False
 
 # Model parameters
 in_channels: 14

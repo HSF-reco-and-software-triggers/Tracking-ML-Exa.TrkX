@@ -77,14 +77,15 @@ def calc_eta(r, z):
 def select_hits(hits, particles, pt_min=0, endcaps=True, noise=True):
         
     particles = particles[(particles.pt > pt_min)]
+    particles = particles.assign(primary=(particles.barcode < 200000).astype(int))
     
     if not endcaps:
         hits = hits[hits["barrel_endcap"] == 0]
     
     if noise:
-        hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz"]], on="particle_id", how="left")
+        hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]], on="particle_id", how="left")
     else:
-        hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz"]], on="particle_id")
+        hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]], on="particle_id")
     
     r = np.sqrt(hits.x**2 + hits.y**2)
     phi = np.arctan2(hits.y, hits.x)
@@ -150,6 +151,7 @@ def build_event(
         layerwise_true_edges,
         hits["hit_id"].to_numpy(),
         hits.pt.to_numpy(),
+        hits.primary.to_numpy()
     )
 
 
@@ -183,7 +185,8 @@ def prepare_event(
                 modulewise_true_edges,
                 layerwise_true_edges,
                 hid,
-                pt
+                pt,
+                primary
             ) = build_event(
                 event_file,
                 pt_min,
@@ -202,7 +205,8 @@ def prepare_event(
                 pid=torch.from_numpy(pid),
                 event_file=event_file,
                 hid=torch.from_numpy(hid),
-                pt=torch.from_numpy(pt)
+                pt=torch.from_numpy(pt),
+                primary=torch.from_numpy(primary)
             )
             if modulewise_true_edges is not None:
                 hit_data.modulewise_true_edges = torch.from_numpy(modulewise_true_edges)
