@@ -1,2 +1,3 @@
 stage_list:
-    - {set: Processing, name: FeatureStore, config: prepare_feature_store.yaml, batch: batch_cpu_default.yaml}
+#     - {set: Processing, name: FeatureStore, config: prepare_feature_store.yaml, batch: configs/batch_cpu_default.yaml}
+    - {set: Embedding, name: LayerlessEmbedding, config: train_embedding.yaml, batch: configs/batch_gpu_default.yaml}

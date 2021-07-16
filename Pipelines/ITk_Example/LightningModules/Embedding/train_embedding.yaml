@@ -1,37 +1,30 @@
 # Input/output configuration
-input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml/feature_store_endcaps
-output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml_processed/embedding_processed/0_pt_cut_endcaps
-project: EmbeddingStudy
-overwrite: True
+input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store_modulewise
+project: ITk_1GeV
 
 # Dataset parameters
-pt_min: 0
-train_split: [900, 50, 50] # Number of [training, validation, testing] examples
-endcaps: True
-layerwise: False
-layerless: True
-noise: False
-adjacent: False
+pt_min: 1000
+train_split: [[500, 10, 10], [2000, 10, 10]] # Number of [training, validation, testing] examples
 
 # Model parameters
-in_channels: 12
-emb_hidden: 512
-nb_layer: 6
+spatial_channels: 3
+cell_channels: [2, 4, 8]
+emb_hidden: [512, 1024]
+nb_layer: [6, 8, 10]
 emb_dim: 8
-weight: 4
+weight: [1, 2, 10]
 randomisation: 2
-r_train: 1
-r_val: 1
+r_train: 1.0
+r_val: 1.0
 r_test: 1.5
-knn: 20
+knn: [20, 30, 50]
 warmup: 500
 margin: 1
-lr: 0.002
+lr: 0.001
 factor: 0.3
-patience: 5
-regime:
-    - rp # Random pairs: Trains with pairs in hinge loss selected randomly
-    - hnm # Hard negative mining: Trains with
-    - ci
-max_epochs: 100
-wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
+patience: 8
+regime: [[rp, hnm, ci]]
+max_epochs: 50
+
+callbacks: 
+

@@ -2,6 +2,7 @@ job_name: train_gpu
 constraint: gpu
 nodes: 1
 gpus: 1
-time: 10
+time: 100
+qos: regular
 output: logs/%x-%j.out
 account: m1759

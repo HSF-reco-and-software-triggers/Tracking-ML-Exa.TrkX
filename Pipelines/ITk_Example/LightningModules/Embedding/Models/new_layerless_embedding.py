@@ -16,14 +16,13 @@ from torch_geometric.data import DataLoader
 from ..utils import graph_intersection
 
 
-class LayerlessEmbedding(EmbeddingBase):
+class NewLayerlessEmbedding(EmbeddingBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
 
-          # Construct the MLP architecture
         if "ci" in hparams["regime"]:
             in_channels = hparams["spatial_channels"] + hparams["cell_channels"]
         else:
@@ -33,7 +32,8 @@ class LayerlessEmbedding(EmbeddingBase):
             Linear(hparams["emb_hidden"], hparams["emb_hidden"])
             for _ in range(hparams["nb_layer"] - 1)
         ]
-
+        
+        
         layers.extend(ln)
         self.layers = nn.ModuleList(layers)
         self.emb_layer = nn.Linear(hparams["emb_hidden"], hparams["emb_dim"])
