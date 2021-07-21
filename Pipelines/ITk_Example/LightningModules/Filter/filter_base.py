@@ -24,9 +24,7 @@ class FilterBase(LightningModule):
         """
         Initialise the Lightning Module that can scan over different filter training regimes
         """
-        self.save_hyperparameters()
-        # Assign hyperparameters
-        self.hparams = hparams
+        self.save_hyperparameters(hparams)
 
     def setup(self, stage):
         # Handle any subset of [train, val, test] data split, assuming that ordering
@@ -153,22 +151,21 @@ class FilterBase(LightningModule):
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
 
-        sections = 8
         cut_list = []
         val_loss = torch.tensor(0)
-        for j in range(sections):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[
+        for j in range(self.hparams["n_chunks"]):
+            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
                 j
             ]
-            output = (
-                self(
-                    torch.cat([batch.cell_data, batch.x], axis=-1),
-                    batch.edge_index[:, subset_ind],
-                    emb,
-                ).squeeze()
-                if ("ci" in self.hparams["regime"])
-                else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-            )
+            if ("ci" in self.hparams["regime"]):
+                output = self(
+                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                        batch.edge_index[:, subset_ind],
+                        emb,
+                    ).squeeze()
+            else:
+                self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                    
             cut = F.sigmoid(output) > self.hparams["filter_cut"]
             cut_list.append(cut)
 
@@ -273,22 +270,27 @@ class FilterBaseBalanced(FilterBase):
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
 
+        # Handle training towards a subset of the data
+        if "subset" in self.hparams["regime"]:
+            subset_mask = np.isin(batch.edge_index.cpu(), batch.modulewise_true_edges.unique().cpu()).any(0)
+#             (batch.edge_index[..., None] == batch.modulewise_true_edges.unique()).any(-1).any(0)
+            batch.edge_index = batch.edge_index[:, subset_mask]
+        
         with torch.no_grad():
-            sections = 8
             cut_list = []
-            for j in range(sections):
+            for j in range(self.hparams["n_chunks"]):
                 subset_ind = torch.chunk(
-                    torch.arange(batch.edge_index.shape[1]), sections
+                    torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
                 )[j]
-                output = (
-                    self(
-                        torch.cat([batch.cell_data, batch.x], axis=-1),
-                        batch.edge_index[:, subset_ind],
-                        emb,
-                    ).squeeze()
-                    if ("ci" in self.hparams["regime"])
-                    else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-                )
+                if ("ci" in self.hparams["regime"]):
+                    output = self(
+                            torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                            batch.edge_index[:, subset_ind],
+                            emb,
+                        ).squeeze()
+                else:
+                    self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                
                 cut = F.sigmoid(output) > self.hparams["filter_cut"]
                 cut_list.append(cut)
 
@@ -371,22 +373,22 @@ class FilterBaseBalanced(FilterBase):
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
 
-        sections = 8
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
-        for j in range(sections):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[
+        for j in range(self.hparams["n_chunks"]):
+            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
                 j
             ]
-            output = (
-                self(
-                    torch.cat([batch.cell_data, batch.x], axis=-1),
-                    batch.edge_index[:, subset_ind],
-                    emb,
-                ).squeeze()
-                if ("ci" in self.hparams["regime"])
-                else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-            )
+            
+            if ("ci" in self.hparams["regime"]):
+                output = self(
+                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                        batch.edge_index[:, subset_ind],
+                        emb,
+                    ).squeeze()
+            else:
+                self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+            
             scores = F.sigmoid(output)
             score_list.append(scores)
 

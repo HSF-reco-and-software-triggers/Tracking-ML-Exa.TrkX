@@ -43,6 +43,8 @@ class EmbeddingBase(LightningModule):
                 self.hparams["input_dir"],
                 self.hparams["train_split"],
                 self.hparams["pt_min"],
+                self.hparams["n_hits"],
+                self.hparams["primary_only"]
             )
 
     def train_dataloader(self):
@@ -73,14 +75,6 @@ class EmbeddingBase(LightningModule):
                 amsgrad=True,
             )
         ]
-        #         scheduler = [
-        #             {
-        #                 'scheduler': torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer[0], factor=self.hparams["factor"], patience=self.hparams["patience"]),
-        #                 'monitor': 'val_loss',
-        #                 'interval': 'epoch',
-        #                 'frequency': 1
-        #             }
-        #         ]
         scheduler = [
             {
                 "scheduler": torch.optim.lr_scheduler.StepLR(
@@ -92,7 +86,6 @@ class EmbeddingBase(LightningModule):
                 "frequency": 1,
             }
         ]
-        #         scheduler = [torch.optim.lr_scheduler.StepLR(optimizer[0], step_size=1, gamma=0.3)]
         return optimizer, scheduler
 
     def training_step(self, batch, batch_idx):
@@ -105,16 +98,7 @@ class EmbeddingBase(LightningModule):
         Returns:
             ``torch.tensor`` The loss function as a tensor
         """
-
-        # Forward pass of model, handling whether Cell Information (ci) is included
-        if "ci" in self.hparams["regime"]:
-            spatial = self(torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1))
-        else:
-            spatial = self(batch.x)
-            
-        cut_indices = batch.modulewise_true_edges.unique()
-        query = spatial[cut_indices]
-
+        
         # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
         e_bidir = torch.cat(
             [batch.modulewise_true_edges, batch.modulewise_true_edges.flip(0)], axis=-1
@@ -122,7 +106,37 @@ class EmbeddingBase(LightningModule):
 
         # Instantiate empty prediction edge list
         e_spatial = torch.empty([2, 0], dtype=torch.int64, device=self.device)
+        
+        
+        # Forward pass of model, handling whether Cell Information (ci) is included
+        if "ci" in self.hparams["regime"]:
+            input_data = torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1)
+            input_data[input_data != input_data] = 0
+        else:
+            input_data = batch.x
+            input_data[input_data != input_data] = 0
+        
+        with torch.no_grad():
+            spatial = self(input_data)
+            
+        cut_indices = batch.modulewise_true_edges.unique()
+        query = spatial[cut_indices]
+#         print("Query", query)
+#         print("Database", spatial)
 
+        # Append Hard Negative Mining (hnm) with KNN graph
+        if "hnm" in self.hparams["regime"]:
+            knn_edges = build_edges(query, spatial, cut_indices, self.hparams["r_train"], self.hparams["knn"])
+#             print("KNN:", knn_edges.shape)
+#             print("Unique in KNN:", knn_edges.unique().shape)
+            e_spatial = torch.cat(
+                [
+                    e_spatial,
+                    knn_edges,
+                ],
+                axis=-1,
+            )
+        
         # Append random edges pairs (rp) for stability
         if "rp" in self.hparams["regime"]:
             
@@ -140,15 +154,7 @@ class EmbeddingBase(LightningModule):
                 axis=-1,
             )
 
-        # Append Hard Negative Mining (hnm) with KNN graph
-        if "hnm" in self.hparams["regime"]:
-            e_spatial = torch.cat(
-                [
-                    e_spatial,
-                    build_edges(query, spatial, cut_indices, self.hparams["r_train"], self.hparams["knn"]),
-                ],
-                axis=-1,
-            )
+        
 
         # Calculate truth from intersection between Prediction graph and Truth graph
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
@@ -170,6 +176,11 @@ class EmbeddingBase(LightningModule):
                 * self.hparams["weight"],
             ]
         )
+        
+        included_hits = e_spatial.unique()
+        print("Total shape:", spatial.shape[0], " - Unique shape:", included_hits.shape)
+        
+        spatial[included_hits] = self(input_data[included_hits])
 
         hinge = y_cluster.float().to(self.device)
         hinge[hinge == 0] = -1
@@ -194,9 +205,13 @@ class EmbeddingBase(LightningModule):
     def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False):
 
         if "ci" in self.hparams["regime"]:
-            spatial = self(torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1))
+            input_data = torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1)
+            input_data[input_data != input_data] = 0
+            spatial = self(input_data)
         else:
-            spatial = self(batch.x)
+            input_data = batch.x
+            input_data[input_data != input_data] = 0
+            spatial = self(input_data)
 
         e_bidir = torch.cat(
             [batch.modulewise_true_edges, batch.modulewise_true_edges.flip(0)], axis=-1
@@ -204,7 +219,7 @@ class EmbeddingBase(LightningModule):
 
         # Build whole KNN graph
         e_spatial = build_edges(spatial, spatial, indices=None, r_max=knn_radius, k_max=knn_num)
-
+        
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
         new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
@@ -252,7 +267,7 @@ class EmbeddingBase(LightningModule):
         """
 
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_val"], 300, log=True
+            batch, batch_idx, self.hparams["r_val"], 100, log=True
         )
 
         return outputs["loss"]

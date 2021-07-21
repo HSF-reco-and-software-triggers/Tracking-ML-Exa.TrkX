@@ -4,16 +4,18 @@ project: ITk_1GeV
 
 # Dataset parameters
 pt_min: 1000
-train_split: [500, 10, 10] # Number of [training, validation, testing] examples
+n_hits: 3
+primary_only: True
+train_split: [100, 10, 10] # Number of [training, validation, testing] examples
 
 # Model parameters
 spatial_channels: 3
 cell_channels: 8
-emb_hidden: 512
+emb_hidden: 2048
 nb_layer: 6
 emb_dim: 8
-weight: 2
-randomisation: 2
+weight: 10
+randomisation: 1
 r_train: 1.0
 r_val: 1.0
 r_test: 1.5
@@ -22,9 +24,9 @@ warmup: 1000
 margin: 1
 lr: 0.001
 factor: 0.3
-patience: 8
+patience: 15
 regime: [rp, ci, hnm]
-max_epochs: 10
+max_epochs: 50
 
 # Postprocessing
 callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 

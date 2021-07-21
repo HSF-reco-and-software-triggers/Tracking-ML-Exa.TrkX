@@ -54,20 +54,30 @@ def get_layerwise_edges(hits):
 
 def get_modulewise_edges(hits):
     
-    hits = hits.drop_duplicates(subset=["particle_id","barrel_endcap", "layer_disk", "eta_module", "phi_module"])
-
-    hits = hits.assign(R=np.sqrt((hits.x - hits.vx)**2 + (hits.y - hits.vy)**2 + (hits.z - hits.vz)**2))
-    hits = hits.sort_values('R').reset_index(drop=True).reset_index(drop=False)
-    hits.loc[hits["particle_id"] == 0, "particle_id"] = np.nan
-    hit_list = hits.groupby(['particle_id'], sort=False)['index'].agg(lambda x: list(x))
+    signal = hits[((~hits.particle_id.isna()) & (hits.particle_id != 0)) & (~hits.vx.isna())]
+    signal = signal.drop_duplicates(subset=["particle_id","barrel_endcap", "layer_disk", "eta_module", "phi_module"])
+    
+    # Sort by increasing distance from production
+    signal = signal.assign(R=np.sqrt((signal.x - signal.vx)**2 + (signal.y - signal.vy)**2 + (signal.z - signal.vz)**2))
+    signal = signal.sort_values('R').reset_index(drop=False)
+    
+    # Handle re-indexing
+    signal = signal.rename(columns={"index": "unsorted_index"}).reset_index(drop=False)
+    signal.loc[signal["particle_id"] == 0, "particle_id"] = np.nan
+    
+    # Group by particle ID
+    signal_list = signal.groupby(['particle_id'], sort=False)['index'].agg(lambda x: list(x))
     
     true_edges = []
-    for row in hit_list.values:
-        for i, j in zip(row[0:-1], row[1:]):
+    for row in signal_list.values:
+        for i, j in zip(row[:-1], row[1:]):
             true_edges.append([i, j])
+            
     true_edges = np.array(true_edges).T
-
-    return true_edges, hits
+    
+    true_edges = signal.unsorted_index.values[true_edges]
+    
+    return true_edges
 
 def calc_eta(r, z):
     theta = np.arctan2(r, z)
@@ -75,7 +85,7 @@ def calc_eta(r, z):
 
 
 def select_hits(hits, particles, pt_min=0, endcaps=True, noise=True):
-        
+    
     particles = particles[(particles.pt > pt_min)]
     particles = particles.assign(primary=(particles.barcode < 200000).astype(int))
     
@@ -86,6 +96,9 @@ def select_hits(hits, particles, pt_min=0, endcaps=True, noise=True):
         hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]], on="particle_id", how="left")
     else:
         hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]], on="particle_id")
+    
+    hits["nhits"] = hits.groupby('particle_id')["particle_id"].transform("count")
+    hits.loc[hits.particle_id == 0, "nhits"] = -1
     
     r = np.sqrt(hits.x**2 + hits.y**2)
     phi = np.arctan2(hits.y, hits.x)
@@ -119,7 +132,7 @@ def build_event(
     modulewise_true_edges, layerwise_true_edges = None, None
 
     if modulewise:
-        modulewise_true_edges, hits = get_modulewise_edges(hits)
+        modulewise_true_edges = get_modulewise_edges(hits)
         logging.info(
             "Layerless truth graph built for {} with size {}".format(
                 event_file, modulewise_true_edges.shape
@@ -151,7 +164,8 @@ def build_event(
         layerwise_true_edges,
         hits["hit_id"].to_numpy(),
         hits.pt.to_numpy(),
-        hits.primary.to_numpy()
+        hits.primary.to_numpy(),
+        hits.nhits.to_numpy()
     )
 
 
@@ -186,7 +200,8 @@ def prepare_event(
                 layerwise_true_edges,
                 hid,
                 pt,
-                primary
+                primary,
+                nhits
             ) = build_event(
                 event_file,
                 pt_min,
@@ -206,7 +221,8 @@ def prepare_event(
                 event_file=event_file,
                 hid=torch.from_numpy(hid),
                 pt=torch.from_numpy(pt),
-                primary=torch.from_numpy(primary)
+                primary=torch.from_numpy(primary),
+                nhits=torch.from_numpy(nhits)
             )
             if modulewise_true_edges is not None:
                 hit_data.modulewise_true_edges = torch.from_numpy(modulewise_true_edges)

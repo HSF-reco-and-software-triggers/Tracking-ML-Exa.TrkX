@@ -14,7 +14,7 @@ import trackml.dataset
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def load_dataset(input_dir, num, pt_cut):
+def load_dataset(input_dir, num, pt_cut, nhits, primary_only):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
@@ -26,19 +26,19 @@ def load_dataset(input_dir, num, pt_cut):
                 logging.info("Loaded event: {}".format(loaded_event.event_file))
             except:
                 logging.info("Corrupted event file: {}".format(event))
-        loaded_events = filter_edge_pt(loaded_events, pt_cut)
+        loaded_events = filter_edge_pt(loaded_events, pt_cut, nhits, primary_only)
         return loaded_events
     else:
         return None
 
 
-def split_datasets(input_dir, train_split, pt_cut=0, seed=1):
+def split_datasets(input_dir, train_split, pt_cut=0, nhits=0, primary_only=False, seed=1):
     """
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
     """
     torch.manual_seed(seed)
-    loaded_events = load_dataset(input_dir, sum(train_split), pt_cut)
+    loaded_events = load_dataset(input_dir, sum(train_split),  pt_cut, nhits, primary_only)
     train_events, val_events, test_events = random_split(loaded_events, train_split)
 
     return train_events, val_events, test_events
@@ -79,40 +79,31 @@ def fetch_type(event):
     return p_type
 
 
-def filter_edge_pt(events, pt_cut=0, nhits=0, primary_only=False):
+def filter_edge_pt(events, pt_cut, nhits_min, primary_only):
     # Handle event in batched form
     if type(events) is not list:
         events = [events]
 
     if pt_cut > 0:
         for event in events:
-            if "pt" in event.__dict__.keys():
-                pt = event.pt
-            else:
-                pt = fetch_pt(event)
-            
+            pt = event.pt
             if "modulewise_true_edges" in event.__dict__.keys():
                 edge_subset = pt[event.modulewise_true_edges] > pt_cut
                 combined_subset = edge_subset[0] & edge_subset[1]
                 event.modulewise_true_edges = event.modulewise_true_edges[:, combined_subset]
 
-    if nhits > 0:
+    if nhits_min > 0:
         for event in events:
-            particle_num, particle_count = np.unique(event.pid, return_counts=True)
-            particle_cut = particle_num[particle_count >= nhits]
-            hits_cut = np.isin(event.pid, particle_cut)
-                        
+            n_hits = event.nhits            
             if "modulewise_true_edges" in event.__dict__.keys():
-                edge_subset = hits_cut[event.modulewise_true_edges]
-                combined_subset = edge_subset[0] & edge_subset[1]
-                event.modulewise_true_edges = event.modulewise_true_edges[:, combined_subset]
+                edge_subset = n_hits[event.modulewise_true_edges] >= nhits_min
+                event.modulewise_true_edges = event.modulewise_true_edges[:, edge_subset.all(0)]
     
     if primary_only:
         for event in events:
             if "modulewise_true_edges" in event.__dict__.keys():
-                edge_subset = event.primary[event.modulewise_true_edges]
-                combined_subset = edge_subset[0] & edge_subset[1]
-                event.modulewise_true_edges = event.modulewise_true_edges[:, combined_subset]
+                edge_subset = event.primary[event.modulewise_true_edges] == 1
+                event.modulewise_true_edges = event.modulewise_true_edges[:, edge_subset.all(0)]
     
     return events
 
@@ -223,7 +214,7 @@ def build_edges(query, database, indices=None, r_max=1.0, k_max=10, return_indic
     ind = torch.Tensor.repeat(torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1).T
     positive_idxs = idxs >= 0
     edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]])
-
+    
     # Reset indices subset to correct global index 
     if indices is not None:
         edge_list[0] = indices[edge_list[0]]
