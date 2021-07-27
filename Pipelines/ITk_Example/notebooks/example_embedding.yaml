@@ -6,12 +6,12 @@ project: ITk_1GeV
 pt_min: 1000
 n_hits: 3
 primary_only: True
-train_split: [100, 10, 10] # Number of [training, validation, testing] examples
+train_split: [200, 10, 10] # Number of [training, validation, testing] examples
 
 # Model parameters
 spatial_channels: 3
 cell_channels: 8
-emb_hidden: 2048
+emb_hidden: 1024
 nb_layer: 6
 emb_dim: 8
 weight: 10
@@ -22,7 +22,7 @@ r_test: 1.5
 knn: 30
 warmup: 1000
 margin: 1
-lr: 0.001
+lr: 0.0001
 factor: 0.3
 patience: 15
 regime: [rp, ci, hnm]

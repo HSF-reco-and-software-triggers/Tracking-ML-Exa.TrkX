@@ -195,11 +195,9 @@ class FilterBase(LightningModule):
         if "pid" in self.hparams["regime"]:
             y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
             edge_true = y_pid.sum()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), cut_list.cpu())})
         else:
             edge_true = batch.y.sum()
             edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), cut_list.cpu())})
 
         current_lr = self.optimizers().param_groups[0]["lr"]
 
@@ -273,8 +271,8 @@ class FilterBaseBalanced(FilterBase):
         # Handle training towards a subset of the data
         if "subset" in self.hparams["regime"]:
             subset_mask = np.isin(batch.edge_index.cpu(), batch.modulewise_true_edges.unique().cpu()).any(0)
-#             (batch.edge_index[..., None] == batch.modulewise_true_edges.unique()).any(-1).any(0)
             batch.edge_index = batch.edge_index[:, subset_mask]
+            batch.y = batch.y[subset_mask]
         
         with torch.no_grad():
             cut_list = []
@@ -315,16 +313,15 @@ class FilterBaseBalanced(FilterBase):
             combined_indices[torch.randperm(len(combined_indices))]
             weight = torch.tensor(self.hparams["weight"])
 
-        output = (
-            self(
-                torch.cat([batch.cell_data, batch.x], axis=-1),
-                batch.edge_index[:, combined_indices],
-                emb,
-            ).squeeze()
-            if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
-        )
-
+        if ("ci" in self.hparams["regime"]):
+            output = self(
+                    torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                    batch.edge_index[:, combined_indices],
+                    emb,
+                ).squeeze()
+        else:
+            self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
+                    
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights[combined_indices]
             manual_weights[batch.y[combined_indices] == 0] = 1
@@ -420,11 +417,9 @@ class FilterBaseBalanced(FilterBase):
             y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
             edge_true = y_pid.sum()
             edge_true_positive = (y_pid & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
         else:
             edge_true = batch.y.sum()
             edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
 
         current_lr = self.optimizers().param_groups[0]["lr"]
 

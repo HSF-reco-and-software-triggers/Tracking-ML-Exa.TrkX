@@ -7,11 +7,11 @@ sanity_steps: 0
 pt_min: 1000
 n_hits: 3
 primary_only: True
-train_split: [[200, 20, 20], [500, 20, 20], [1300, 20, 20]] # Number of [training, validation, testing] examples
+train_split: [[500, 20, 20], [1300, 20, 20]] # Number of [training, validation, testing] examples
 
 # Model parameters
 spatial_channels: 3
-cell_channels: [4, 8]
+cell_channels: 8
 emb_hidden: [512, 1024, 2048]
 nb_layer: 6
 emb_dim: 8
@@ -21,13 +21,13 @@ r_train: 1.0
 r_val: 1.0
 r_test: 1.5
 knn: 30
-warmup: 1000
+warmup: 5000
 margin: 1
-lr: 0.001
+lr: [0.001, 0.0005, 0.0001]
 factor: 0.3
-patience: 15
+patience: 50
 regime: [[rp, hnm, ci]]
-max_epochs: 60
+max_epochs: 200
 
 callbacks: 
 

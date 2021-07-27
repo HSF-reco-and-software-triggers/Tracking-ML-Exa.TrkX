@@ -120,15 +120,12 @@ class EmbeddingBase(LightningModule):
             spatial = self(input_data)
             
         cut_indices = batch.modulewise_true_edges.unique()
+        cut_indices = cut_indices[torch.randperm(len(cut_indices))][:len(cut_indices) // 2]
         query = spatial[cut_indices]
-#         print("Query", query)
-#         print("Database", spatial)
 
         # Append Hard Negative Mining (hnm) with KNN graph
         if "hnm" in self.hparams["regime"]:
             knn_edges = build_edges(query, spatial, cut_indices, self.hparams["r_train"], self.hparams["knn"])
-#             print("KNN:", knn_edges.shape)
-#             print("Unique in KNN:", knn_edges.unique().shape)
             e_spatial = torch.cat(
                 [
                     e_spatial,
@@ -178,7 +175,7 @@ class EmbeddingBase(LightningModule):
         )
         
         included_hits = e_spatial.unique()
-        print("Total shape:", spatial.shape[0], " - Unique shape:", included_hits.shape)
+#         print("Total shape:", spatial.shape[0], " - Unique shape:", included_hits.shape)
         
         spatial[included_hits] = self(input_data[included_hits])
 

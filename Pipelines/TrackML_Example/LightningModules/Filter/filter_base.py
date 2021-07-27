@@ -153,22 +153,21 @@ class FilterBase(LightningModule):
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
 
-        sections = 8
         cut_list = []
         val_loss = torch.tensor(0)
-        for j in range(sections):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[
+        for j in range(self.hparams["n_chunks"]):
+            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
                 j
             ]
-            output = (
-                self(
-                    torch.cat([batch.cell_data, batch.x], axis=-1),
-                    batch.edge_index[:, subset_ind],
-                    emb,
-                ).squeeze()
-                if ("ci" in self.hparams["regime"])
-                else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-            )
+            if ("ci" in self.hparams["regime"]):
+                output = self(
+                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                        batch.edge_index[:, subset_ind],
+                        emb,
+                    ).squeeze()
+            else:
+                self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                
             cut = F.sigmoid(output) > self.hparams["filter_cut"]
             cut_list.append(cut)
 
@@ -198,11 +197,9 @@ class FilterBase(LightningModule):
         if "pid" in self.hparams["regime"]:
             y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
             edge_true = y_pid.sum()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), cut_list.cpu())})
         else:
             edge_true = batch.y.sum()
             edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), cut_list.cpu())})
 
         current_lr = self.optimizers().param_groups[0]["lr"]
 
@@ -273,22 +270,26 @@ class FilterBaseBalanced(FilterBase):
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
 
+        if "subset" in self.hparams["regime"]:
+            subset_mask = np.isin(batch.edge_index.cpu(), batch.layerless_true_edges.unique().cpu()).any(0)
+            batch.edge_index = batch.edge_index[:, subset_mask]
+            batch.y = batch.y[subset_mask]
+            
         with torch.no_grad():
-            sections = 8
             cut_list = []
-            for j in range(sections):
+            for j in range(self.hparams["n_chunks"]):
                 subset_ind = torch.chunk(
-                    torch.arange(batch.edge_index.shape[1]), sections
+                    torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
                 )[j]
-                output = (
-                    self(
-                        torch.cat([batch.cell_data, batch.x], axis=-1),
-                        batch.edge_index[:, subset_ind],
-                        emb,
-                    ).squeeze()
-                    if ("ci" in self.hparams["regime"])
-                    else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-                )
+                if ("ci" in self.hparams["regime"]):
+                    output = self(
+                            torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                            batch.edge_index[:, subset_ind],
+                            emb,
+                        ).squeeze()
+                else:
+                    self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                    
                 cut = F.sigmoid(output) > self.hparams["filter_cut"]
                 cut_list.append(cut)
 
@@ -313,15 +314,14 @@ class FilterBaseBalanced(FilterBase):
             combined_indices[torch.randperm(len(combined_indices))]
             weight = torch.tensor(self.hparams["weight"])
 
-        output = (
-            self(
-                torch.cat([batch.cell_data, batch.x], axis=-1),
-                batch.edge_index[:, combined_indices],
-                emb,
-            ).squeeze()
-            if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
-        )
+        if ("ci" in self.hparams["regime"]):
+            output = self(
+                    torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                    batch.edge_index[:, combined_indices],
+                    emb,
+                ).squeeze()
+        else:
+            self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights[combined_indices]
