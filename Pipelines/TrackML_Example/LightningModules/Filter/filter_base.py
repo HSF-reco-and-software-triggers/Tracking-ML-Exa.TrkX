@@ -24,9 +24,7 @@ class FilterBase(LightningModule):
         """
         Initialise the Lightning Module that can scan over different filter training regimes
         """
-        self.save_hyperparameters()
-        # Assign hyperparameters
-        self.hparams = hparams
+        self.save_hyperparameters(hparams)
 
     def setup(self, stage):
         # Handle any subset of [train, val, test] data split, assuming that ordering
@@ -70,12 +68,11 @@ class FilterBase(LightningModule):
         ]
         scheduler = [
             {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(
+                "scheduler": torch.optim.lr_scheduler.StepLR(
                     optimizer[0],
-                    factor=self.hparams["factor"],
-                    patience=self.hparams["patience"],
+                    step_size=self.hparams["patience"],
+                    gamma=self.hparams["factor"],
                 ),
-                "monitor": "val_loss",
                 "interval": "epoch",
                 "frequency": 1,
             }
@@ -161,7 +158,7 @@ class FilterBase(LightningModule):
             ]
             if ("ci" in self.hparams["regime"]):
                 output = self(
-                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                        torch.cat([batch.cell_data, batch.x], axis=-1),
                         batch.edge_index[:, subset_ind],
                         emb,
                     ).squeeze()
@@ -283,7 +280,7 @@ class FilterBaseBalanced(FilterBase):
                 )[j]
                 if ("ci" in self.hparams["regime"]):
                     output = self(
-                            torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                            torch.cat([batch.cell_data, batch.x], axis=-1),
                             batch.edge_index[:, subset_ind],
                             emb,
                         ).squeeze()
@@ -316,7 +313,7 @@ class FilterBaseBalanced(FilterBase):
 
         if ("ci" in self.hparams["regime"]):
             output = self(
-                    torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                    torch.cat([batch.cell_data, batch.x], axis=-1),
                     batch.edge_index[:, combined_indices],
                     emb,
                 ).squeeze()
@@ -344,8 +341,8 @@ class FilterBaseBalanced(FilterBase):
                 weight=manual_weights,
                 pos_weight=weight,
             )
-
-        self.log("train_loss", loss)
+            
+        self.log_dict({"train_loss": loss})
 
         return loss
 
@@ -371,11 +368,10 @@ class FilterBaseBalanced(FilterBase):
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
 
-        sections = 8
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
-        for j in range(sections):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), sections)[
+        for j in range(self.hparams["n_chunks"]):
+            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
                 j
             ]
             output = (
@@ -416,24 +412,28 @@ class FilterBaseBalanced(FilterBase):
         edge_positive = cut_list.sum().float()
         if "pid" in self.hparams["regime"]:
             y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            edge_true = y_pid.sum()
+            edge_true = y_pid
             edge_true_positive = (y_pid & cut_list).sum().float()
         #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
         else:
-            edge_true = batch.y.sum()
+            edge_true = batch.y
             edge_true_positive = (batch.y.bool() & cut_list).sum().float()
         #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
 
-        current_lr = self.optimizers().param_groups[0]["lr"]
-
         if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
+            
             self.log_dict(
                 {
-                    "eff": torch.tensor(edge_true_positive / edge_true),
+                    "eff": torch.tensor(edge_true_positive / edge_true.sum()),
                     "pur": torch.tensor(edge_true_positive / edge_positive),
                     "val_loss": val_loss,
                     "current_lr": current_lr,
                 }
             )
 
-        return val_loss
+        return {
+                    "preds": score_list,
+                    "trues": edge_true,
+                    "loss": val_loss
+                }
