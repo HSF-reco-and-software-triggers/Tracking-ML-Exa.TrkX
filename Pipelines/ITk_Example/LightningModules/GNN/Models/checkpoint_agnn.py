@@ -53,7 +53,7 @@ class CheckpointedResAGNN(GNNBase):
         # Encode the graph features into the hidden space
         input_x = x
         x = self.node_encoder(x)
-        x = torch.cat([x, input_x], dim=-1)
+        # x = torch.cat([x, input_x], dim=-1)
 
         start, end = edge_index
 
@@ -81,7 +81,7 @@ class CheckpointedResAGNN(GNNBase):
             x = checkpoint(self.node_network, node_inputs)
 
             # Residual connection
-            x = torch.cat([x, input_x], dim=-1)
+            # x = torch.cat([x, input_x], dim=-1)
             x = x + x0
 
         # Compute final edge scores; use original edge directions only

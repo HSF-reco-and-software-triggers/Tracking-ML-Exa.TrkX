@@ -415,22 +415,28 @@ class FilterBaseBalanced(FilterBase):
         edge_positive = cut_list.sum().float()
         if "pid" in self.hparams["regime"]:
             y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            edge_true = y_pid.sum()
+            edge_true = y_pid
             edge_true_positive = (y_pid & cut_list).sum().float()
+        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
         else:
-            edge_true = batch.y.sum()
+            edge_true = batch.y
             edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-
-        current_lr = self.optimizers().param_groups[0]["lr"]
+        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
 
         if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
+            
             self.log_dict(
                 {
-                    "eff": torch.tensor(edge_true_positive / edge_true),
+                    "eff": torch.tensor(edge_true_positive / edge_true.sum()),
                     "pur": torch.tensor(edge_true_positive / edge_positive),
                     "val_loss": val_loss,
                     "current_lr": current_lr,
                 }
             )
 
-        return val_loss
+        return {
+                    "preds": score_list,
+                    "trues": edge_true,
+                    "loss": val_loss
+                }

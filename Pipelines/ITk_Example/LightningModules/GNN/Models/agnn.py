@@ -120,7 +120,7 @@ class ResAGNN(GNNBase):
         x = self.input_network(x)
 
         # Shortcut connect the inputs onto the hidden representation
-        x = torch.cat([x, input_x], dim=-1)
+        # x = torch.cat([x, input_x], dim=-1)
 
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
@@ -133,7 +133,7 @@ class ResAGNN(GNNBase):
             x = self.node_network(x, e, edge_index)
 
             # Shortcut connect the inputs onto the hidden representation
-            x = torch.cat([x, input_x], dim=-1)
+            # x = torch.cat([x, input_x], dim=-1)
 
             # Residual connection
             x = x_inital + x

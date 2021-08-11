@@ -110,7 +110,7 @@ class FilterBase(LightningModule):
 
         output = (
             self(
-                torch.cat([batch.cell_data, batch.x], axis=-1),
+                torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
                 batch.edge_index[:, combined_indices],
                 emb,
             ).squeeze()
@@ -158,7 +158,7 @@ class FilterBase(LightningModule):
             ]
             if ("ci" in self.hparams["regime"]):
                 output = self(
-                        torch.cat([batch.cell_data, batch.x], axis=-1),
+                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
                         batch.edge_index[:, subset_ind],
                         emb,
                     ).squeeze()
@@ -280,7 +280,7 @@ class FilterBaseBalanced(FilterBase):
                 )[j]
                 if ("ci" in self.hparams["regime"]):
                     output = self(
-                            torch.cat([batch.cell_data, batch.x], axis=-1),
+                            torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
                             batch.edge_index[:, subset_ind],
                             emb,
                         ).squeeze()
@@ -376,7 +376,7 @@ class FilterBaseBalanced(FilterBase):
             ]
             output = (
                 self(
-                    torch.cat([batch.cell_data, batch.x], axis=-1),
+                    torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
                     batch.edge_index[:, subset_ind],
                     emb,
                 ).squeeze()

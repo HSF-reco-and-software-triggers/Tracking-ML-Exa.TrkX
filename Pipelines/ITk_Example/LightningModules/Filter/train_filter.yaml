@@ -2,12 +2,12 @@
 input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/embedding_processed/1_GeV_unweighted
 output_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/filter_processed/1_GeV_unweighted
 project: ITk_1GeV_Filter
-filter_cut: 0.15
+filter_cut: 0.2
 
 # Dataset parameters
 pt_min: 0
-datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [10, 0, 0] # Number of [training, validation, testing] examples
+datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [[500, 1, 5]] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
@@ -15,25 +15,26 @@ noise: False
 adjacent: False
 
 # Model parameters
-in_channels: 12
-hidden: 512
+spatial_channels: 3
+cell_channels: 8
+hidden: [512, 1024]
 nb_layer: 3
 emb_channels: 0
 layernorm: True
 batchnorm: False
 n_chunks: 8
-ratio: 1
+ratio: [1, 2]
 weight: 1
 val_subset: 0.1
-warmup: 400
-lr: 0.01
+warmup: 1000
+lr: [0.001, 0.01]
 factor: 0.3
-patience: 8
-regime: [[weighting, ci]]
-max_epochs: 10
+patience: 20
+regime: [[ci]]
+max_epochs: 30
 
 # Post-processing
-callbacks: [] #[FilterInferenceCallback]
+callbacks: #[FilterInferenceCallback]
 
 # Logging
 wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
