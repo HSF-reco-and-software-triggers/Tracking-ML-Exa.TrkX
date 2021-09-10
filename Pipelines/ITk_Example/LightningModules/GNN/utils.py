@@ -1,4 +1,5 @@
 import os, sys
+import logging
 
 import torch.nn as nn
 import torch
@@ -10,20 +11,56 @@ import trackml.dataset
 # ---------------------------- Dataset Processing -------------------------
 
 
-def load_dataset(input_dir, num, pt_cut):
+def load_dataset(input_dir, num, pt_cut, noise=True):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
-        loaded_events = [
-            torch.load(event, map_location=torch.device("cpu"))
-            for event in all_events[:num]
-        ]
-        loaded_events = filter_edge_pt(loaded_events, pt_cut)
+        loaded_events = []
+        for event in all_events[:num]:
+            try:
+                loaded_event = torch.load(event, map_location=torch.device("cpu"))
+                loaded_event = process_event(loaded_event, noise, pt_cut)
+                loaded_events.append(loaded_event)
+                logging.info("Loaded event: {}".format(loaded_event.event_file))
+            except:
+                logging.info("Corrupted event file: {}".format(event))
         return loaded_events
     else:
         return None
 
+def process_event(event, noise, pt_cut):
+    
+    event.pid = event.pid.float()
+    event.pid[event.pid == 0] = float('nan')
+    
+    if ~noise:
+        event = remove_noise(event)
+        
+    if pt_cut > 0:
+        event = remove_pt(event, pt_cut)
+        
+    return event
 
+
+def remove_noise(event):
+    
+    noise_mask = np.isin(event.edge_index, torch.where(event.pid > 0)[0]).all(0)
+    
+    event.edge_index = event.edge_index[:, noise_mask]
+    event.y = event.y[noise_mask]
+    
+    return event
+    
+def remove_pt(event, pt_cut):
+    
+    pt_mask = np.isin(event.edge_index, torch.where(event.pt > pt_cut)[0]).all(0)
+            
+    event.edge_index = event.edge_index[:, pt_mask]
+    event.y = event.y[pt_mask]
+    
+    return event
+
+    
 def fetch_pt(event):
     truth = trackml.dataset.load_event(event.event_file, parts=["truth"])[0]
     hid = event.hid
@@ -34,25 +71,6 @@ def fetch_pt(event):
 
     return pt
 
-
-def filter_edge_pt(events, pt_cut=0):
-
-    if pt_cut > 0:
-        for event in events:
-            if "pt" in event.__dict__.keys():
-                pt = event.pt
-                edge_subset = pt.numpy()[event.edge_index] > pt_cut
-            else:
-                pt = fetch_pt(event)
-                edge_subset = pt.to_numpy()[event.edge_index] > pt_cut
-            combined_subset = edge_subset[0] & edge_subset[1]
-            event.edge_index = event.edge_index[:, combined_subset]
-            if "y" in event.__dict__.keys():
-                event.y = event.y[combined_subset]
-            if "y_pid" in event.__dict__.keys():
-                event.y_pid = event.y_pid[combined_subset]
-
-    return events
 
 
 def random_edge_slice_v2(delta_phi, batch):

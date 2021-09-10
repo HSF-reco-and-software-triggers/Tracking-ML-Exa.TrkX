@@ -1,10 +1,10 @@
 # Input/output configuration
-input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/full_events_v3
-output_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store_modulewise
-n_files: 2855
+input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/full_events_v4
+output_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store_modulewise_v2
+n_files: 10000
 n_workers: 32
 n_tasks: 1
-overwrite: True
+overwrite: False
 
 endcaps: True
 noise: True

@@ -25,42 +25,42 @@ class InteractionMultistepGNN(GNNBase):
         # Setup input network
         self.node_encoder = make_mlp(
             hparams["in_channels"],
-            [hparams["hidden"]],
+            [hparams["hidden"], int(hparams["hidden"]/2)],
             output_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
         )
 
         # The edge network computes new edge features from connected nodes
         self.edge_encoder = make_mlp(
-            2 * (hparams["hidden"]),
-            [hparams["hidden"]] * hparams["nb_edge_layer"],
+            hparams["hidden"],
+            [hparams["hidden"], int(hparams["hidden"]/2)],
             layer_norm=hparams["layernorm"],
-            output_activation=None,
+            output_activation=hparams["hidden_activation"],
             hidden_activation=hparams["hidden_activation"],
         )
 
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
-            4 * hparams["hidden"],
-            [hparams["hidden"]] * hparams["nb_edge_layer"],
+            2 * hparams["hidden"],
+            [hparams["hidden"], int(hparams["hidden"]/2)],
             layer_norm=hparams["layernorm"],
-            output_activation=None,
+            output_activation=hparams["hidden_activation"],
             hidden_activation=hparams["hidden_activation"],
         )
 
         # The node network computes new node features
         self.node_network = make_mlp(
-            4 * hparams["hidden"],
-            [hparams["hidden"]] * hparams["nb_node_layer"],
+            2 * hparams["hidden"],
+            [hparams["hidden"], int(hparams["hidden"]/2)],
             layer_norm=hparams["layernorm"],
-            output_activation=None,
+            output_activation=hparams["hidden_activation"],
             hidden_activation=hparams["hidden_activation"],
         )
 
         # Final edge output classification network
         self.output_edge_classifier = make_mlp(
-            3 * hparams["hidden"],
-            [hparams["hidden"], 1],
+            int(1.5 * hparams["hidden"]),
+            [hparams["hidden"], int(hparams["hidden"]/2), 1],
             layer_norm=hparams["layernorm"],
             output_activation=None,
             hidden_activation=hparams["hidden_activation"],
@@ -117,25 +117,24 @@ class InteractionMultistepGNN(GNNBase):
             if ("ci" in self.hparams["regime"])
             else self(batch.x, batch.edge_index)
         )
+        
+        output = torch.cat(output)
 
         if "pid" in self.hparams["regime"]:
-            y_pid = (
+            y = (
                 batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            ).float()
-            y_pid = y_pid.repeat((self.hparams["n_graph_iters"]))
-            loss = F.binary_cross_entropy_with_logits(
-                torch.cat(output), y_pid.float(), pos_weight=weight
             )
         else:
-            y = batch.y.repeat((self.hparams["n_graph_iters"]))
-            loss = F.binary_cross_entropy_with_logits(
-                torch.cat(output), y, pos_weight=weight
-            )
+            y = batch.y
+        
+        loss = F.binary_cross_entropy_with_logits(
+            output, y.float().repeat(self.hparams["n_graph_iters"]), 
+            weight=torch.repeat_interleave(((torch.arange(self.hparams["n_graph_iters"])+1)/self.hparams["n_graph_iters"]).to(self.device), len(y)), pos_weight=weight
+        )
 
-        result = pl.TrainResult(minimize=loss)
-        result.log("train_loss", loss, prog_bar=True)
+        self.log("train_loss", loss)
 
-        return result
+        return loss
 
     def validation_step(self, batch, batch_idx):
 
@@ -144,52 +143,59 @@ class InteractionMultistepGNN(GNNBase):
             if ("weight" in self.hparams)
             else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
         )
-
-        output = (
-            self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index)
-            if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index)
-        )
-
+        
         if "pid" in self.hparams["regime"]:
-            y_pid = (
+            y = (
                 batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            ).float()
-            val_loss = F.binary_cross_entropy_with_logits(
-                torch.cat(output),
-                y_pid.float().repeat((self.hparams["n_graph_iters"])),
-                pos_weight=weight,
             )
         else:
             y = batch.y
-            val_loss = F.binary_cross_entropy_with_logits(
-                torch.cat(output),
-                y.repeat((self.hparams["n_graph_iters"])),
-                pos_weight=weight,
-            )
 
-        result = pl.EvalResult(checkpoint_on=val_loss)
-        result.log("val_loss", val_loss)
+        output = (
+            self(
+                torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
+            ).squeeze()
+            if ("ci" in self.hparams["regime"])
+            else self(batch.x, batch.edge_index)
+        )
+        
+        output = output[-1]
 
-        # Edge filter performance
-        preds = F.sigmoid(output[-1]) > self.hparams["edge_cut"]  # Maybe send to CPU??
-        edge_positive = preds.sum().float()
-
-        if "pid" in self.hparams["regime"]:
-            edge_true = y_pid.sum().float()
-            edge_true_positive = (y_pid.bool() & preds).sum().float()
-        else:
-            edge_true = y.sum()
-            edge_true_positive = (y.bool() & preds).sum().float()
-
-        result.log_dict(
-            {
-                "eff": torch.tensor(edge_true_positive / edge_true),
-                "pur": torch.tensor(edge_true_positive / edge_positive),
-            }
+        truth = (
+            (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
+            if "pid" in self.hparams["regime"]
+            else batch.y
         )
 
-        return result
+        if "weighting" in self.hparams["regime"]:
+            manual_weights = batch.weights
+        else:
+            manual_weights = None
+
+        loss = F.binary_cross_entropy_with_logits(
+            output, truth.float(), weight=manual_weights, pos_weight=weight
+        )
+
+        # Edge filter performance
+        preds = F.sigmoid(output) > self.hparams["edge_cut"]
+        edge_positive = preds.sum().float()
+
+        edge_true = truth.sum().float()
+        edge_true_positive = (truth.bool() & preds).sum().float()
+
+        eff = torch.tensor(edge_true_positive / edge_true)
+        pur = torch.tensor(edge_true_positive / edge_positive)
+
+        current_lr = self.optimizers().param_groups[0]["lr"]
+        self.log_dict(
+            {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
+        )
+
+        return {
+            "loss": loss,
+            "preds": preds.cpu().numpy(),
+            "truth": truth.cpu().numpy(),
+        }
 
 
 class CheckpointedInteractionMultistepGNN(InteractionMultistepGNN):

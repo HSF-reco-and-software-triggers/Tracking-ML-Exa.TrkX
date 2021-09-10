@@ -7,7 +7,7 @@ filter_cut: 0.2
 # Dataset parameters
 pt_min: 0
 datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [[25, 5, 1], [100, 5, 1]] # Number of [training, validation, testing] examples
+datatype_split: [[10, 5, 1]] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
@@ -17,21 +17,21 @@ adjacent: False
 # Model parameters
 spatial_channels: 3
 cell_channels: 8
-hidden: [512, 1024]
-nb_layer: [3, 6]
+hidden: 512
+nb_layer: 3
 emb_channels: 0
 layernorm: True
 batchnorm: False
-n_chunks: 80
-edges_per_batch: [300000, 500000]
-ratio: [1, 2, 4, 8]
+n_chunks: 40
+# edges_per_batch: 300000
+ratio: 1
 weight: 2
 warmup: 100
-lr: [0.001, 0.01]
+lr: 0.001
 factor: 0.3
-patience: 20
-regime: [[ci]]
-max_epochs: 50
+patience: 15
+regime: [[ci, subset]]
+max_epochs: 30
 
 # Post-processing
 callbacks: #[FilterInferenceCallback]

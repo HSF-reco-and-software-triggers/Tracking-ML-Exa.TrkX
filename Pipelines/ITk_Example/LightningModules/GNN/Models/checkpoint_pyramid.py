@@ -15,7 +15,7 @@ from ..gnn_base import GNNBase
 from ..utils import make_mlp, hard_random_edge_slice, hard_eta_edge_slice
 
 
-class CheckpointedResAGNN(GNNBase):
+class CheckpointedPyramid(GNNBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
@@ -25,15 +25,15 @@ class CheckpointedResAGNN(GNNBase):
         # Setup input network
         self.node_encoder = make_mlp(
             hparams["in_channels"],
-            [hparams["hidden"]] * hparams["nb_node_layer"],
+            [hparams["hidden"], int(hparams["hidden"]/2)],
             output_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
         )
 
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
-            2 * hparams["hidden"],
-            [hparams["hidden"]] * hparams["nb_edge_layer"] + [1],
+            hparams["hidden"],
+            [hparams["hidden"], int(hparams["hidden"]/2), 1],
             layer_norm=hparams["layernorm"],
             output_activation=None,
             hidden_activation=hparams["hidden_activation"],
@@ -42,7 +42,7 @@ class CheckpointedResAGNN(GNNBase):
         # The node network computes new node features
         self.node_network = make_mlp(
             hparams["hidden"],
-            [hparams["hidden"]] * hparams["nb_node_layer"],
+            [hparams["hidden"], int(hparams["hidden"]/2)],
             layer_norm=hparams["layernorm"],
             output_activation=hparams["hidden_activation"],
             hidden_activation=hparams["hidden_activation"],
@@ -76,9 +76,9 @@ class CheckpointedResAGNN(GNNBase):
 
             # Compute new node features
             #             node_inputs = torch.cat([x, weighted_messages_in, weighted_messages_out], dim=1)
-#             node_inputs = torch.cat([x, weighted_messages], dim=1)
-            node_inputs = weighted_messages + x
-            
+            node_inputs = torch.cat([x, weighted_messages], dim=1)
+#             node_inputs = weighted_messages + x
+    
             x = checkpoint(self.node_network, node_inputs)
 
             # Residual connection
@@ -87,56 +87,3 @@ class CheckpointedResAGNN(GNNBase):
         # Compute final edge scores; use original edge directions only
         clf_inputs = torch.cat([x[start], x[end]], dim=1)
         return checkpoint(self.edge_network, clf_inputs).squeeze(-1)
-
-
-class SliceCheckpointedResAGNN(CheckpointedResAGNN):
-    def __init__(self, hparams):
-        super().__init__(hparams)
-
-    def training_step(self, batch, batch_idx):
-
-        weight = (
-            torch.tensor(self.hparams["weight"])
-            if ("weight" in self.hparams)
-            else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
-        )
-
-        if "delta_phi" in self.hparams.keys():
-            subset_edge_ind = hard_random_edge_slice(self.hparams["delta_phi"], batch)
-        elif "delta_eta" in self.hparams.keys():
-            subset_edge_ind = hard_eta_edge_slice(self.hparams["delta_eta"], batch)
-
-        if "weighting" in self.hparams["regime"]:
-            manual_weights = batch.weights[subset_edge_ind]
-            manual_weights[batch.y[subset_edge_ind] == 0] = 1
-        else:
-            manual_weights = None
-
-        output = (
-            self(
-                torch.cat([batch.cell_data, batch.x], axis=-1),
-                batch.edge_index[:, subset_edge_ind],
-            ).squeeze()
-            if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index[:, subset_edge_ind]).squeeze()
-        )
-
-        if "pid" in self.hparams["regime"]:
-            y_pid = (
-                batch.pid[batch.edge_index[0, subset_edge_ind]]
-                == batch.pid[batch.edge_index[1, subset_edge_ind]]
-            ).float()
-            loss = F.binary_cross_entropy_with_logits(
-                output, y_pid.float(), weight=manual_weights, pos_weight=weight
-            )
-        else:
-            loss = F.binary_cross_entropy_with_logits(
-                output,
-                batch.y[subset_edge_ind].float(),
-                weight=manual_weights,
-                pos_weight=weight,
-            )
-
-        self.log("train_loss", loss)
-
-        return loss

@@ -18,7 +18,7 @@ from ..utils import graph_intersection
 from ..filter_base import FilterBase, FilterBaseBalanced
 
 
-class PyramidFilter(FilterBaseBalanced):
+class PyramidFilter(FilterBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """

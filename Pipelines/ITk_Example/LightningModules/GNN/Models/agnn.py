@@ -94,20 +94,25 @@ class ResAGNN(GNNBase):
         """
 
         # Setup input network
-        self.input_network = make_mlp(hparams["in_channels"], [hparams["hidden"]],
+        self.input_network = make_mlp(hparams["in_channels"], [hparams["hidden"]]*hparams["nb_node_layer"],
                                       output_activation=hparams["hidden_activation"],
                                       layer_norm=hparams["layernorm"])
+        
+#         self.input_network = make_mlp(hparams["in_channels"], [hparams["hidden"]],
+#                                       output_activation=hparams["hidden_activation"],
+#                                       layer_norm=hparams["layernorm"])
+        
         # Setup the edge network
         self.edge_network = EdgeNetwork(
-            hparams["in_channels"] + hparams["hidden"],
-            hparams["in_channels"] + hparams["hidden"],
+            hparams["hidden"],
+            hparams["hidden"],
             hparams["nb_edge_layer"],
             hparams["hidden_activation"],
             hparams["layernorm"],
         )
         # Setup the node layers
         self.node_network = NodeNetwork(
-            hparams["in_channels"] + hparams["hidden"],
+            hparams["hidden"],
             hparams["hidden"],
             hparams["nb_node_layer"],
             hparams["hidden_activation"],
@@ -119,9 +124,6 @@ class ResAGNN(GNNBase):
 
         x = self.input_network(x)
 
-        # Shortcut connect the inputs onto the hidden representation
-        # x = torch.cat([x, input_x], dim=-1)
-
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
             x_inital = x
@@ -131,9 +133,6 @@ class ResAGNN(GNNBase):
 
             # Apply node network
             x = self.node_network(x, e, edge_index)
-
-            # Shortcut connect the inputs onto the hidden representation
-            # x = torch.cat([x, input_x], dim=-1)
 
             # Residual connection
             x = x_inital + x

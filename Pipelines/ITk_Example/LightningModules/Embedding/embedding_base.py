@@ -42,7 +42,8 @@ class EmbeddingBase(LightningModule):
             self.trainset, self.valset, self.testset = split_datasets(
                 self.hparams["input_dir"],
                 self.hparams["train_split"],
-                self.hparams["pt_min"],
+                self.hparams["pt_background_min"],
+                self.hparams["pt_signal_min"],
                 self.hparams["n_hits"],
                 self.hparams["primary_only"]
             )
@@ -120,7 +121,7 @@ class EmbeddingBase(LightningModule):
             spatial = self(input_data)
             
         cut_indices = batch.modulewise_true_edges.unique()
-        cut_indices = cut_indices[torch.randperm(len(cut_indices))][:len(cut_indices) // 2]
+        cut_indices = cut_indices[torch.randperm(len(cut_indices))][:self.hparams["points_per_batch"]]
         query = spatial[cut_indices]
 
         # Append Hard Negative Mining (hnm) with KNN graph
@@ -151,7 +152,6 @@ class EmbeddingBase(LightningModule):
                 axis=-1,
             )
 
-        
 
         # Calculate truth from intersection between Prediction graph and Truth graph
         e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
@@ -274,7 +274,7 @@ class EmbeddingBase(LightningModule):
         Step to evaluate the model's performance
         """
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_test"], 500, log=True
+            batch, batch_idx, self.hparams["r_test"], 500, log=False
         )
 
         return outputs

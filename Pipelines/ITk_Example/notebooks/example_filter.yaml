@@ -1,13 +1,13 @@
 # Input/output configuration
-input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/embedding_processed/1_GeV_unweighted
-output_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/filter_processed/1_GeV_unweighted
+input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/embedding_processed/0_GeV_unweighted_subset
+output_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/filter_processed/0_GeV_unweighted_subset
 project: ITk_1GeV_Filter
 filter_cut: 0.15
 
 # Dataset parameters
 pt_min: 0
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [1, 1, 0] # Number of [training, validation, testing] examples
+datatype_split: [10, 2, 1] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True
@@ -22,16 +22,17 @@ nb_layer: 3
 emb_channels: 0
 layernorm: True
 batchnorm: False
-n_chunks: 8
+n_chunks: 80
+edges_per_batch: 300000
 ratio: 1
-weight: 1
-val_subset: 0.1
-warmup: 400
+weight: 2
+# val_subset: 0.1
+warmup: 200
 lr: 0.01
 factor: 0.3
-patience: 8
-regime: [ci, subset]
-max_epochs: 10
+patience: 20
+regime: [ci]
+max_epochs: 50
 
 # Post-processing
 callbacks: [] #[FilterInferenceCallback]
