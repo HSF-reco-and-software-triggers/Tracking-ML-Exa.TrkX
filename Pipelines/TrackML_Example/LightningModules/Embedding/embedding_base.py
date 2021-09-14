@@ -43,7 +43,10 @@ class EmbeddingBase(LightningModule):
             self.trainset, self.valset, self.testset = split_datasets(
                 self.hparams["input_dir"],
                 self.hparams["train_split"],
-                self.hparams["pt_min"],
+                self.hparams["pt_background_min"],
+                self.hparams["pt_signal_min"],
+                self.hparams["true_edges"],
+                self.hparams["noise"],
             )
 
     def train_dataloader(self):
@@ -96,6 +99,81 @@ class EmbeddingBase(LightningModule):
         #         scheduler = [torch.optim.lr_scheduler.StepLR(optimizer[0], step_size=1, gamma=0.3)]
         return optimizer, scheduler
 
+    def get_input_data(self, batch):
+        
+        if "ci" in self.hparams["regime"]:
+            input_data = torch.cat([batch.cell_data, batch.x], axis=-1)
+            input_data[input_data != input_data] = 0
+        else:
+            input_data = batch.x
+            input_data[input_data != input_data] = 0
+            
+        return input_data
+    
+    def get_query_points(self, batch, spatial):
+        
+        query_indices = batch.signal_true_edges.unique()
+        query_indices = query_indices[torch.randperm(len(query_indices))][:self.hparams["points_per_batch"]]
+        query = spatial[query_indices]
+        
+        return query_indices, query
+    
+    def append_hnm_pairs(self, e_spatial, query, query_indices, spatial):
+        knn_edges = build_edges(query, spatial, query_indices, self.hparams["r_train"], self.hparams["knn"])
+        e_spatial = torch.cat(
+            [
+                e_spatial,
+                knn_edges,
+            ],
+            axis=-1,
+        )
+        return e_spatial
+    
+    def append_random_pairs(self, e_spatial, query_indices, spatial):
+        n_random = int(self.hparams["randomisation"] * len(query_indices))
+        indices_src = torch.randint(0, len(query_indices), (n_random,), device=self.device)
+        indices_dest = torch.randint(0, len(spatial), (n_random,), device=self.device)
+        random_pairs = torch.stack([query_indices[indices_src], indices_dest])
+
+
+        e_spatial = torch.cat(
+            [
+                e_spatial,
+                random_pairs
+            ],
+            axis=-1,
+        )
+        return e_spatial
+    
+    def get_true_pairs(self, e_spatial, y_cluster, new_weights, e_bidir):
+        e_spatial = torch.cat(
+            [
+                e_spatial.to(self.device),
+                e_bidir,
+            ],
+            axis=-1,
+        )
+        y_cluster = torch.cat([y_cluster.int(), torch.ones(e_bidir.shape[1])])
+        new_weights = torch.cat(
+            [
+                new_weights,
+                torch.ones(e_bidir.shape[1], device=self.device)
+                * self.hparams["weight"],
+            ]
+        )
+        return e_spatial, y_cluster, new_weights
+    
+    def get_hinge_distance(self, spatial, e_spatial, y_cluster):
+    
+        hinge = y_cluster.float().to(self.device)
+        hinge[hinge == 0] = -1
+
+        reference = spatial.index_select(0, e_spatial[1])
+        neighbors = spatial.index_select(0, e_spatial[0])
+        d = torch.sum((reference - neighbors) ** 2, dim=-1)
+        
+        return hinge, d
+    
     def training_step(self, batch, batch_idx):
 
         """
@@ -107,88 +185,68 @@ class EmbeddingBase(LightningModule):
             ``torch.tensor`` The loss function as a tensor
         """
 
-        # Forward pass of model, handling whether Cell Information (ci) is included
-        if "ci" in self.hparams["regime"]:
-            spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
-        else:
-            spatial = self(batch.x)
-
-        indices = torch.tensor(random.sample(range(0, int(spatial.shape[0])), int(spatial.shape[0]/2)))
-        query = spatial[indices]
-        database = spatial
-        
-        # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
-        e_bidir = torch.cat(
-            [batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1
-        )
-
         # Instantiate empty prediction edge list
         e_spatial = torch.empty([2, 0], dtype=torch.int64, device=self.device)
+        
+        # Forward pass of model, handling whether Cell Information (ci) is included
+        input_data = self.get_input_data(batch)       
+        
+        with torch.no_grad():
+            spatial = self(input_data)
 
-        # Append random edges pairs (rp) for stability
-        if "rp" in self.hparams["regime"]:
-            n_random = int(self.hparams["randomisation"] * e_bidir.shape[1])
-            e_spatial = torch.cat(
-                [
-                    e_spatial,
-                    torch.randint(
-                        e_bidir.min(), e_bidir.max(), (2, n_random), device=self.device
-                    ),
-                ],
-                axis=-1,
-            )
+        query_indices, query = self.get_query_points(batch, spatial)
 
         # Append Hard Negative Mining (hnm) with KNN graph
         if "hnm" in self.hparams["regime"]:
-            e_spatial = torch.cat(
-                [
-                    e_spatial,
-                    build_edges(query, database, indices, self.hparams["r_train"], self.hparams["knn"]),
-                ],
-                axis=-1,
-            )
-
+            e_spatial = self.append_hnm_pairs(e_spatial, query, query_indices, spatial)            
+        
+        # Append random edges pairs (rp) for stability
+        if "rp" in self.hparams["regime"]:
+            e_spatial = self.append_random_pairs(e_spatial, query_indices, spatial)
+            
+        # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
+        e_bidir = torch.cat(
+            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
+        )
+        
         # Calculate truth from intersection between Prediction graph and Truth graph
-        if "weighting" in self.hparams["regime"]:
-            weights_bidir = torch.cat([batch.weights, batch.weights])
-            e_spatial, y_cluster, new_weights = graph_intersection(
-                e_spatial, e_bidir, using_weights=True, weights_bidir=weights_bidir
-            )
-            new_weights = (
-                new_weights.to(self.device) * self.hparams["weight"]
-            )  # Weight positive examples
-        else:
-            e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-            new_weights = y_cluster.to(self.device) * self.hparams["weight"]
+        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
         # Append all positive examples and their truth and weighting
-        e_spatial = torch.cat(
-            [
-                e_spatial.to(self.device),
-                e_bidir.transpose(0, 1).repeat(1, 1).view(-1, 2).transpose(0, 1),
-            ],
-            axis=-1,
-        )
-        y_cluster = torch.cat([y_cluster.int(), torch.ones(e_bidir.shape[1])])
-        if "weighting" in self.hparams["regime"]:
-            new_weights = torch.cat(
-                [new_weights, weights_bidir * self.hparams["weight"]]
-            )
-        else:
-            new_weights = torch.cat(
-                [
-                    new_weights,
-                    torch.ones(e_bidir.shape[1], device=self.device)
-                    * self.hparams["weight"],
-                ]
-            )
+        e_spatial, y_cluster, new_weights = self.get_true_pairs(e_spatial, y_cluster, new_weights, e_bidir)
+       
+        # Calculate truth from intersection between Prediction graph and Truth graph
+#         if "weighting" in self.hparams["regime"]:
+#             weights_bidir = torch.cat([batch.weights, batch.weights])
+#             e_spatial, y_cluster, new_weights = graph_intersection(
+#                 e_spatial, e_bidir, using_weights=True, weights_bidir=weights_bidir
+#             )
+#             new_weights = (
+#                 new_weights.to(self.device) * self.hparams["weight"]
+#             )  # Weight positive examples
+#         else:
+#             e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+#             new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
-        hinge = y_cluster.float().to(self.device)
-        hinge[hinge == 0] = -1
 
-        reference = spatial.index_select(0, e_spatial[1])
-        neighbors = spatial.index_select(0, e_spatial[0])
-        d = torch.sum((reference - neighbors) ** 2, dim=-1)
+#         if "weighting" in self.hparams["regime"]:
+#             new_weights = torch.cat(
+#                 [new_weights, weights_bidir * self.hparams["weight"]]
+#             )
+#         else:
+#             new_weights = torch.cat(
+#                 [
+#                     new_weights,
+#                     torch.ones(e_bidir.shape[1], device=self.device)
+#                     * self.hparams["weight"],
+#                 ]
+#             )
+
+        included_hits = e_spatial.unique()        
+        spatial[included_hits] = self(input_data[included_hits])
+        
+        hinge, d = self.get_hinge_distance(spatial, e_spatial, y_cluster)
 
         new_weights[
             y_cluster == 0
@@ -205,47 +263,35 @@ class EmbeddingBase(LightningModule):
 
     def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False):
 
-        if "ci" in self.hparams["regime"]:
-            spatial = self(torch.cat([batch.cell_data, batch.x], axis=-1))
-        else:
-            spatial = self(batch.x)
+        input_data = self.get_input_data(batch)    
+        spatial = self(input_data)
 
         e_bidir = torch.cat(
-            [batch.layerless_true_edges, batch.layerless_true_edges.flip(0)], axis=-1
+            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
         )
-        
-        indices = torch.tensor(random.sample(range(0, int(spatial.shape[0])), int(spatial.shape[0]/2)))
-        query = spatial[indices]
-        database = spatial
 
-        check = np.isin(e_bidir[0].cpu().numpy(), indices)
-        e_bidir = e_bidir[:, check]
-        
         # Build whole KNN graph
-        e_spatial = build_edges(query, database, indices, knn_radius, knn_num)
+        e_spatial = build_edges(spatial, spatial, indices=None, r_max=knn_radius, k_max=knn_num)
+        
+        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
-        if "weighting" in self.hparams["regime"]:
-            weights_bidir = torch.cat([batch.weights, batch.weights])
-            e_spatial, y_cluster, new_weights = graph_intersection(
-                e_spatial, e_bidir, using_weights=True, weights_bidir=weights_bidir
-            )
-            new_weights = (
-                new_weights.to(self.device) * self.hparams["weight"]
-            )  # Weight positive examples
-        else:
-            e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-            new_weights = y_cluster.to(self.device) * self.hparams["weight"]
+#         if "weighting" in self.hparams["regime"]:
+#             weights_bidir = torch.cat([batch.weights, batch.weights])
+#             e_spatial, y_cluster, new_weights = graph_intersection(
+#                 e_spatial, e_bidir, using_weights=True, weights_bidir=weights_bidir
+#             )
+#             new_weights = (
+#                 new_weights.to(self.device) * self.hparams["weight"]
+#             )  # Weight positive examples
+#         else:
+#             e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+#             new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
-        hinge = y_cluster.float().to(self.device)
-        hinge[hinge == 0] = -1
+        hinge, d = self.get_hinge_distance(spatial, e_spatial.to(self.device), y_cluster)
 
-        e_spatial = e_spatial.to(self.device)
-        reference = spatial.index_select(0, e_spatial[1])
-        neighbors = spatial.index_select(0, e_spatial[0])
-        d = torch.sum((reference - neighbors) ** 2, dim=-1)
-
-        new_weights[y_cluster == -1] = 1
-        d = d * new_weights
+        new_weights[y_cluster == 0] = 1
+        d = d # * new_weights THIS IS BETTER TO NOT INCLUDE
 
         loss = torch.nn.functional.hinge_embedding_loss(
             d, hinge, margin=self.hparams["margin"], reduction="mean"
@@ -269,9 +315,10 @@ class EmbeddingBase(LightningModule):
 
         return {
             "loss": loss,
-            "preds": e_spatial.cpu().numpy(),
-            "truth": y_cluster.cpu().numpy(),
-            "truth_graph": e_bidir.cpu().numpy(),
+            "distances": d,
+            "preds": e_spatial,
+            "truth": y_cluster,
+            "truth_graph": e_bidir,
         }
 
     def validation_step(self, batch, batch_idx):
@@ -290,7 +337,7 @@ class EmbeddingBase(LightningModule):
         Step to evaluate the model's performance
         """
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_test"], 200, log=True
+            batch, batch_idx, self.hparams["r_test"], 500, log=False
         )
 
         return outputs

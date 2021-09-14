@@ -23,7 +23,7 @@ Class-based Callback inference for integration with Lightning
 class EmbeddingTelemetry(Callback):
 
     """
-    This callback contains standardised tests of the performance of a GNN
+    This callback contains standardised tests of the performance of the Exatrkx embedding (a.k.a metric learning) architecture
     """
 
     def __init__(self):
@@ -105,40 +105,32 @@ class EmbeddingTelemetry(Callback):
         )
 
 
-class EmbeddingInferenceCallback(Callback):
+class EmbeddingBuilder(Callback):        
+    """Callback handling embedding inference for later stages.
+
+    This callback is used to apply a trained embedding model to the dataset of a LightningModule. 
+    The data structure is preloaded in the model, as training, validation and testing sets.
+    For best performance, run training and examine the telemetry to decide on the hyperparameters (e.g. r_test) that
+    lead to desired efficiency-purity tradeoff. Then set these hyperparameters in the pipeline configuration and run
+    with the --inference flag. Otherwise, to just run straight through automatically, train with this callback included.
+
+    """
+    
     def __init__(self):
         self.output_dir = None
         self.overwrite = False
 
-    def on_train_start(self, trainer, pl_module):
-        # Prep the directory to produce inference data to
-        self.output_dir = pl_module.hparams.output_dir
-        self.datatypes = ["train", "val", "test"]
-        os.makedirs(self.output_dir, exist_ok=True)
-        [
-            os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
-            for datatype in self.datatypes
-        ]
-
-        # Set overwrite setting if it is in config
-        self.overwrite = (
-            pl_module.hparams.overwrite if "overwrite" in pl_module.hparams else False
-        )
-
-    def on_train_end(self, trainer, pl_module):
-        print("Training finished, running inference to build graphs...")
-
-        # By default, the set of examples propagated through the pipeline will be train+val+test set
-        datasets = {
-            "train": pl_module.trainset,
-            "val": pl_module.valset,
-            "test": pl_module.testset,
-        }
+    def on_test_end(self, trainer, pl_module):
+        
+        print("Testing finished, running inference to build graphs...")
+        
+        datasets = self.prepare_datastructure()
+        
         total_length = sum([len(dataset) for dataset in datasets.values()])
-        batch_incr = 0
+        
         pl_module.eval()
-        tracemalloc.start()
         with torch.no_grad():
+            batch_incr = 0
             for set_idx, (datatype, dataset) in enumerate(datasets.items()):
                 for batch_idx, batch in enumerate(dataset):
                     percent = (batch_incr / total_length) * 100
@@ -159,31 +151,48 @@ class EmbeddingInferenceCallback(Callback):
 
                     batch_incr += 1
 
+    def prepare_datastructure(self):
+        # Prep the directory to produce inference data to
+        self.output_dir = pl_module.hparams.output_dir
+        self.datatypes = ["train", "val", "test"]
+        
+        os.makedirs(self.output_dir, exist_ok=True)
+        [
+            os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
+            for datatype in self.datatypes
+        ]
+
+        # Set overwrite setting if it is in config
+        self.overwrite = (
+            pl_module.hparams.overwrite if "overwrite" in pl_module.hparams else False
+        )
+
+        # By default, the set of examples propagated through the pipeline will be train+val+test set
+        datasets = {
+            "train": pl_module.trainset,
+            "val": pl_module.valset,
+            "test": pl_module.testset,
+        }
+        
+        return datasets
+                    
     def construct_downstream(self, batch, pl_module, datatype):
 
         # Free up batch.weights for subset of embedding selection
         batch.true_weights = batch.weights
 
-        if "ci" in pl_module.hparams["regime"]:
-            spatial = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1))
-        else:
-            spatial = pl_module(batch.x)
+        input_data = pl_module.get_input_data(batch)
+        
+        spatial = pl_module(input_data)
 
         # Make truth bidirectional
         e_bidir = torch.cat(
-            [
-                batch.layerless_true_edges,
-                torch.stack(
-                    [batch.layerless_true_edges[1], batch.layerless_true_edges[0]],
-                    axis=1,
-                ).T,
-            ],
-            axis=-1,
+            [batch[pl_module.hparams["true_edges"]], batch[pl_module.hparams["true_edges"]].flip(0)], axis=-1,
         )
 
         # Build the radius graph with radius < r_test
         e_spatial = build_edges(
-            spatial, pl_module.hparams.r_test, 300
+            spatial, spatial, indices=None, r_max = pl_module.hparams.r_test, k_max = 500
         )  # This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
 
         # Arbitrary ordering to remove half of the duplicate edges

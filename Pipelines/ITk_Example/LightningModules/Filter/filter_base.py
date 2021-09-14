@@ -184,32 +184,25 @@ class FilterBase(LightningModule):
         # Edge filter performance
         edge_positive = cut_list.sum().float()
         if "pid" in self.hparams["regime"]:
-            y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            edge_true = y_pid
-            edge_true_positive = (y_pid & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+            true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
-            edge_true = batch.y
-            edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+            true_y = batch.y
+            
+        edge_true = true_y.sum()
+        edge_true_positive = (true_y.bool() & cut_list).sum().float()
+
+        current_lr = self.optimizers().param_groups[0]["lr"]
 
         if log:
-            current_lr = self.optimizers().param_groups[0]["lr"]
-            
             self.log_dict(
                 {
-                    "eff": torch.tensor(edge_true_positive / edge_true.sum()),
+                    "eff": torch.tensor(edge_true_positive / edge_true),
                     "pur": torch.tensor(edge_true_positive / edge_positive),
                     "val_loss": val_loss,
                     "current_lr": current_lr,
                 }
             )
-
-        return {
-                    "preds": score_list,
-                    "trues": edge_true,
-                    "loss": val_loss
-                }
+        return {"loss": val_loss, "preds": score_list, "truth": true_y}
 
 
     def validation_step(self, batch, batch_idx):
@@ -419,29 +412,22 @@ class FilterBaseBalanced(FilterBase):
         # Edge filter performance
         edge_positive = cut_list.sum().float()
         if "pid" in self.hparams["regime"]:
-            y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            edge_true = y_pid
-            edge_true_positive = (y_pid & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+            true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
-            edge_true = batch.y
-            edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+            true_y = batch.y
+            
+        edge_true = true_y.sum()
+        edge_true_positive = (true_y.bool() & cut_list).sum().float()
+
+        current_lr = self.optimizers().param_groups[0]["lr"]
 
         if log:
-            current_lr = self.optimizers().param_groups[0]["lr"]
-            
             self.log_dict(
                 {
-                    "eff": torch.tensor(edge_true_positive / edge_true.sum()),
+                    "eff": torch.tensor(edge_true_positive / edge_true),
                     "pur": torch.tensor(edge_true_positive / edge_positive),
                     "val_loss": val_loss,
                     "current_lr": current_lr,
                 }
             )
-
-        return {
-                    "preds": score_list,
-                    "trues": edge_true,
-                    "loss": val_loss
-                }
+        return {"loss": val_loss, "preds": score_list, "truth": true_y}

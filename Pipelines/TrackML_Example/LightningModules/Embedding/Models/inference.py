@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 
-from ..utils import fetch_pt, build_edges, graph_intersection
+from ..utils import build_edges, graph_intersection
 
 """
 Class-based Callback inference for integration with Lightning
@@ -40,6 +40,7 @@ class EmbeddingTelemetry(Callback):
         self.truth_graph = []
         self.pt_true_pos = []
         self.pt_true = []
+        self.distances = []
 
     def on_test_batch_end(
         self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
@@ -48,19 +49,18 @@ class EmbeddingTelemetry(Callback):
         """
         Get the relevant outputs from each batch
         """
-        pts = fetch_pt(batch)
+        pts = batch.pt
         true_positives = outputs["preds"][:, outputs["truth"]]
         true = outputs["truth_graph"]
 
-        self.pt_true_pos.append(pts[true_positives])
-        self.pt_true.append(pts[true])
-
-        print(pts.shape, true_positives.shape, true.shape)
-
-    #         self.preds.append(outputs["preds"])
-    #         self.truth.append(outputs["truth"])
-    #         self.truth_graph.append(outputs["truth_graph"])
-
+        self.pt_true_pos.append(pts[true_positives].cpu())
+        self.pt_true.append(pts[true].cpu())
+        
+        self.truth.append(outputs["truth"].cpu())
+        self.distances.append(outputs["distances"].cpu())
+        self.truth_graph.append(outputs["truth_graph"].cpu())
+                
+        
     def on_test_end(self, trainer, pl_module):
 
         """
@@ -69,12 +69,17 @@ class EmbeddingTelemetry(Callback):
         3. Plot ROC curve,
         4. Save plots to PDF 'metrics.pdf'
         """
+        
+        metrics = self.calculate_metrics()
 
-        # REFACTOR THIS INTO CALCULATE METRICS, PLOT METRICS, SAVE METRICS
+        metrics_plots = self.plot_metrics(metrics)
+        
+        self.save_metrics(metrics_plots, pl_module.hparams.output_dir)
+
+    def get_pt_metrics(self):
+        
         pt_true_pos = np.concatenate(self.pt_true_pos, axis=1)
         pt_true = np.concatenate(self.pt_true, axis=1)
-
-        print(pt_true_pos.shape, pt_true.shape)
 
         pt_true_pos_av = (pt_true_pos[0] + pt_true_pos[1]) / 2
         pt_true_av = (pt_true[0] + pt_true[1]) / 2
@@ -87,58 +92,99 @@ class EmbeddingTelemetry(Callback):
         tp_hist = np.histogram(pt_true_pos_av, bins=bins)[0]
         t_hist = np.histogram(pt_true_av, bins=bins)[0]
         ratio_hist = tp_hist / t_hist
+        
+        return centers, ratio_hist
+    
+    def get_eff_pur_metrics(self):
+                        
+        self.distances = torch.cat(self.distances)
+        self.truth = torch.cat(self.truth)
+        self.truth_graph = torch.cat(self.truth_graph, axis=1)
+        
+        r_cuts = np.arange(0.3, 1.5, 0.1)
+        
+        print(self.truth.shape)
+        print(self.distances < r_cuts[0])
+        print(self.distances.shape)
+        
+        positives = np.array([self.truth[self.distances < r_cut].shape[0] for r_cut in r_cuts])
+        true_positives = np.array([self.truth[self.distances < r_cut].sum() for r_cut in r_cuts])
+                
+        eff = true_positives / self.truth_graph.shape[1]
+        pur = true_positives / positives
+        
+        return eff, pur, r_cuts
+        
 
+    def calculate_metrics(self):
+
+        centers, ratio_hist = self.get_pt_metrics()
+        
+        eff, pur, r_cuts = self.get_eff_pur_metrics()
+        
+        return {"pt_plot": {"centers": centers, "ratio_hist": ratio_hist}, 
+                "eff_plot": {"eff": eff, "r_cuts": r_cuts}, 
+                "pur_plot": {"pur": pur, "r_cuts": r_cuts}}
+    
+    def make_plot(self, x_val, y_val, x_lab, y_lab, title):
+        
         # Update this to dynamically adapt to number of metrics
         fig, axs = plt.subplots(nrows=1, ncols=1, figsize=(20, 20))
         axs = axs.flatten() if type(axs) is list else [axs]
 
-        axs[0].plot(centers, ratio_hist)
-        axs[0].plot([centers[0], centers[-1]], [1, 1], "--")
-        axs[0].set_xlabel("pT (GeV)")
-        axs[0].set_ylabel("Efficiency")
-        axs[0].set_title("Metric Learning Efficiency")
+        axs[0].plot(x_val, y_val)
+        axs[0].set_xlabel(x_lab)
+        axs[0].set_ylabel(y_lab)
+        axs[0].set_title(title)
         plt.tight_layout()
+        
+        return fig, axs
+    
+    def plot_metrics(self, metrics):
+        
+        centers, ratio_hist = metrics["pt_plot"]["centers"], metrics["pt_plot"]["ratio_hist"]
+        pt_fig, pt_axs = self.make_plot(centers, ratio_hist, "pT (GeV)", "Efficiency", "Metric Learning Efficiency")
+                
+        eff_fig, eff_axs = self.make_plot(metrics["eff_plot"]["r_cuts"], metrics["eff_plot"]["eff"], "radius", "Eff", "Efficiency vs. radius")
+        pur_fig, pur_axs = self.make_plot(metrics["pur_plot"]["r_cuts"], metrics["pur_plot"]["pur"], "radius", "Pur", "Purity vs. radius")
+        
+        return {"pt_plot": [pt_fig, pt_axs], "eff_plot": [eff_fig, eff_axs], "pur_plot": [pur_fig, pur_axs]}
+    
+    def save_metrics(self, metrics_plots, output_dir):
+        
+        os.makedirs(output_dir, exist_ok=True)
+        
+        for metric, (fig, axs) in metrics_plots.items():
+            fig.savefig(
+                os.path.join(output_dir, f"metrics_{metric}.pdf"), format="pdf"
+            )
+        
+class EmbeddingBuilder(Callback):        
+    """Callback handling embedding inference for later stages.
 
-        os.makedirs(pl_module.hparams.output_dir, exist_ok=True)
-        fig.savefig(
-            os.path.join(pl_module.hparams.output_dir, "metrics.pdf"), format="pdf"
-        )
+    This callback is used to apply a trained embedding model to the dataset of a LightningModule. 
+    The data structure is preloaded in the model, as training, validation and testing sets.
+    Intended usage: run training and examine the telemetry to decide on the hyperparameters (e.g. r_test) that
+    lead to desired efficiency-purity tradeoff. Then set these hyperparameters in the pipeline configuration and run
+    with the --inference flag. Otherwise, to just run straight through automatically, train with this callback included.
 
-
-class EmbeddingInferenceCallback(Callback):
+    """
+    
     def __init__(self):
         self.output_dir = None
         self.overwrite = False
 
-    def on_train_start(self, trainer, pl_module):
-        # Prep the directory to produce inference data to
-        self.output_dir = pl_module.hparams.output_dir
-        self.datatypes = ["train", "val", "test"]
-        os.makedirs(self.output_dir, exist_ok=True)
-        [
-            os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
-            for datatype in self.datatypes
-        ]
-
-        # Set overwrite setting if it is in config
-        self.overwrite = (
-            pl_module.hparams.overwrite if "overwrite" in pl_module.hparams else False
-        )
-
-    def on_train_end(self, trainer, pl_module):
-        print("Training finished, running inference to build graphs...")
-
-        # By default, the set of examples propagated through the pipeline will be train+val+test set
-        datasets = {
-            "train": pl_module.trainset,
-            "val": pl_module.valset,
-            "test": pl_module.testset,
-        }
+    def on_test_end(self, trainer, pl_module):
+        
+        print("Testing finished, running inference to build graphs...")
+        
+        datasets = self.prepare_datastructure(pl_module)
+        
         total_length = sum([len(dataset) for dataset in datasets.values()])
-        batch_incr = 0
+        
         pl_module.eval()
-        tracemalloc.start()
         with torch.no_grad():
+            batch_incr = 0
             for set_idx, (datatype, dataset) in enumerate(datasets.items()):
                 for batch_idx, batch in enumerate(dataset):
                     percent = (batch_incr / total_length) * 100
@@ -159,31 +205,48 @@ class EmbeddingInferenceCallback(Callback):
 
                     batch_incr += 1
 
+    def prepare_datastructure(self, pl_module):
+        # Prep the directory to produce inference data to
+        self.output_dir = pl_module.hparams.output_dir
+        self.datatypes = ["train", "val", "test"]
+        
+        os.makedirs(self.output_dir, exist_ok=True)
+        [
+            os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
+            for datatype in self.datatypes
+        ]
+
+        # Set overwrite setting if it is in config
+        self.overwrite = (
+            pl_module.hparams.overwrite if "overwrite" in pl_module.hparams else False
+        )
+
+        # By default, the set of examples propagated through the pipeline will be train+val+test set
+        datasets = {
+            "train": pl_module.trainset,
+            "val": pl_module.valset,
+            "test": pl_module.testset,
+        }
+        
+        return datasets
+                    
     def construct_downstream(self, batch, pl_module, datatype):
 
         # Free up batch.weights for subset of embedding selection
         batch.true_weights = batch.weights
 
-        if "ci" in pl_module.hparams["regime"]:
-            spatial = pl_module(torch.cat([batch.cell_data, batch.x], axis=-1))
-        else:
-            spatial = pl_module(batch.x)
+        input_data = pl_module.get_input_data(batch)
+        
+        spatial = pl_module(input_data)
 
         # Make truth bidirectional
         e_bidir = torch.cat(
-            [
-                batch.layerless_true_edges,
-                torch.stack(
-                    [batch.layerless_true_edges[1], batch.layerless_true_edges[0]],
-                    axis=1,
-                ).T,
-            ],
-            axis=-1,
+            [batch[pl_module.hparams["true_edges"]], batch[pl_module.hparams["true_edges"]].flip(0)], axis=-1,
         )
 
         # Build the radius graph with radius < r_test
         e_spatial = build_edges(
-            spatial, pl_module.hparams.r_test, 300
+            spatial, spatial, indices=None, r_max = pl_module.hparams.r_test, k_max = 500
         )  # This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
 
         # Arbitrary ordering to remove half of the duplicate edges
@@ -208,6 +271,7 @@ class EmbeddingInferenceCallback(Callback):
 
         batch.edge_index = e_spatial
         batch.y = y_cluster
+        batch.signal_true_edges = None
 
         self.save_downstream(batch, pl_module, datatype)
 

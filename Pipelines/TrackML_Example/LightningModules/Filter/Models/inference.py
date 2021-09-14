@@ -18,7 +18,7 @@ Class-based Callback inference for integration with Lightning
 """
 
 
-class GNNTelemetry(Callback):
+class FilterTelemetry(Callback):
 
     """
     This callback contains standardised tests of the performance of a GNN
@@ -117,7 +117,7 @@ class GNNTelemetry(Callback):
                 os.path.join(output_dir, f"metrics_{metric}.pdf"), format="pdf"
             )
         
-class GNNBuilder(Callback):        
+class FilterBuilder(Callback):        
     """Callback handling filter inference for later stages.
 
     This callback is used to apply a trained filter model to the dataset of a LightningModule. 

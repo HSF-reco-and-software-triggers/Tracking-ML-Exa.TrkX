@@ -19,8 +19,7 @@ class GNNBase(LightningModule):
         Initialise the Lightning Module that can scan over different GNN training regimes
         """
         # Assign hyperparameters
-        self.hparams = hparams
-        self.hparams["posted_alert"] = False
+        self.save_hyperparameters(hparams)
 
     def setup(self, stage):
         # Handle any subset of [train, val, test] data split, assuming that ordering
@@ -31,7 +30,12 @@ class GNNBase(LightningModule):
         ]
         self.trainset, self.valset, self.testset = [
             load_dataset(
-                input_dir, self.hparams["datatype_split"][i], self.hparams["pt_min"]
+                input_dir, 
+                self.hparams["datatype_split"][i], 
+                self.hparams["pt_background_min"],
+                self.hparams["pt_signal_min"],
+                self.hparams["true_edges"],
+                self.hparams["noise"]
             )
             for i, input_dir in enumerate(input_dirs)
         ]
@@ -106,23 +110,23 @@ class GNNBase(LightningModule):
         else:
             manual_weights = None
 
-        if "pid" in self.hparams["regime"]:
-            y_pid = (
-                batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            ).float()
-            loss = F.binary_cross_entropy_with_logits(
-                output, y_pid.float(), weight=manual_weights, pos_weight=weight
-            )
-        else:
-            loss = F.binary_cross_entropy_with_logits(
-                output, batch.y, weight=manual_weights, pos_weight=weight
-            )
+        truth = (
+            (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
+            if "pid" in self.hparams["regime"]
+            else batch.y
+        )
+        
+ 
+        loss = F.binary_cross_entropy_with_logits(
+            output, truth.float(), weight=manual_weights, pos_weight=weight
+        )
+
 
         self.log("train_loss", loss)
 
         return loss
 
-    def shared_evaluation(self, batch, batch_idx):
+    def shared_evaluation(self, batch, batch_idx, log=False):
 
         weight = (
             torch.tensor(self.hparams["weight"])
@@ -163,41 +167,28 @@ class GNNBase(LightningModule):
         eff = torch.tensor(edge_true_positive / edge_true)
         pur = torch.tensor(edge_true_positive / edge_positive)
 
-        if (
-            (eff > 0.99)
-            and (pur > 0.99)
-            and not self.hparams["posted_alert"]
-            and self.hparams["slack_alert"]
-        ):
-            self.logger.experiment.alert(
-                title="High Performance",
-                text="Efficiency and purity have both cracked 99%. Great job, Dan! You're having a great Thursday, and I think you've earned a celebratory beer.",
-                wait_duration=timedelta(minutes=60),
+        if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
+            self.log_dict(
+                {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
             )
-            self.hparams["posted_alert"] = True
-
-        current_lr = self.optimizers().param_groups[0]["lr"]
-        self.log_dict(
-            {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
-        )
 
         return {
             "loss": loss,
-            "preds": preds.cpu().numpy(),
-            "truth": truth.cpu().numpy(),
+            "preds": preds,
+            "truth": truth,
         }
 
-    #         return {"loss": loss, "preds": preds, "truth": truth}
 
     def validation_step(self, batch, batch_idx):
 
-        outputs = self.shared_evaluation(batch, batch_idx)
+        outputs = self.shared_evaluation(batch, batch_idx, log=True)
 
         return outputs["loss"]
 
     def test_step(self, batch, batch_idx):
 
-        outputs = self.shared_evaluation(batch, batch_idx)
+        outputs = self.shared_evaluation(batch, batch_idx, log=False)
 
         return outputs
 

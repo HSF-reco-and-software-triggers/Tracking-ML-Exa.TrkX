@@ -1,9 +1,6 @@
 import os
 import logging
-
-import frnn
-import faiss
-import faiss.contrib.torch_utils
+    
 import torch
 from torch.utils.data import random_split
 import scipy as sp
@@ -11,10 +8,28 @@ import numpy as np
 import pandas as pd
 import trackml.dataset
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+"""
+Ideally, we would be using FRNN and the GPU. But in the case of a user not having a GPU, or not having FRNN, we import FAISS as the 
+nearest neighbor library
+"""
+
+import faiss
+import faiss.contrib.torch_utils
+
+try:
+    import frnn
+    using_faiss = False
+except ImportError:
+    using_faiss = True
+    
+if torch.cuda.is_available():
+    device = "cuda" 
+else:
+    device = "cpu"
+    using_faiss = True
 
 
-def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, nhits, primary_only):
+def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
@@ -26,19 +41,19 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, nhits, primar
                 logging.info("Loaded event: {}".format(loaded_event.event_file))
             except:
                 logging.info("Corrupted event file: {}".format(event))
-        loaded_events = filter_edge_pt(loaded_events, pt_background_cut, pt_signal_cut, nhits, primary_only)
+        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise)
         return loaded_events
     else:
         return None
 
 
-def split_datasets(input_dir, train_split, pt_background_cut=0, pt_signal_cut=0, nhits=0, primary_only=False, seed=1):
+def split_datasets(input_dir, train_split, pt_background_cut=0, pt_signal_cut=0, nhits=0, primary_only=False, true_edges=None, noise=True, seed=1):
     """
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
     """
     torch.manual_seed(seed)
-    loaded_events = load_dataset(input_dir, sum(train_split),  pt_background_cut, pt_signal_cut, nhits, primary_only)
+    loaded_events = load_dataset(input_dir, sum(train_split),  pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise)
     train_events, val_events, test_events = random_split(loaded_events, train_split)
 
     return train_events, val_events, test_events
@@ -78,28 +93,31 @@ def fetch_type(event):
 
     return p_type
 
+def get_edge_subset(edges, mask_where, inverse_mask):
+    
+    included_edges_mask = np.isin(edges, mask_where).all(0)    
+    included_edges = edges[:, included_edges_mask]
+    included_edges = inverse_mask[included_edges]
+    
+    return included_edges, included_edges_mask
 
-def filter_edge_pt(events, pt_background_cut, pt_signal_cut, nhits_min, primary_only):
+def select_data(events, pt_background_cut, pt_signal_cut, nhits_min, primary_only, true_edges, noise):
     # Handle event in batched form
     if type(events) is not list:
         events = [events]
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
-    if pt_background_cut > 0:
+    if pt_background_cut > 0 or not noise:
         for event in events:
             
-            pt_mask = event.pt > pt_background_cut
+            pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid)
             pt_where = torch.where(pt_mask)[0]
             
             inverse_mask = torch.zeros(pt_where.max()+1).long()
             inverse_mask[pt_where] = torch.arange(len(pt_where))
             
-            if "modulewise_true_edges" in event.__dict__.keys():     
-                included_edges = np.isin(event.modulewise_true_edges, pt_where).all(0)
-                
-            event.modulewise_true_edges = event.modulewise_true_edges[:, included_edges]
-            event.modulewise_true_edges = inverse_mask[event.modulewise_true_edges]
-            
+            event[true_edges], edge_mask = get_edge_subset(event[true_edges], pt_where, inverse_mask)
+
             node_features = ["cell_data", "x", "hid", "pid", "pt", "nhits", "primary"]
             for feature in node_features:
                 event[feature] = event[feature][pt_mask]
@@ -107,9 +125,8 @@ def filter_edge_pt(events, pt_background_cut, pt_signal_cut, nhits_min, primary_
     if pt_signal_cut > 0:
         for event in events:
             if "modulewise_true_edges" in event.__dict__.keys(): 
-                edge_subset = event.pt[event.modulewise_true_edges] > pt_signal_cut
-                combined_subset = edge_subset[0] & edge_subset[1]
-                event.modulewise_true_edges = event.modulewise_true_edges[:, combined_subset]
+                edge_subset = (event.pt[event.modulewise_true_edges] > pt_signal_cut).all(0)
+                event.modulewise_true_edges = event.modulewise_true_edges[:, edge_subset]
 
     if nhits_min > 0:
         for event in events:           

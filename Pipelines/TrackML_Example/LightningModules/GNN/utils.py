@@ -5,12 +5,11 @@ import torch
 import pandas as pd
 import numpy as np
 import cupy as cp
-import trackml.dataset
 
 # ---------------------------- Dataset Processing -------------------------
 
 
-def load_dataset(input_dir, num, pt_cut):
+def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, noise):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
@@ -18,40 +17,54 @@ def load_dataset(input_dir, num, pt_cut):
             torch.load(event, map_location=torch.device("cpu"))
             for event in all_events[:num]
         ]
-        loaded_events = filter_edge_pt(loaded_events, pt_cut)
+        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise)
         return loaded_events
     else:
         return None
 
+    
+def get_edge_subset(edges, mask_where, inverse_mask):
+    
+    included_edges_mask = np.isin(edges, mask_where).all(0)    
+    included_edges = edges[:, included_edges_mask]
+    included_edges = inverse_mask[included_edges]
+    
+    return included_edges, included_edges_mask
 
-def fetch_pt(event):
-    truth = trackml.dataset.load_event(event.event_file, parts=["truth"])[0]
-    hid = event.hid
-    merged_truth = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(
-        truth, on="hit_id"
-    )
-    pt = np.sqrt(merged_truth.tpx ** 2 + merged_truth.tpy ** 2)
+def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
+    # Handle event in batched form
+    if type(events) is not list:
+        events = [events]
 
-    return pt
-
-
-def filter_edge_pt(events, pt_cut=0):
-
-    if pt_cut > 0:
+    # NOTE: Cutting background by pT BY DEFINITION removes noise
+    if (pt_background_cut > 0) or not noise:
         for event in events:
-            if "pt" in event.__dict__.keys():
-                pt = event.pt
-                edge_subset = pt.numpy()[event.edge_index] > pt_cut
-            else:
-                pt = fetch_pt(event)
-                edge_subset = pt.to_numpy()[event.edge_index] > pt_cut
-            combined_subset = edge_subset[0] & edge_subset[1]
-            event.edge_index = event.edge_index[:, combined_subset]
-            if "y" in event.__dict__.keys():
-                event.y = event.y[combined_subset]
-            if "y_pid" in event.__dict__.keys():
-                event.y_pid = event.y_pid[combined_subset]
-
+            
+            pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid)
+            pt_where = torch.where(pt_mask)[0]
+            
+            inverse_mask = torch.zeros(pt_where.max()+1).long()
+            inverse_mask[pt_where] = torch.arange(len(pt_where))
+            
+            edge_mask = None    
+            event[true_edges], edge_mask = get_edge_subset(event[true_edges], pt_where, inverse_mask)
+                        
+            if "weights" in event.__dict__.keys():
+                if event.weights.shape[0] == event[true_edges].shape[1]:
+                    event.weights = event.weights[edge_mask]
+            
+            event.edge_index, _ = get_edge_subset(event.edge_index, pt_where, inverse_mask)
+            
+            node_features = ["cell_data", "x", "hid", "pid", "pt", "layers"]
+            for feature in node_features:
+                if feature in event.__dict__.keys():
+                    event[feature] = event[feature][pt_mask]
+        
+    # Define the signal edges
+    for event in events:
+        edge_subset = (event.pt[event[true_edges]] > pt_signal_cut).all(0)
+        event.signal_true_edges = event[true_edges][:, edge_subset]
+    
     return events
 
 

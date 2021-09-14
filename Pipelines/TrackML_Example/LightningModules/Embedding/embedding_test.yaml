@@ -1,36 +1,35 @@
 # Input/output configuration
-input_dir: ${EXATRKX_DATA}/feature_store/quickstart_example
-output_dir: ${EXATRKX_DATA}/embedding_processed/1_pt_cut_quickstart_example
-project: CodaEmbeddingStudy
+input_dir: ${EXATRKX_DATA}/feature_store/testing_1
+output_dir: ${EXATRKX_DATA}/embedding_processed/1GeV_cut_testing_1
+project: CodaEmbedding1GeV
 overwrite: True
 
 # Dataset parameters
-pt_min: 1.0
-train_split: [[10, 2, 2]] # Number of [training, validation, testing] examples
-endcaps: True
-layerwise: False
-layerless: True
+pt_signal_min: 1.
+pt_background_min: 1.
+train_split: [[450, 25, 25]] # Number of [training, validation, testing] examples
+true_edges: modulewise_true_edges
 noise: False
-adjacent: False
 
 # Model parameters
 in_channels: 12
 emb_hidden: 512
-nb_layer: 6
+nb_layer: 4
 emb_dim: 8
-weight: 1
+weight: 10
 randomisation: 2
-r_train: 1
-r_val: 1
+points_per_batch: 100000
+r_train: 1.0
+r_val: 1.0
 r_test: 1.5
-knn: 20
-warmup: 1600
+knn: 50
+warmup: 80
 margin: 1
-lr: 0.002
+lr: 0.001
 factor: 0.3
-patience: 8
+patience: 10
 regime: [[rp, hnm, ci]]
-max_epochs: 1
+max_epochs: 10
 
 # Postprocessing
-callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 
+callbacks: 

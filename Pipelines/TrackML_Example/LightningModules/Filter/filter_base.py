@@ -34,7 +34,14 @@ class FilterBase(LightningModule):
             for datatype in self.hparams["datatype_names"]
         ]
         self.trainset, self.valset, self.testset = [
-            load_dataset(input_dir, self.hparams["datatype_split"][i])
+            load_dataset(
+                input_dir, 
+                self.hparams["datatype_split"][i],
+                self.hparams["pt_background_min"],
+                self.hparams["pt_signal_min"],
+                self.hparams["true_edges"],
+                self.hparams["noise"]
+            )
             for i, input_dir in enumerate(input_dirs)
         ]
 
@@ -110,7 +117,7 @@ class FilterBase(LightningModule):
 
         output = (
             self(
-                torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                torch.cat([batch.cell_data, batch.x], axis=-1),
                 batch.edge_index[:, combined_indices],
                 emb,
             ).squeeze()
@@ -158,7 +165,7 @@ class FilterBase(LightningModule):
             ]
             if ("ci" in self.hparams["regime"]):
                 output = self(
-                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                        torch.cat([batch.cell_data, batch.x], axis=-1),
                         batch.edge_index[:, subset_ind],
                         emb,
                     ).squeeze()
@@ -175,7 +182,7 @@ class FilterBase(LightningModule):
                 manual_weights = None
 
             if "pid" not in self.hparams["regime"]:
-                val_loss = +F.binary_cross_entropy_with_logits(
+                val_loss =+ F.binary_cross_entropy_with_logits(
                     output, batch.y[subset_ind].float(), weight=manual_weights
                 )
             else:
@@ -192,11 +199,12 @@ class FilterBase(LightningModule):
         # Edge filter performance
         edge_positive = cut_list.sum().float()
         if "pid" in self.hparams["regime"]:
-            y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            edge_true = y_pid.sum()
+            true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
-            edge_true = batch.y.sum()
-            edge_true_positive = (batch.y.bool() & cut_list).sum().float()
+            true_y = batch.y
+            
+        edge_true = true_y.sum()
+        edge_true_positive = (true_y.bool() & cut_list).sum().float()
 
         current_lr = self.optimizers().param_groups[0]["lr"]
 
@@ -209,7 +217,7 @@ class FilterBase(LightningModule):
                     "current_lr": current_lr,
                 }
             )
-        return {"loss": val_loss}
+        return {"loss": val_loss, "preds": score_list, "truth": true_y}
 
     def validation_step(self, batch, batch_idx):
 
@@ -280,7 +288,7 @@ class FilterBaseBalanced(FilterBase):
                 )[j]
                 if ("ci" in self.hparams["regime"]):
                     output = self(
-                            torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                            torch.cat([batch.cell_data, batch.x], axis=-1),
                             batch.edge_index[:, subset_ind],
                             emb,
                         ).squeeze()
@@ -376,7 +384,7 @@ class FilterBaseBalanced(FilterBase):
             ]
             output = (
                 self(
-                    torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
+                    torch.cat([batch.cell_data, batch.x], axis=-1),
                     batch.edge_index[:, subset_ind],
                     emb,
                 ).squeeze()
@@ -411,29 +419,22 @@ class FilterBaseBalanced(FilterBase):
         # Edge filter performance
         edge_positive = cut_list.sum().float()
         if "pid" in self.hparams["regime"]:
-            y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-            edge_true = y_pid
-            edge_true_positive = (y_pid & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( y_pid.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+            true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
-            edge_true = batch.y
-            edge_true_positive = (batch.y.bool() & cut_list).sum().float()
-        #             self.logger.experiment.log({"roc" : wandb.plot.roc_curve( batch.y.cpu(), torch.stack([1 - score_list.cpu(), score_list.cpu()], axis=1))})
+            true_y = batch.y
+            
+        edge_true = true_y.sum()
+        edge_true_positive = (true_y.bool() & cut_list).sum().float()
+
+        current_lr = self.optimizers().param_groups[0]["lr"]
 
         if log:
-            current_lr = self.optimizers().param_groups[0]["lr"]
-            
             self.log_dict(
                 {
-                    "eff": torch.tensor(edge_true_positive / edge_true.sum()),
+                    "eff": torch.tensor(edge_true_positive / edge_true),
                     "pur": torch.tensor(edge_true_positive / edge_positive),
                     "val_loss": val_loss,
                     "current_lr": current_lr,
                 }
             )
-
-        return {
-                    "preds": score_list,
-                    "trues": edge_true,
-                    "loss": val_loss
-                }
+        return {"loss": val_loss, "preds": score_list, "truth": true_y}

@@ -7,7 +7,7 @@ edge_cut: 0.5
 # Dataset parameters
 pt_min: 0.
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [1000, 10, 10] # Number of [training, validation, testing] examples
+datatype_split: [[80, 10, 10]] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True

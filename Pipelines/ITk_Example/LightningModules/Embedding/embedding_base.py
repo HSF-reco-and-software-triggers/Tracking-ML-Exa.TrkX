@@ -45,7 +45,9 @@ class EmbeddingBase(LightningModule):
                 self.hparams["pt_background_min"],
                 self.hparams["pt_signal_min"],
                 self.hparams["n_hits"],
-                self.hparams["primary_only"]
+                self.hparams["primary_only"],
+                self.hparams["true_edges"],
+                self.hparams["noise"],
             )
 
     def train_dataloader(self):
@@ -89,75 +91,53 @@ class EmbeddingBase(LightningModule):
         ]
         return optimizer, scheduler
 
-    def training_step(self, batch, batch_idx):
-
-        """
-        Args:
-            batch (``list``, required): A list of ``torch.tensor`` objects
-            batch (``int``, required): The index of the batch
-
-        Returns:
-            ``torch.tensor`` The loss function as a tensor
-        """
+    def get_input_data(self, batch):
         
-        # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
-        e_bidir = torch.cat(
-            [batch.modulewise_true_edges, batch.modulewise_true_edges.flip(0)], axis=-1
-        )
-
-        # Instantiate empty prediction edge list
-        e_spatial = torch.empty([2, 0], dtype=torch.int64, device=self.device)
-        
-        
-        # Forward pass of model, handling whether Cell Information (ci) is included
         if "ci" in self.hparams["regime"]:
             input_data = torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1)
             input_data[input_data != input_data] = 0
         else:
             input_data = batch.x
             input_data[input_data != input_data] = 0
-        
-        with torch.no_grad():
-            spatial = self(input_data)
             
+        return input_data
+    
+    def get_query_points(self, batch, spatial):
+        
         cut_indices = batch.modulewise_true_edges.unique()
         cut_indices = cut_indices[torch.randperm(len(cut_indices))][:self.hparams["points_per_batch"]]
         query = spatial[cut_indices]
-
-        # Append Hard Negative Mining (hnm) with KNN graph
-        if "hnm" in self.hparams["regime"]:
-            knn_edges = build_edges(query, spatial, cut_indices, self.hparams["r_train"], self.hparams["knn"])
-            e_spatial = torch.cat(
-                [
-                    e_spatial,
-                    knn_edges,
-                ],
-                axis=-1,
-            )
         
-        # Append random edges pairs (rp) for stability
-        if "rp" in self.hparams["regime"]:
-            
-            n_random = int(self.hparams["randomisation"] * len(cut_indices))
-            indices_src = torch.randint(0, len(cut_indices), (n_random,), device=self.device)
-            indices_dest = torch.randint(0, len(spatial), (n_random,), device=self.device)
-            random_pairs = torch.stack([cut_indices[indices_src], indices_dest])
-            
-            
-            e_spatial = torch.cat(
-                [
-                    e_spatial,
-                    random_pairs
-                ],
-                axis=-1,
-            )
+        return cut_indices, query
+    
+    def append_hnm_pairs(self, e_spatial, query, query_indices, spatial):
+        knn_edges = build_edges(query, spatial, query_indices, self.hparams["r_train"], self.hparams["knn"])
+        e_spatial = torch.cat(
+            [
+                e_spatial,
+                knn_edges,
+            ],
+            axis=-1,
+        )
+        return e_spatial
+    
+    def append_random_pairs(self, e_spatial, query, spatial):
+        n_random = int(self.hparams["randomisation"] * len(cut_indices))
+        indices_src = torch.randint(0, len(cut_indices), (n_random,), device=self.device)
+        indices_dest = torch.randint(0, len(spatial), (n_random,), device=self.device)
+        random_pairs = torch.stack([cut_indices[indices_src], indices_dest])
 
 
-        # Calculate truth from intersection between Prediction graph and Truth graph
-        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
-
-        # Append all positive examples and their truth and weighting
+        e_spatial = torch.cat(
+            [
+                e_spatial,
+                random_pairs
+            ],
+            axis=-1,
+        )
+        return e_spatial
+    
+    def get_true_pairs(self, e_spatial, y_cluster, new_weights, e_bidir):
         e_spatial = torch.cat(
             [
                 e_spatial.to(self.device),
@@ -173,10 +153,51 @@ class EmbeddingBase(LightningModule):
                 * self.hparams["weight"],
             ]
         )
+        return e_spatial, y_cluster, new_weights
+    
+    def training_step(self, batch, batch_idx):
+
+        """
+        Args:
+            batch (``list``, required): A list of ``torch.tensor`` objects
+            batch (``int``, required): The index of the batch
+
+        Returns:
+            ``torch.tensor`` The loss function as a tensor
+        """
+
+        # Instantiate empty prediction edge list
+        e_spatial = torch.empty([2, 0], dtype=torch.int64, device=self.device)
         
-        included_hits = e_spatial.unique()
-#         print("Total shape:", spatial.shape[0], " - Unique shape:", included_hits.shape)
+        # Forward pass of model, handling whether Cell Information (ci) is included
+        input_data = self.get_input_data(batch)       
         
+        with torch.no_grad():
+            spatial = self(input_data)
+        
+        query_indices, query = self.get_query_points(batch, spatial)
+        
+        # Append Hard Negative Mining (hnm) with KNN graph
+        if "hnm" in self.hparams["regime"]:
+            e_spatial = append_hnm_pairs(e_spatial, query, query_indices, spatial)            
+        
+        # Append random edges pairs (rp) for stability
+        if "rp" in self.hparams["regime"]:
+            e_spatial = append_random_pairs(e_spatial, query, spatial)
+            
+        # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
+        e_bidir = torch.cat(
+            [batch.modulewise_true_edges, batch.modulewise_true_edges.flip(0)], axis=-1
+        )
+        
+        # Calculate truth from intersection between Prediction graph and Truth graph
+        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
+
+        # Append all positive examples and their truth and weighting
+        e_spatial, y_cluster, new_weights = get_true_pairs(e_spatial, y_cluster, new_weights, e_bidir)
+        
+        included_hits = e_spatial.unique()        
         spatial[included_hits] = self(input_data[included_hits])
 
         hinge = y_cluster.float().to(self.device)
@@ -186,9 +207,10 @@ class EmbeddingBase(LightningModule):
         neighbors = spatial.index_select(0, e_spatial[0])
         d = torch.sum((reference - neighbors) ** 2, dim=-1)
 
+        # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
         new_weights[
             y_cluster == 0
-        ] = 1  # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
+        ] = 1  
         d = d * new_weights
 
         loss = torch.nn.functional.hinge_embedding_loss(
@@ -201,14 +223,8 @@ class EmbeddingBase(LightningModule):
 
     def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False):
 
-        if "ci" in self.hparams["regime"]:
-            input_data = torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1)
-            input_data[input_data != input_data] = 0
-            spatial = self(input_data)
-        else:
-            input_data = batch.x
-            input_data[input_data != input_data] = 0
-            spatial = self(input_data)
+        input_data = self.get_input_data(batch)    
+        spatial = self(input_data)
 
         e_bidir = torch.cat(
             [batch.modulewise_true_edges, batch.modulewise_true_edges.flip(0)], axis=-1

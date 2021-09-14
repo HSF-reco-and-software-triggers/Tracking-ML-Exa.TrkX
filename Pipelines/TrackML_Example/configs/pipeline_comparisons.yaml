@@ -1,6 +1,0 @@
-libraries:
-    model_library: /global/homes/d/danieltm/ExaTrkX/Tracking-ML-Exa.TrkX/src/Pipelines/Examples/LightningModules
-    artifact_library: /global/cscratch1/sd/danieltm/ExaTrkX/lightning_checkpoints
-
-stage_list:
-    - {set: GNN, name: SliceCheckpointedResAGNN, config: grid_gnn.yaml, resume_id: }

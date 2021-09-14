@@ -1,2 +1,0 @@
-stage_list:
-    - {set: Filter, name: VanillaFilter, config: train_filter.yaml, batch: configs/batch_gpu_default.yaml}

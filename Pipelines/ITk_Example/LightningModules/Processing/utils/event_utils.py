@@ -134,7 +134,7 @@ def build_event(
     if modulewise:
         modulewise_true_edges = get_modulewise_edges(hits)
         logging.info(
-            "Layerless truth graph built for {} with size {}".format(
+            "Modulewise truth graph built for {} with size {}".format(
                 event_file, modulewise_true_edges.shape
             )
         )
