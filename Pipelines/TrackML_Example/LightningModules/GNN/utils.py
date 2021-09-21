@@ -4,7 +4,13 @@ import torch.nn as nn
 import torch
 import pandas as pd
 import numpy as np
-import cupy as cp
+
+# Find current device.
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Only import cupy in CUDA environment.
+if device == "cuda":
+    import cupy as cp
 
 # ---------------------------- Dataset Processing -------------------------
 
@@ -30,6 +36,7 @@ def get_edge_subset(edges, mask_where, inverse_mask):
     included_edges = inverse_mask[included_edges]
     
     return included_edges, included_edges_mask
+
 
 def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
     # Handle event in batched form
@@ -62,8 +69,11 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
         
     # Define the signal edges
     for event in events:
-        edge_subset = (event.pt[event[true_edges]] > pt_signal_cut).all(0)
-        event.signal_true_edges = event[true_edges][:, edge_subset]
+        if pt_signal_cut > 0:
+            edge_subset = (event.pt[event[true_edges]] > pt_signal_cut).all(0)
+            event.signal_true_edges = event[true_edges][:, edge_subset]
+        else:
+            event.signal_true_edges = event[true_edges]
     
     return events
 
