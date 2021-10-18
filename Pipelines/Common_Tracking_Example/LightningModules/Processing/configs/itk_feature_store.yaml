@@ -1,0 +1,13 @@
+# Input/output configuration
+input_dir: ${ITK_DATA}/full_events_v4
+output_dir: ${ITK_DATA}/feature_store_modulewise_v2
+n_files: 10000
+n_workers: 32
+n_tasks: 1
+overwrite: False
+
+endcaps: True
+noise: True
+modulewise: True
+layerwise: False
+cell_information: True

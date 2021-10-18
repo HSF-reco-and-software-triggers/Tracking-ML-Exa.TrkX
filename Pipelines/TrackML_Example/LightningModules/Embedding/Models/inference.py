@@ -41,6 +41,8 @@ class EmbeddingTelemetry(Callback):
         self.pt_true_pos = []
         self.pt_true = []
         self.distances = []
+        
+        self.hparams = pl_module.hparams
 
     def on_test_batch_end(
         self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
@@ -101,17 +103,15 @@ class EmbeddingTelemetry(Callback):
         self.truth = torch.cat(self.truth)
         self.truth_graph = torch.cat(self.truth_graph, axis=1)
         
-        r_cuts = np.arange(0.3, 1.5, 0.1)
-        
-        print(self.truth.shape)
-        print(self.distances < r_cuts[0])
-        print(self.distances.shape)
+        r_cuts = np.arange(0.1, self.hparams["r_test"], 0.1)
         
         positives = np.array([self.truth[self.distances < r_cut].shape[0] for r_cut in r_cuts])
         true_positives = np.array([self.truth[self.distances < r_cut].sum() for r_cut in r_cuts])
                 
         eff = true_positives / self.truth_graph.shape[1]
         pur = true_positives / positives
+        
+        print("Eff & Purity:", list(zip(r_cuts, eff, pur)))
         
         return eff, pur, r_cuts
         
@@ -229,7 +229,20 @@ class EmbeddingBuilder(Callback):
         }
         
         return datasets
-                    
+    
+    def get_truth(self, batch, e_spatial, e_bidir):
+        
+        e_spatial_easy_fake = e_spatial[:, batch.pid[e_spatial[0]] != batch.pid[e_spatial[1]]]
+        y_cluster_easy_fake = torch.zeros(e_spatial_easy_fake.shape[1])
+        
+        e_spatial_ambiguous = e_spatial[:, batch.pid[e_spatial[0]] == batch.pid[e_spatial[1]]]
+        e_spatial_ambiguous, y_cluster_ambiguous = graph_intersection(e_spatial_ambiguous, e_bidir)
+        
+        e_spatial = torch.cat([e_spatial_easy_fake.cpu(), e_spatial_ambiguous.cpu()], dim=-1)
+        y_cluster = torch.cat([y_cluster_easy_fake.cpu(), y_cluster_ambiguous.cpu()])
+        
+        return e_spatial, y_cluster
+    
     def construct_downstream(self, batch, pl_module, datatype):
 
         # Free up batch.weights for subset of embedding selection
@@ -241,12 +254,12 @@ class EmbeddingBuilder(Callback):
 
         # Make truth bidirectional
         e_bidir = torch.cat(
-            [batch[pl_module.hparams["true_edges"]], batch[pl_module.hparams["true_edges"]].flip(0)], axis=-1,
+            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1,
         )
 
         # Build the radius graph with radius < r_test
         e_spatial = build_edges(
-            spatial, spatial, indices=None, r_max = pl_module.hparams.r_test, k_max = 500
+            spatial, spatial, indices=None, r_max = pl_module.hparams.r_test, k_max = 2000
         )  # This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
 
         # Arbitrary ordering to remove half of the duplicate edges
@@ -260,7 +273,7 @@ class EmbeddingBuilder(Callback):
             )
             batch.weights = new_weights
         else:
-            e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+            e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
 
         # Re-introduce random direction, to avoid training bias
         random_flip = torch.randint(2, (e_spatial.shape[1],)).bool()

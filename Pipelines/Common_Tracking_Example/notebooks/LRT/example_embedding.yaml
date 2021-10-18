@@ -1,0 +1,37 @@
+# Input/output configuration
+input_dir: /project/projectdirs/m3443/data/LRT/v3/PileUp40_10K_withTruth_Processed
+project: LRT_mu40_0GeV_Embedding
+
+# Dataset parameters
+pt_signal_min: 0.
+pt_background_min: 0.
+train_split: [1000, 25, 25] # Number of [training, validation, testing] examples
+true_edges: layerless_true_edges
+noise: True
+
+# Model parameters
+spatial_channels: 3
+cell_channels: 0
+emb_hidden: 1024
+nb_layer: 6
+emb_dim: 8
+weight: 10
+randomisation: 1
+points_per_batch: 100000
+r_train: 1.0
+r_val: 1.0
+r_test: 1.5
+knn: 30
+warmup: 1000
+margin: 1
+lr: 0.0001
+factor: 0.3
+patience: 15
+regime: [rp, hnm]
+max_epochs: 50
+
+# Postprocessing
+callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 
+
+# Logging
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

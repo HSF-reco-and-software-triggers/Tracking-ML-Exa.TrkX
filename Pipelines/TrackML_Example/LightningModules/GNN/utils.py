@@ -22,48 +22,28 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, n
     else:
         return None
 
-    
-def get_edge_subset(edges, mask_where, inverse_mask):
-    
-    included_edges_mask = np.isin(edges, mask_where).all(0)    
-    included_edges = edges[:, included_edges_mask]
-    included_edges = inverse_mask[included_edges]
-    
     return included_edges, included_edges_mask
 
 def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
     # Handle event in batched form
     if type(events) is not list:
-        events = [events]
+        events = [events] 
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
-    if (pt_background_cut > 0) or not noise:
+    if (pt_background_cut > 0) | (pt_signal_cut > 0):
         for event in events:
             
-            pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid)
-            pt_where = torch.where(pt_mask)[0]
-            
-            inverse_mask = torch.zeros(pt_where.max()+1).long()
-            inverse_mask[pt_where] = torch.arange(len(pt_where))
-            
-            edge_mask = None    
-            event[true_edges], edge_mask = get_edge_subset(event[true_edges], pt_where, inverse_mask)
-                        
+            edge_mask = (event.pt[event.edge_index] > pt_background_cut).all(0)
+            event.edge_index = event.edge_index[:, edge_mask]
+            event.y = event.y[edge_mask]
+                
             if "weights" in event.__dict__.keys():
-                if event.weights.shape[0] == event[true_edges].shape[1]:
+                if event.weights.shape[0] == edge_mask.shape[0]:
                     event.weights = event.weights[edge_mask]
-            
-            event.edge_index, _ = get_edge_subset(event.edge_index, pt_where, inverse_mask)
-            
-            node_features = ["cell_data", "x", "hid", "pid", "pt", "layers"]
-            for feature in node_features:
-                if feature in event.__dict__.keys():
-                    event[feature] = event[feature][pt_mask]
-        
-    # Define the signal edges
-    for event in events:
-        edge_subset = (event.pt[event[true_edges]] > pt_signal_cut).all(0)
-        event.signal_true_edges = event[true_edges][:, edge_subset]
+                    
+            if pt_signal_cut > pt_background_cut:
+                signal_mask = (event.pt[event.signal_true_edges] > pt_signal_cut).all(0)
+                event.signal_true_edges = event.signal_true_edges[:, signal_mask]
     
     return events
 

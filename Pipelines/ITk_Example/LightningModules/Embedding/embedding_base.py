@@ -38,17 +38,16 @@ class EmbeddingBase(LightningModule):
         self.save_hyperparameters(hparams)
 
     def setup(self, stage):
-        if stage == "fit":
-            self.trainset, self.valset, self.testset = split_datasets(
-                self.hparams["input_dir"],
-                self.hparams["train_split"],
-                self.hparams["pt_background_min"],
-                self.hparams["pt_signal_min"],
-                self.hparams["n_hits"],
-                self.hparams["primary_only"],
-                self.hparams["true_edges"],
-                self.hparams["noise"],
-            )
+        self.trainset, self.valset, self.testset = split_datasets(
+            self.hparams["input_dir"],
+            self.hparams["train_split"],
+            self.hparams["pt_background_min"],
+            self.hparams["pt_signal_min"],
+            self.hparams["n_hits"],
+            self.hparams["primary_only"],
+            self.hparams["true_edges"],
+            self.hparams["noise"],
+        )
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
@@ -104,11 +103,11 @@ class EmbeddingBase(LightningModule):
     
     def get_query_points(self, batch, spatial):
         
-        cut_indices = batch.modulewise_true_edges.unique()
-        cut_indices = cut_indices[torch.randperm(len(cut_indices))][:self.hparams["points_per_batch"]]
-        query = spatial[cut_indices]
+        query_indices = batch.signal_true_edges.unique()
+        query_indices = query_indices[torch.randperm(len(query_indices))][:self.hparams["points_per_batch"]]
+        query = spatial[query_indices]
         
-        return cut_indices, query
+        return query_indices, query
     
     def append_hnm_pairs(self, e_spatial, query, query_indices, spatial):
         knn_edges = build_edges(query, spatial, query_indices, self.hparams["r_train"], self.hparams["knn"])
@@ -121,11 +120,11 @@ class EmbeddingBase(LightningModule):
         )
         return e_spatial
     
-    def append_random_pairs(self, e_spatial, query, spatial):
-        n_random = int(self.hparams["randomisation"] * len(cut_indices))
-        indices_src = torch.randint(0, len(cut_indices), (n_random,), device=self.device)
+    def append_random_pairs(self, e_spatial, query_indices, spatial):
+        n_random = int(self.hparams["randomisation"] * len(query_indices))
+        indices_src = torch.randint(0, len(query_indices), (n_random,), device=self.device)
         indices_dest = torch.randint(0, len(spatial), (n_random,), device=self.device)
-        random_pairs = torch.stack([cut_indices[indices_src], indices_dest])
+        random_pairs = torch.stack([query_indices[indices_src], indices_dest])
 
 
         e_spatial = torch.cat(
@@ -155,6 +154,30 @@ class EmbeddingBase(LightningModule):
         )
         return e_spatial, y_cluster, new_weights
     
+    def get_hinge_distance(self, spatial, e_spatial, y_cluster):
+    
+        hinge = y_cluster.float().to(self.device)
+        hinge[hinge == 0] = -1
+
+        reference = spatial.index_select(0, e_spatial[1])
+        neighbors = spatial.index_select(0, e_spatial[0])
+        d = torch.sum((reference - neighbors) ** 2, dim=-1)
+        
+        return hinge, d
+    
+    def get_truth(self, batch, e_spatial, e_bidir):
+        
+        e_spatial_easy_fake = e_spatial[:, batch.pid[e_spatial[0]] != batch.pid[e_spatial[1]]]
+        y_cluster_easy_fake = torch.zeros(e_spatial_easy_fake.shape[1])
+        
+        e_spatial_ambiguous = e_spatial[:, batch.pid[e_spatial[0]] == batch.pid[e_spatial[1]]]
+        e_spatial_ambiguous, y_cluster_ambiguous = graph_intersection(e_spatial_ambiguous, e_bidir)
+        
+        e_spatial = torch.cat([e_spatial_easy_fake.cpu(), e_spatial_ambiguous], dim=-1)
+        y_cluster = torch.cat([y_cluster_easy_fake, y_cluster_ambiguous])
+        
+        return e_spatial, y_cluster
+    
     def training_step(self, batch, batch_idx):
 
         """
@@ -174,38 +197,33 @@ class EmbeddingBase(LightningModule):
         
         with torch.no_grad():
             spatial = self(input_data)
-        
+
         query_indices, query = self.get_query_points(batch, spatial)
-        
+
         # Append Hard Negative Mining (hnm) with KNN graph
         if "hnm" in self.hparams["regime"]:
-            e_spatial = append_hnm_pairs(e_spatial, query, query_indices, spatial)            
+            e_spatial = self.append_hnm_pairs(e_spatial, query, query_indices, spatial)            
         
         # Append random edges pairs (rp) for stability
         if "rp" in self.hparams["regime"]:
-            e_spatial = append_random_pairs(e_spatial, query, spatial)
+            e_spatial = self.append_random_pairs(e_spatial, query_indices, spatial)
             
         # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
         e_bidir = torch.cat(
-            [batch.modulewise_true_edges, batch.modulewise_true_edges.flip(0)], axis=-1
+            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
         )
         
         # Calculate truth from intersection between Prediction graph and Truth graph
-        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+        e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
         new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
         # Append all positive examples and their truth and weighting
-        e_spatial, y_cluster, new_weights = get_true_pairs(e_spatial, y_cluster, new_weights, e_bidir)
+        e_spatial, y_cluster, new_weights = self.get_true_pairs(e_spatial, y_cluster, new_weights, e_bidir)
         
         included_hits = e_spatial.unique()        
         spatial[included_hits] = self(input_data[included_hits])
 
-        hinge = y_cluster.float().to(self.device)
-        hinge[hinge == 0] = -1
-
-        reference = spatial.index_select(0, e_spatial[1])
-        neighbors = spatial.index_select(0, e_spatial[0])
-        d = torch.sum((reference - neighbors) ** 2, dim=-1)
+        hinge, d = self.get_hinge_distance(spatial, e_spatial, y_cluster)
 
         # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
         new_weights[
@@ -227,24 +245,19 @@ class EmbeddingBase(LightningModule):
         spatial = self(input_data)
 
         e_bidir = torch.cat(
-            [batch.modulewise_true_edges, batch.modulewise_true_edges.flip(0)], axis=-1
+            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
         )
 
         # Build whole KNN graph
         e_spatial = build_edges(spatial, spatial, indices=None, r_max=knn_radius, k_max=knn_num)
         
-        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+        e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
         new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
-        hinge = y_cluster.float().to(self.device)
-        hinge[hinge == 0] = -1
+        
+        hinge, d = self.get_hinge_distance(spatial, e_spatial.to(self.device), y_cluster)
 
-        e_spatial = e_spatial.to(self.device)
-        reference = spatial.index_select(0, e_spatial[1])
-        neighbors = spatial.index_select(0, e_spatial[0])
-        d = torch.sum((reference - neighbors) ** 2, dim=-1)
-
-        new_weights[y_cluster == -1] = 1
+        new_weights[y_cluster == 0] = 1
         d = d # * new_weights THIS IS BETTER TO NOT INCLUDE
 
         loss = torch.nn.functional.hinge_embedding_loss(
@@ -258,8 +271,8 @@ class EmbeddingBase(LightningModule):
         eff = torch.tensor(cluster_true_positive / cluster_true)
         pur = torch.tensor(cluster_true_positive / cluster_positive)
 
-        current_lr = self.optimizers().param_groups[0]["lr"]
         if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
                 {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
             )
@@ -269,9 +282,10 @@ class EmbeddingBase(LightningModule):
 
         return {
             "loss": loss,
-            "preds": e_spatial.cpu().numpy(),
-            "truth": y_cluster.cpu().numpy(),
-            "truth_graph": e_bidir.cpu().numpy(),
+            "distances": d,
+            "preds": e_spatial,
+            "truth": y_cluster,
+            "truth_graph": e_bidir,
         }
 
     def validation_step(self, batch, batch_idx):
@@ -290,7 +304,7 @@ class EmbeddingBase(LightningModule):
         Step to evaluate the model's performance
         """
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_test"], 500, log=False
+            batch, batch_idx, self.hparams["r_test"], 1000, log=False
         )
 
         return outputs

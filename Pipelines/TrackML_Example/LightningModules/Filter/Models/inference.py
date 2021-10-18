@@ -13,6 +13,9 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 
+from sklearn.metrics import roc_auc_score, roc_curve
+from ..utils import load_dataset
+
 """
 Class-based Callback inference for integration with Lightning
 """
@@ -72,7 +75,7 @@ class FilterTelemetry(Callback):
         score_cuts = np.arange(0., 1., 0.05)
         
         positives = np.array([(self.preds > score_cut).sum() for score_cut in score_cuts])
-        true_positives = np.array([((self.preds > score_cut) & self.truth).sum() for score_cut in score_cuts])
+        true_positives = np.array([((self.preds > score_cut) & self.truth.bool()).sum() for score_cut in score_cuts])
                 
         eff = true_positives / self.truth.sum()
         pur = true_positives / positives
@@ -85,7 +88,8 @@ class FilterTelemetry(Callback):
         eff, pur, score_cuts = self.get_eff_pur_metrics()
         
         return {"eff_plot": {"eff": eff, "score_cuts": score_cuts}, 
-                "pur_plot": {"pur": pur, "score_cuts": score_cuts}}
+                "pur_plot": {"pur": pur, "score_cuts": score_cuts},
+               "roc_plot": {"eff": eff, "pur": pur}}
     
     def make_plot(self, x_val, y_val, x_lab, y_lab, title):
         
@@ -105,8 +109,9 @@ class FilterTelemetry(Callback):
                 
         eff_fig, eff_axs = self.make_plot(metrics["eff_plot"]["score_cuts"], metrics["eff_plot"]["eff"], "cut", "Eff", "Efficiency vs. cut")
         pur_fig, pur_axs = self.make_plot(metrics["pur_plot"]["score_cuts"], metrics["pur_plot"]["pur"], "cut", "Pur", "Purity vs. cut")
+        roc_fig, roc_axs = self.make_plot(metrics["roc_plot"]["pur"], metrics["roc_plot"]["eff"], "pur", "eff", "ROC Curve")
         
-        return {"eff_plot": [eff_fig, eff_axs], "pur_plot": [pur_fig, pur_axs]}
+        return {"eff_plot": [eff_fig, eff_axs], "pur_plot": [pur_fig, pur_axs], "roc_plot": [roc_fig, roc_axs]}
     
     def save_metrics(self, metrics_plots, output_dir):
         
@@ -233,3 +238,90 @@ class FilterBuilder(Callback):
             torch.save(batch, pickle_file)
 
         logging.info("Saved event {}".format(batch.event_file[-4:]))
+
+        
+class SingleFileFilterBuilder(FilterBuilder):
+    def __init__(self):
+        super().__init__()
+        
+    def setup(self, trainer, pl_module, stage = None):
+
+        print("Callback")
+        input_dirs = [None, None, None]
+        input_dirs[: len(pl_module.hparams["datatype_names"])] = [
+            os.path.join(pl_module.hparams["input_dir"], datatype)
+            for datatype in pl_module.hparams["datatype_names"]
+        ]
+
+        single_file_split = [1, 1, 1]
+        pl_module.trainset, pl_module.valset, pl_module.testset = [
+            load_dataset(input_dir, single_file_split[i], pl_module.hparams["pt_background_min"],
+                pl_module.hparams["pt_signal_min"],
+                pl_module.hparams["true_edges"],
+                pl_module.hparams["noise"])
+            for i, input_dir in enumerate(input_dirs)
+        ]
+        
+        # Get [train, val, test] lists of files
+        self.dataset_list = []
+        for dataname, datanum in zip(pl_module.hparams["datatype_names"], pl_module.hparams["datatype_split"]):
+            dataset = os.listdir(os.path.join(pl_module.hparams["input_dir"], dataname))
+            dataset = sorted([os.path.join(pl_module.hparams["input_dir"], dataname, event) for event in dataset])[:datanum]
+            self.dataset_list.append(dataset)
+            
+    def on_test_end(self, trainer, pl_module):
+        
+        print("Testing finished, running inference to build graphs...")
+        
+        datasets = self.prepare_datastructure(pl_module)
+        
+        total_length = sum([len(dataset) for dataset in datasets.values()])
+        
+        pl_module.eval()
+        with torch.no_grad():
+            batch_incr = 0
+            for set_idx, (datatype, dataset) in enumerate(datasets.items()):
+                for batch_idx, event_file in enumerate(dataset):
+                    percent = (batch_incr / total_length) * 100
+                    sys.stdout.flush()
+                    sys.stdout.write(f"{percent:.01f}% inference complete \r")
+                    batch = torch.load(event_file).to(pl_module.device)
+                    if (
+                        not os.path.exists(
+                            os.path.join(
+                                self.output_dir, datatype, batch.event_file[-4:]
+                            )
+                        )
+                    ) or self.overwrite:
+                        batch_to_save = copy.deepcopy(batch)
+                        batch_to_save = batch_to_save.to(
+                            pl_module.device
+                        )  # Is this step necessary??
+                        self.construct_downstream(batch_to_save, pl_module, datatype)
+
+                    batch_incr += 1
+
+    def prepare_datastructure(self, pl_module):
+        # Prep the directory to produce inference data to
+        self.output_dir = pl_module.hparams.output_dir
+        self.datatypes = ["train", "val", "test"]
+        
+        os.makedirs(self.output_dir, exist_ok=True)
+        [
+            os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
+            for datatype in self.datatypes
+        ]
+
+        # Set overwrite setting if it is in config
+        self.overwrite = (
+            pl_module.hparams.overwrite if "overwrite" in pl_module.hparams else False
+        )
+
+        # By default, the set of examples propagated through the pipeline will be train+val+test set
+        datasets = {
+            "train": self.dataset_list[0],
+            "val": self.dataset_list[1],
+            "test": self.dataset_list[2],
+        }
+        
+        return datasets

@@ -33,17 +33,18 @@ class FilterBase(LightningModule):
             os.path.join(self.hparams["input_dir"], datatype)
             for datatype in self.hparams["datatype_names"]
         ]
-        self.trainset, self.valset, self.testset = [
-            load_dataset(
-                input_dir, 
-                self.hparams["datatype_split"][i],
-                self.hparams["pt_background_min"],
-                self.hparams["pt_signal_min"],
-                self.hparams["true_edges"],
-                self.hparams["noise"]
-            )
-            for i, input_dir in enumerate(input_dirs)
-        ]
+        if "trainset" not in self.__dict__.keys():
+            self.trainset, self.valset, self.testset = [
+                load_dataset(
+                    input_dir, 
+                    self.hparams["datatype_split"][i],
+                    self.hparams["pt_background_min"],
+                    self.hparams["pt_signal_min"],
+                    self.hparams["true_edges"],
+                    self.hparams["noise"]
+                )
+                for i, input_dir in enumerate(input_dirs)
+            ]
 
     def train_dataloader(self):
         if self.trainset is not None:
@@ -172,7 +173,7 @@ class FilterBase(LightningModule):
             else:
                 self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
                 
-            cut = F.sigmoid(output) > self.hparams["filter_cut"]
+            cut = torch.sigmoid(output) > self.hparams["filter_cut"]
             cut_list.append(cut)
 
             if "weighting" in self.hparams["regime"]:
@@ -206,9 +207,8 @@ class FilterBase(LightningModule):
         edge_true = true_y.sum()
         edge_true_positive = (true_y.bool() & cut_list).sum().float()
 
-        current_lr = self.optimizers().param_groups[0]["lr"]
-
         if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
                 {
                     "eff": torch.tensor(edge_true_positive / edge_true),
@@ -295,7 +295,7 @@ class FilterBaseBalanced(FilterBase):
                 else:
                     self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
                     
-                cut = F.sigmoid(output) > self.hparams["filter_cut"]
+                cut = torch.sigmoid(output) > self.hparams["filter_cut"]
                 cut_list.append(cut)
 
             cut_list = torch.cat(cut_list)
@@ -350,7 +350,7 @@ class FilterBaseBalanced(FilterBase):
                 pos_weight=weight,
             )
             
-        self.log_dict({"train_loss": loss})
+        self.log_dict({"train_loss": loss}, on_step=True, on_epoch=True)
 
         return loss
 
@@ -391,7 +391,7 @@ class FilterBaseBalanced(FilterBase):
                 if ("ci" in self.hparams["regime"])
                 else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             )
-            scores = F.sigmoid(output)
+            scores = torch.sigmoid(output)
             score_list.append(scores)
 
             if "weighting" in self.hparams["regime"]:
@@ -426,9 +426,9 @@ class FilterBaseBalanced(FilterBase):
         edge_true = true_y.sum()
         edge_true_positive = (true_y.bool() & cut_list).sum().float()
 
-        current_lr = self.optimizers().param_groups[0]["lr"]
-
         if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
+            
             self.log_dict(
                 {
                     "eff": torch.tensor(edge_true_positive / edge_true),

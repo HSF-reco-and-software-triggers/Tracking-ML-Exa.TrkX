@@ -39,15 +39,14 @@ class EmbeddingBase(LightningModule):
         self.save_hyperparameters(hparams)
 
     def setup(self, stage):
-        if stage == "fit":
-            self.trainset, self.valset, self.testset = split_datasets(
-                self.hparams["input_dir"],
-                self.hparams["train_split"],
-                self.hparams["pt_background_min"],
-                self.hparams["pt_signal_min"],
-                self.hparams["true_edges"],
-                self.hparams["noise"],
-            )
+        self.trainset, self.valset, self.testset = split_datasets(
+            self.hparams["input_dir"],
+            self.hparams["train_split"],
+            self.hparams["pt_background_min"],
+            self.hparams["pt_signal_min"],
+            self.hparams["true_edges"],
+            self.hparams["noise"],
+        )
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
@@ -174,6 +173,19 @@ class EmbeddingBase(LightningModule):
         
         return hinge, d
     
+    def get_truth(self, batch, e_spatial, e_bidir):
+        
+        e_spatial_easy_fake = e_spatial[:, batch.pid[e_spatial[0]] != batch.pid[e_spatial[1]]]
+        y_cluster_easy_fake = torch.zeros(e_spatial_easy_fake.shape[1])
+        
+        e_spatial_ambiguous = e_spatial[:, batch.pid[e_spatial[0]] == batch.pid[e_spatial[1]]]
+        e_spatial_ambiguous, y_cluster_ambiguous = graph_intersection(e_spatial_ambiguous, e_bidir)
+        
+        e_spatial = torch.cat([e_spatial_easy_fake.cpu(), e_spatial_ambiguous], dim=-1)
+        y_cluster = torch.cat([y_cluster_easy_fake, y_cluster_ambiguous])
+        
+        return e_spatial, y_cluster
+    
     def training_step(self, batch, batch_idx):
 
         """
@@ -210,7 +222,7 @@ class EmbeddingBase(LightningModule):
         )
         
         # Calculate truth from intersection between Prediction graph and Truth graph
-        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+        e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
         new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
         # Append all positive examples and their truth and weighting
@@ -273,9 +285,8 @@ class EmbeddingBase(LightningModule):
         # Build whole KNN graph
         e_spatial = build_edges(spatial, spatial, indices=None, r_max=knn_radius, k_max=knn_num)
         
-        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
-        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
-
+        e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
+        
 #         if "weighting" in self.hparams["regime"]:
 #             weights_bidir = torch.cat([batch.weights, batch.weights])
 #             e_spatial, y_cluster, new_weights = graph_intersection(
@@ -288,37 +299,42 @@ class EmbeddingBase(LightningModule):
 #             e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
 #             new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
-        hinge, d = self.get_hinge_distance(spatial, e_spatial.to(self.device), y_cluster)
+        d = torch.sum((spatial[e_spatial[1]] - spatial[e_spatial[0]]) ** 2, dim=-1)
 
-        new_weights[y_cluster == 0] = 1
-        d = d # * new_weights THIS IS BETTER TO NOT INCLUDE
-
-        loss = torch.nn.functional.hinge_embedding_loss(
-            d, hinge, margin=self.hparams["margin"], reduction="mean"
-        )
-
-        cluster_true = e_bidir.shape[1]
-        cluster_true_positive = y_cluster.sum()
-        cluster_positive = len(e_spatial[0])
-
-        eff = torch.tensor(cluster_true_positive / cluster_true)
-        pur = torch.tensor(cluster_true_positive / cluster_positive)
-
-        current_lr = self.optimizers().param_groups[0]["lr"]
         if log:
+            
+            hinge = y_cluster.float().to(self.device)
+            hinge[hinge == 0] = -1
+
+            loss = torch.nn.functional.hinge_embedding_loss(
+                d, hinge, margin=self.hparams["margin"], reduction="mean"
+            )
+
+            cluster_true = e_bidir.shape[1]
+            cluster_true_positive = y_cluster.sum()
+            cluster_positive = len(e_spatial[0])
+
+            eff = torch.tensor(cluster_true_positive / cluster_true)
+            pur = torch.tensor(cluster_true_positive / cluster_positive)
+        
+            current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
                 {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
             )
-        logging.info("Efficiency: {}".format(eff))
-        logging.info("Purity: {}".format(pur))
-        logging.info(batch.event_file)
+            
+            logging.info("Efficiency: {}".format(eff))
+            logging.info("Purity: {}".format(pur))
+            logging.info(batch.event_file)
 
+        else:
+            loss = None
+            
         return {
             "loss": loss,
-            "distances": d,
-            "preds": e_spatial,
-            "truth": y_cluster,
-            "truth_graph": e_bidir,
+            "distances": d.cpu(),
+            "preds": e_spatial.cpu(),
+            "truth": y_cluster.bool().cpu(),
+            "truth_graph": e_bidir.cpu(),
         }
 
     def validation_step(self, batch, batch_idx):
@@ -337,7 +353,7 @@ class EmbeddingBase(LightningModule):
         Step to evaluate the model's performance
         """
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_test"], 500, log=False
+            batch, batch_idx, self.hparams["r_test"], 2000, log=False
         )
 
         return outputs
