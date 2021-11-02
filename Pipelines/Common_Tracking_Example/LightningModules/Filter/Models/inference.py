@@ -213,7 +213,7 @@ class FilterBuilder(Callback):
                 else pl_module(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             )
             
-            cut = F.sigmoid(output) > pl_module.hparams["filter_cut"]
+            cut = F.sigmoid(output) > pl_module.hparams["edge_cut"]
             cut_list.append(cut)
 
         cut_list = torch.cat(cut_list)

@@ -1,0 +1,42 @@
+# Dataset
+program: train.py
+method: bayes
+project: LRT_mu40_0GeV_GNN
+metric:
+    name: auc.max
+    goal: maximize
+parameters:
+    # Model hyperparameters
+    nb_edge_layers:
+        min: 1
+        max: 4
+    nb_node_layers:
+        min: 1
+        max: 4
+    nb_graph_iters:
+        min: 5
+        max: 10
+    train_purity:
+        min: 0.
+        max: 0.1
+    hidden:
+        min: 32
+        max: 128
+    hidden_activation:
+        values: [ReLU, SiLU, Tanh]
+    layer_norm:
+        values: [False, True]
+        
+    # Training hyperparameters
+    lr: 
+        min: 0.00001
+        max: 0.02
+    patience: 
+        min: 1
+        max: 25
+    factor: 
+        min: 0.1
+        max: 0.9
+    max_epochs:
+        min: 10
+        max: 50

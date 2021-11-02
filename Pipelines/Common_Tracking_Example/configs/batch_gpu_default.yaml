@@ -3,6 +3,6 @@ constraint: gpu
 nodes: 1
 gpus: 1
 time: "4:00:00"
-qos: regular
+qos: special
 output: logs/%x-%j.out
 account: m1759

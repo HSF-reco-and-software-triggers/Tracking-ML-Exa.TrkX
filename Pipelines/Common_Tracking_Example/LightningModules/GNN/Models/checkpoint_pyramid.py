@@ -1,18 +1,13 @@
 import sys
 
-import pytorch_lightning as pl
-from pytorch_lightning import LightningModule
-from pytorch_lightning.callbacks import Callback
 import torch.nn as nn
-from torch.nn import Linear
 import torch.nn.functional as F
 import torch
-from torch_scatter import scatter_add
-from torch_geometric.nn.conv import MessagePassing
+from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
 
 from ..gnn_base import GNNBase
-from ..utils import make_mlp, hard_random_edge_slice, hard_eta_edge_slice
+from ..utils import make_mlp
 
 
 class CheckpointedPyramid(GNNBase):
@@ -21,19 +16,20 @@ class CheckpointedPyramid(GNNBase):
         """
         Initialise the Lightning Module that can scan over different GNN training regimes
         """
-
+        concatenation_factor = 3 if (self.hparams["aggregation"] in ["sum_max", "mean_max"]) else 2
+        
         # Setup input network
         self.node_encoder = make_mlp(
             hparams["spatial_channels"] + hparams["cell_channels"],
-            [hparams["hidden"], int(hparams["hidden"]/2)],
+            [hparams["hidden"]]*hparams["nb_node_layer"],
             output_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
         )
 
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
-            hparams["hidden"],
-            [hparams["hidden"], int(hparams["hidden"]/2), 1],
+            hparams["hidden"]*2,
+            [hparams["hidden"]//(2**i) for i in range(hparams["nb_edge_layer"])] + [1],
             layer_norm=hparams["layernorm"],
             output_activation=None,
             hidden_activation=hparams["hidden_activation"],
@@ -41,49 +37,50 @@ class CheckpointedPyramid(GNNBase):
 
         # The node network computes new node features
         self.node_network = make_mlp(
-            hparams["hidden"],
-            [hparams["hidden"], int(hparams["hidden"]/2)],
+            hparams["hidden"]*concatenation_factor,
+            [hparams["hidden"]] * hparams["nb_node_layer"],
             layer_norm=hparams["layernorm"],
             output_activation=hparams["hidden_activation"],
             hidden_activation=hparams["hidden_activation"],
         )
 
+    def message_step(self, x, start, end):
+                
+        edge_inputs = torch.cat([x[start], x[end]], dim=1)
+        e = self.edge_network(edge_inputs)
+        e = torch.sigmoid(e)
+    
+        if self.hparams["aggregation"] == "sum":  
+                messages = scatter_add(e * x[start], end, dim=0, dim_size=x.shape[0]) 
+                                    
+        elif self.hparams["aggregation"] == "max":
+            messages = scatter_max(e * x[start], end, dim=0, dim_size=x.shape[0])[0]
+
+        elif self.hparams["aggregation"] == "sum_max":
+            messages = torch.cat([scatter_max(e * x[start], end, dim=0, dim_size=x.shape[0])[0],
+                                 scatter_add(e * x[start], end, dim=0, dim_size=x.shape[0])], dim=-1)
+
+        node_inputs = torch.cat([messages, x], dim=1)
+        x_out = self.node_network(node_inputs)
+        
+        x_out += x
+        
+        return x_out
+            
+    def output_step(self, x, start, end):
+        edge_inputs = torch.cat([x[start], x[end]], dim=1)
+        
+        return self.edge_network(edge_inputs)
+        
     def forward(self, x, edge_index):
-
-        # Encode the graph features into the hidden space
-        input_x = x
-        x = self.node_encoder(x)
-
         start, end = edge_index
-
+        
+        x.requires_grad = True        
+        x = checkpoint(self.node_encoder, x)
+        
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
-            # Previous hidden state
-#             x0 = x
-
-            # Compute new edge score
-            edge_inputs = torch.cat([x[start], x[end]], dim=1)
-            e = checkpoint(self.edge_network, edge_inputs)
-            e = torch.sigmoid(e)
-
-            # Sum weighted node features coming into each node
-            #             weighted_messages_in = scatter_add(e * x[start], end, dim=0, dim_size=x.shape[0])
-            #             weighted_messages_out = scatter_add(e * x[end], start, dim=0, dim_size=x.shape[0])
-
-            weighted_messages = scatter_add(
-                e * x[start], end, dim=0, dim_size=x.shape[0]
-            ) + scatter_add(e * x[end], start, dim=0, dim_size=x.shape[0])
-
-            # Compute new node features
-            #             node_inputs = torch.cat([x, weighted_messages_in, weighted_messages_out], dim=1)
-            node_inputs = torch.cat([x, weighted_messages], dim=1)
-#             node_inputs = weighted_messages + x
-    
-            x = checkpoint(self.node_network, node_inputs)
-
-            # Residual connection
-#             x = x + x0
-
-        # Compute final edge scores; use original edge directions only
-        clf_inputs = torch.cat([x[start], x[end]], dim=1)
-        return checkpoint(self.edge_network, clf_inputs).squeeze(-1)
+            
+            x = checkpoint(self.message_step, x, start, end)
+            
+        return checkpoint(self.output_step, x, start, end)

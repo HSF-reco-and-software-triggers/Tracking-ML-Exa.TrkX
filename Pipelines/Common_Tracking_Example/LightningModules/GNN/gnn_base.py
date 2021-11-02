@@ -42,7 +42,7 @@ class GNNBase(LightningModule):
             for i, input_dir in enumerate(input_dirs)
         ]
         
-        if "logger" in self.trainer.__dict__.keys() and "_experiment" in self.logger.__dict__.keys():
+        if (self.trainer) and ("logger" in self.trainer.__dict__.keys()) and ("_experiment" in self.logger.__dict__.keys()):
             self.logger.experiment.define_metric("val_loss" , summary="min")
             self.logger.experiment.define_metric("auc" , summary="max")
 
@@ -114,11 +114,11 @@ class GNNBase(LightningModule):
     def training_step(self, batch, batch_idx):
 
         if ("train_purity" in self.hparams.keys()) and (self.hparams["train_purity"] > 0):
-            edge_sample, truth_sample = purity_sample(batch, self.hparams["train_purity"])
-            edge_sample, truth_sample = self.handle_directed(batch, edge_sample, truth_sample)
+            edge_sample, truth_sample = purity_sample(batch, self.hparams["train_purity"], self.hparams["regime"])
         else:
             edge_sample, truth_sample = batch.edge_index, batch.y_pid
-            edge_sample, truth_sample = self.handle_directed(batch, edge_sample, truth_sample)
+        
+        edge_sample, truth_sample = self.handle_directed(batch, edge_sample, truth_sample)
         
         # Handle training towards a subset of the data
         if "subset" in self.hparams["regime"]:
@@ -134,9 +134,6 @@ class GNNBase(LightningModule):
 
         input_data = self.get_input_data(batch)
         
-#         print("1:", torch.cuda.max_memory_allocated() / 1024**3)
-        torch.cuda.reset_peak_memory_stats()
-        
         output = self(input_data, edge_sample).squeeze()
             
         if "weighting" in self.hparams["regime"]:
@@ -151,10 +148,7 @@ class GNNBase(LightningModule):
         )
 
         self.log("train_loss", loss, on_step=False, on_epoch=True)
-        
-#         print("6:", torch.cuda.max_memory_allocated() / 1024**3)
-        torch.cuda.reset_peak_memory_stats()
-        
+                
         return loss
 
     def get_metrics(self, truth, output):

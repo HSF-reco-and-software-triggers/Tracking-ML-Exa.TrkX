@@ -43,7 +43,6 @@ class VanillaCheckResAGNN(GNNBase):
             output_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"]
         )
-        
             
     def forward(self, x, edge_index):
         start, end = edge_index
@@ -52,7 +51,7 @@ class VanillaCheckResAGNN(GNNBase):
 
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
-            x_inital = x
+            # x_inital = x
 
             # Apply edge network
             edge_inputs = torch.cat([x[start], x[end]], dim=1)
@@ -68,6 +67,7 @@ class VanillaCheckResAGNN(GNNBase):
             elif self.hparams["aggregation"] == "sum_max":
                 messages = torch.cat([scatter_max(e * x[start], end, dim=0, dim_size=x.shape[0])[0],
                                      scatter_add(e * x[start], end, dim=0, dim_size=x.shape[0])], dim=-1)
+                
             
             node_inputs = torch.cat([messages, x], dim=1)
             x = checkpoint(self.node_network, node_inputs)

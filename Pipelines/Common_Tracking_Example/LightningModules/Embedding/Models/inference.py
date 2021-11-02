@@ -51,12 +51,14 @@ class EmbeddingTelemetry(Callback):
         """
         Get the relevant outputs from each batch
         """
-        pts = batch.pt
+        
         true_positives = outputs["preds"][:, outputs["truth"]]
         true = outputs["truth_graph"]
 
-        self.pt_true_pos.append(pts[true_positives].cpu())
-        self.pt_true.append(pts[true].cpu())
+        if "pt" in batch.__dict__.keys():
+            pts = batch.pt
+            self.pt_true_pos.append(pts[true_positives].cpu())
+            self.pt_true.append(pts[true].cpu())
         
         self.truth.append(outputs["truth"].cpu())
         self.distances.append(outputs["distances"].cpu())

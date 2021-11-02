@@ -184,9 +184,9 @@ class FilterBase(LightningModule):
                         emb
                     ).squeeze()
             else:
-                self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                output = self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             
-            scores = F.sigmoid(output)
+            scores = torch.sigmoid(output)
             score_list.append(scores)
 
             if "weighting" in self.hparams["regime"]:
@@ -320,9 +320,9 @@ class FilterBaseBalanced(FilterBase):
                             emb,
                         ).squeeze()
                 else:
-                    self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                    output = self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
                 
-                cut = F.sigmoid(output) > self.hparams["edge_cut"]
+                cut = torch.sigmoid(output) > self.hparams["edge_cut"]
                 cut_list.append(cut)
 
             cut_list = torch.cat(cut_list)
@@ -353,7 +353,7 @@ class FilterBaseBalanced(FilterBase):
                     emb,
                 ).squeeze()
         else:
-            self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
+            output = self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
                     
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights[combined_indices]
@@ -417,9 +417,9 @@ class FilterBaseBalanced(FilterBase):
                         emb,
                     ).squeeze()
             else:
-                self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                output = self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             
-            scores = F.sigmoid(output)
+            scores = torch.sigmoid(output)
             score_list.append(scores)
 
             if "weighting" in self.hparams["regime"]:

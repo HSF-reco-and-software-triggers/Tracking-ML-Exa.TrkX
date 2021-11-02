@@ -2,7 +2,7 @@
 input_dir: ${EXATRKX_DATA}/embedding_processed/0GeV_cut_testing_2
 output_dir: ${EXATRKX_DATA}/filter_processed/0GeV_cut_testing_2
 project: CodaFilter0GeV
-filter_cut: 0.15
+edge_cut: 0.15
 overwrite: True
 
 # Dataset parameters

@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch
 import pandas as pd
 import numpy as np
-import cupy as cp
-import trackml.dataset
+# import cupy as cp
+# import trackml.dataset
 
 # ---------------------------- Dataset Processing -------------------------
 
@@ -47,14 +47,15 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
     
     return events
 
-def purity_sample(batch, target_purity):
+def purity_sample(batch, target_purity, regime):
     
+    truth = batch.y_pid.bool() if "pid" in regime else batch.y.bool()
     # Get true edges
-    true_edges = torch.where(batch.y_pid.bool())[0]
+    true_edges = torch.where(truth)[0]
     num_true = true_edges.shape[0]
     
     # Get fake edges
-    fake_edges = torch.where(~batch.y_pid.bool())[0]
+    fake_edges = torch.where(~truth)[0]
     
     # Sample fake edges
     num_fakes_to_sample = int(num_true * (1 - target_purity) / target_purity)
