@@ -9,11 +9,12 @@ from ..embedding_base import EmbeddingBase
 from torch.nn import Linear
 import torch.nn as nn
 from torch_cluster import radius_graph
+import torch.nn.functional as F
 import torch
 from torch_geometric.data import DataLoader
 
 # Local imports
-from ..utils import graph_intersection
+from ..utils import graph_intersection, make_mlp
 
 
 class LayerlessEmbedding(EmbeddingBase):
@@ -22,30 +23,26 @@ class LayerlessEmbedding(EmbeddingBase):
         """
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
-
-          # Construct the MLP architecture
+        # Construct the MLP architecture
         if "ci" in hparams["regime"]:
             in_channels = hparams["spatial_channels"] + hparams["cell_channels"]
         else:
             in_channels = hparams["spatial_channels"]
-        layers = [Linear(in_channels, hparams["emb_hidden"])]
-        ln = [
-            Linear(hparams["emb_hidden"], hparams["emb_hidden"])
-            for _ in range(hparams["nb_layer"] - 1)
-        ]
-
-        layers.extend(ln)
-        self.layers = nn.ModuleList(layers)
-        self.emb_layer = nn.Linear(hparams["emb_hidden"], hparams["emb_dim"])
-        self.norm = nn.LayerNorm(hparams["emb_hidden"])
-        self.act = nn.Tanh()
+          
+        self.network = make_mlp(in_channels,
+                [hparams["emb_hidden"]]*hparams["nb_layer"] + [hparams["emb_dim"]],
+                hidden_activation=hparams["activation"],
+                output_activation=None,
+                layer_norm=True                        
+               )
+        
         self.save_hyperparameters()
 
     def forward(self, x):
-        #         hits = self.normalize(hits)
-        for l in self.layers:
-            x = l(x)
-            x = self.act(x)
-        #         x = self.norm(x) #Option of LayerNorm
-        x = self.emb_layer(x)
-        return x
+        
+        x_out = self.network(x)
+        
+        if "norm" in self.hparams["regime"]:
+            return F.normalize(x_out)
+        else:
+            return x_out

@@ -24,7 +24,7 @@ from torch_cluster import radius_graph
 import numpy as np
 
 # Local Imports
-from .utils import graph_intersection, split_datasets, build_edges
+from ..Embedding.utils import graph_intersection, split_datasets, build_edges
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -39,15 +39,7 @@ class SuperEmbeddingBase(LightningModule):
 
     def setup(self, stage):
         self.trainset, self.valset, self.testset = split_datasets(
-            self.hparams["input_dir"],
-            self.hparams["train_split"],
-            self.hparams["pt_background_min"],
-            self.hparams["pt_signal_min"],
-            self.hparams["n_hits"],
-            self.hparams["primary_only"],
-            self.hparams["true_edges"],
-            self.hparams["noise"],
-            self.hparams["eta_cut"]
+            **self.hparams
         )
 
     def train_dataloader(self):
@@ -168,15 +160,8 @@ class SuperEmbeddingBase(LightningModule):
     
     def get_truth(self, batch, e_spatial, e_bidir):
         
-        e_spatial_easy_fake = e_spatial[:, batch.pid[e_spatial[0]] != batch.pid[e_spatial[1]]]
-        y_cluster_easy_fake = torch.zeros(e_spatial_easy_fake.shape[1])
-        
-        e_spatial_ambiguous = e_spatial[:, batch.pid[e_spatial[0]] == batch.pid[e_spatial[1]]]
-        e_spatial_ambiguous, y_cluster_ambiguous = graph_intersection(e_spatial_ambiguous, e_bidir)
-        
-        e_spatial = torch.cat([e_spatial_easy_fake.cpu(), e_spatial_ambiguous], dim=-1)
-        y_cluster = torch.cat([y_cluster_easy_fake, y_cluster_ambiguous])
-        
+        e_spatial, y_cluster = graph_intersection(e_spatial, e_bidir)
+                
         return e_spatial, y_cluster
     
     def training_step(self, batch, batch_idx):

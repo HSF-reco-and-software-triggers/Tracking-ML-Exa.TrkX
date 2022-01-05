@@ -1,14 +1,16 @@
 # Input/output configuration
-input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store_modulewise_v2
-project: ITk_0.5GeV
+input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_barrel
+project: ITk_0.5GeV_Barrel_Embedding
 sanity_steps: 0
 
 # Dataset parameters
 pt_signal_min: 500.
 pt_background_min: 500.
-n_hits: 3
+nhits: 3
 primary_only: True
-train_split: [[500, 20, 20], [1300, 20, 20]] # Number of [training, validation, testing] examples
+train_split: [[500, 20, 20], [2000, 20, 20]] # Number of [training, validation, testing] examples
+true_edges: modulewise_true_edges
+noise: True
 
 # Model parameters
 spatial_channels: 3
@@ -16,20 +18,20 @@ cell_channels: 8
 emb_hidden: [512, 1024, 2048]
 nb_layer: [4, 6, 8]
 emb_dim: 8
-weight: 5
+weight: 10
 randomisation: 1
-points_per_batch: 10000
+points_per_batch: 100000
 r_train: 1.0
-r_val: 1.0
+r_val: 1.5
 r_test: 1.0
-knn: [30, 50]
-warmup: 5000
+knn: [30, 50, 100]
+warmup: 2000
 margin: 1
 lr: [0.001, 0.0005, 0.0001]
 factor: 0.3
-patience: 50
+patience: 20
 regime: [[rp, hnm, ci]]
-max_epochs: 50
+max_epochs: 30
 
-callbacks: 
+callbacks: EmbeddingTelemetry
 

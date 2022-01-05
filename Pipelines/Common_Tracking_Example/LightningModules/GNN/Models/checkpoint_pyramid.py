@@ -9,7 +9,6 @@ from torch.utils.checkpoint import checkpoint
 from ..gnn_base import GNNBase
 from ..utils import make_mlp
 
-
 class CheckpointedPyramid(GNNBase):
     def __init__(self, hparams):
         super().__init__(hparams)
@@ -22,7 +21,8 @@ class CheckpointedPyramid(GNNBase):
         self.node_encoder = make_mlp(
             hparams["spatial_channels"] + hparams["cell_channels"],
             [hparams["hidden"]]*hparams["nb_node_layer"],
-            output_activation=hparams["hidden_activation"],
+            output_activation=None,
+            hidden_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
         )
 
@@ -40,7 +40,7 @@ class CheckpointedPyramid(GNNBase):
             hparams["hidden"]*concatenation_factor,
             [hparams["hidden"]] * hparams["nb_node_layer"],
             layer_norm=hparams["layernorm"],
-            output_activation=hparams["hidden_activation"],
+            output_activation=None,
             hidden_activation=hparams["hidden_activation"],
         )
 

@@ -1,8 +1,9 @@
 import os
 import logging
-
+    
 import torch
 from torch.utils.data import random_split
+from torch import nn
 import scipy as sp
 import numpy as np
 import pandas as pd
@@ -29,7 +30,7 @@ else:
     using_faiss = True
 
 
-def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, noise):
+def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
@@ -41,19 +42,20 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, n
                 logging.info("Loaded event: {}".format(loaded_event.event_file))
             except:
                 logging.info("Corrupted event file: {}".format(event))
-        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise)
+        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise)
         return loaded_events
     else:
         return None
 
 
-def split_datasets(input_dir, train_split, pt_background_cut=0, pt_signal_cut=0, true_edges=None, noise=False, seed=1):
+def split_datasets(input_dir="", train_split=[100,10,10], pt_background_cut=0, pt_signal_cut=0, nhits=0, primary_only=False, true_edges=None, noise=True, seed=1, **kwargs):
     """
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
     """
+    
     torch.manual_seed(seed)
-    loaded_events = load_dataset(input_dir, sum(train_split), pt_background_cut, pt_signal_cut, true_edges, noise)
+    loaded_events = load_dataset(input_dir, sum(train_split),  pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise)
     train_events, val_events, test_events = random_split(loaded_events, train_split)
 
     return train_events, val_events, test_events
@@ -67,13 +69,13 @@ def get_edge_subset(edges, mask_where, inverse_mask):
     
     return included_edges, included_edges_mask
 
-def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
+def select_data(events, pt_background_cut, pt_signal_cut, nhits_min, primary_only, true_edges, noise):
     # Handle event in batched form
     if type(events) is not list:
         events = [events]
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
-    if (pt_background_cut > 0) or not noise:
+    if pt_background_cut > 0 or not noise:
         for event in events:
             
             pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid)
@@ -82,25 +84,39 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
             inverse_mask = torch.zeros(pt_where.max()+1).long()
             inverse_mask[pt_where] = torch.arange(len(pt_where))
             
-            edge_mask = None    
             event[true_edges], edge_mask = get_edge_subset(event[true_edges], pt_where, inverse_mask)
-                        
-            if "weights" in event.__dict__.keys():
-                if event.weights.shape[0] == event[true_edges].shape[1]:
-                    event.weights = event.weights[edge_mask]
-                           
-            node_features = ["cell_data", "x", "hid", "pid", "pt", "layers"]
+
+            node_features = ["cell_data", "x", "hid", "pid", "pt", "nhits", "primary"]
             for feature in node_features:
                 if feature in event.__dict__.keys():
                     event[feature] = event[feature][pt_mask]
-        
-    # Define the signal edges
-    for event in events:
-        edge_subset = (event.pt[event[true_edges]] > pt_signal_cut).all(0)
-        event.signal_true_edges = event[true_edges][:, edge_subset]
     
+    for event in events:
+        
+        event.signal_true_edges = event[true_edges]
+        
+        if ("pt" in event.__dict__.keys()) & ("primary" in event.__dict__.keys()) & ("nhits" in event.__dict__.keys()):
+            edge_subset = (
+                (event.pt[event[true_edges]] > pt_signal_cut).all(0) &
+                (event.nhits[event[true_edges]] >= nhits_min).all(0) &
+                (event.primary[event[true_edges]].bool().all(0) | (not primary_only))
+            )
+        
+            event.signal_true_edges = event.signal_true_edges[:, edge_subset]
+        
     return events
 
+
+
+def reset_edge_id(subset, graph):
+    subset_ind = np.where(subset)[0]
+    filler = -np.ones((graph.max() + 1,))
+    filler[subset_ind] = np.arange(len(subset_ind))
+    graph = torch.from_numpy(filler[graph]).long()
+    exist_edges = (graph[0] >= 0) & (graph[1] >= 0)
+    graph = graph[:, exist_edges]
+
+    return graph, exist_edges
 
 
 def graph_intersection(
@@ -153,53 +169,27 @@ def graph_intersection(
         return new_pred_graph, y
 
 
-def build_edges(query, database, indices, r_max, k_max, return_distances=False):
-    
-    if using_faiss:
-        edge_list, dist_list = build_edges_faiss(query, database, r_max, k_max)
-    else:
-        edge_list, dist_list = build_edges_frnn(query, database, r_max, k_max)
-        
-    # Remove self-loops and correct indices if necessary
-    if indices is not None:
-        edge_list[0] = indices[edge_list[0]]
-    edge_list = edge_list[:, edge_list[0] != edge_list[1]]
-
-    if return_distances:
-        return edge_list, dist_list
-    else:
-        return edge_list
-
-
-def build_edges_frnn(query, database, r_max, k_max):
+def build_edges(query, database, indices=None, r_max=1.0, k_max=10, return_indices=False):
     
     dists, idxs, nn, grid = frnn.frnn_grid_points(points1=query.unsqueeze(0), points2=database.unsqueeze(0), lengths1=None, lengths2=None, K=k_max, r=r_max, grid=None, return_nn=False, return_sorted=True)
     
-    idxs = idxs.squeeze()
-    ind = torch.Tensor.repeat(torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1).T
+    idxs = idxs.squeeze().int()
+    ind = torch.Tensor.repeat(torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1).T.int()
     positive_idxs = idxs >= 0
-    edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]])
-    dist_list = dists.squeeze()[positive_idxs]
+    edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]]).long()
     
-    return edge_list, dist_list
+    # Reset indices subset to correct global index 
+    if indices is not None:
+        edge_list[0] = indices[edge_list[0]]
+    
+    # Remove self-loops
+    edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
-def build_edges_faiss(query, database, r_max, k_max):
-    
-    if device == "cuda":
-        res = faiss.StandardGpuResources()
-        D, I = faiss.knn_gpu(res, query, database, k_max)
-    elif device == "cpu":
-        index = faiss.IndexFlatL2(database.shape[1])
-        index.add(database)
-        D, I = index.search(query, k_max)
+    if return_indices:
+        return edge_list, dists, idxs, ind
+    else:
+        return edge_list
 
-    ind = torch.Tensor.repeat(torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1).T
-    edge_list = torch.stack([ind[D <= r_max**2], I[D <= r_max**2]])
-    dist_list = D[D <= r_max**2]
-    
-    return edge_list, dist_list
-    
-    
 
 def build_knn(spatial, k):
 
@@ -288,3 +278,34 @@ def evaluate_set_metrics(r_test, model, trainer):
     print(mean_purity, mean_efficiency)
 
     return mean_efficiency, mean_purity
+
+# ------------------------- Convenience Utilities ---------------------------
+
+
+def make_mlp(
+    input_size,
+    sizes,
+    hidden_activation="ReLU",
+    output_activation="ReLU",
+    layer_norm=False,
+):
+    """Construct an MLP with specified fully-connected layers."""
+    hidden_activation = getattr(nn, hidden_activation)
+    if output_activation is not None:
+        output_activation = getattr(nn, output_activation)
+    layers = []
+    n_layers = len(sizes)
+    sizes = [input_size] + sizes
+    # Hidden layers
+    for i in range(n_layers - 1):
+        layers.append(nn.Linear(sizes[i], sizes[i + 1]))
+        if layer_norm:
+            layers.append(nn.LayerNorm(sizes[i + 1]))
+        layers.append(hidden_activation())
+    # Final layer
+    layers.append(nn.Linear(sizes[-2], sizes[-1]))
+    if output_activation is not None:
+        if layer_norm:
+            layers.append(nn.LayerNorm(sizes[-1]))
+        layers.append(output_activation())
+    return nn.Sequential(*layers)

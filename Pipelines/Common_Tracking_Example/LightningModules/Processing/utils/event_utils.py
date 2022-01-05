@@ -52,32 +52,41 @@ def get_layerwise_edges(hits):
 
     return true_edges, hits
 
+def remap_edges(true_edges, hits):
+    
+    unique_hid = np.unique(hits.hit_id)
+    hid_mapping = np.zeros(unique_hid.max() + 1).astype(int)
+    hid_mapping[unique_hid] = np.arange(len(unique_hid))
+    
+    hits = hits.drop_duplicates(subset="hit_id").sort_values("hit_id")
+    assert (hits.hit_id == unique_hid).all(), "If hit IDs are not sequential, this will mess up graph structure!"
+    
+    true_edges = hid_mapping[true_edges]
+    
+    return true_edges, hits
+
 def get_modulewise_edges(hits):
     
     signal = hits[((~hits.particle_id.isna()) & (hits.particle_id != 0)) & (~hits.vx.isna())]
-    signal = signal.drop_duplicates(subset=["particle_id","barrel_endcap", "layer_disk", "eta_module", "phi_module"])
     
     # Sort by increasing distance from production
     signal = signal.assign(R=np.sqrt((signal.x - signal.vx)**2 + (signal.y - signal.vy)**2 + (signal.z - signal.vz)**2))
     signal = signal.sort_values('R').reset_index(drop=False)
     
-    # Handle re-indexing
-    signal = signal.rename(columns={"index": "unsorted_index"}).reset_index(drop=False)
-    signal.loc[signal["particle_id"] == 0, "particle_id"] = np.nan
-    
     # Group by particle ID
-    signal_list = signal.groupby(['particle_id'], sort=False)['index'].agg(lambda x: list(x))
+    signal_list = signal.groupby(["particle_id", "barrel_endcap", "layer_disk", "eta_module", "phi_module"], sort=False)['hit_id'].agg(lambda x: list(x)).groupby(level=0).agg(lambda x: list(x))
     
     true_edges = []
     for row in signal_list.values:
         for i, j in zip(row[:-1], row[1:]):
-            true_edges.append([i, j])
+            true_edges.extend(list(itertools.product(i, j)))
             
     true_edges = np.array(true_edges).T
     
-    true_edges = signal.unsorted_index.values[true_edges]
+    # Remap
+    true_edges, hits = remap_edges(true_edges, hits)
     
-    return true_edges
+    return true_edges, hits
 
 def calc_eta(r, z):
     theta = np.arctan2(r, z)
@@ -108,6 +117,15 @@ def select_hits(hits, particles, pt_min=0, endcaps=True, noise=True):
     
     return hits
 
+def clean_duplicates(hits):
+    
+    noise_hits = hits[hits.particle_id == 0].drop_duplicates(subset="hit_id")
+    signal_hits = hits[hits.particle_id != 0]
+    
+    non_duplicate_noise_hits = noise_hits[~noise_hits.isin(signal_hits.hit_id)]
+    hits = pd.concat([signal_hits, non_duplicate_noise_hits], ignore_index=True)
+    
+    return hits    
 
 def build_event(
     event_file,
@@ -128,11 +146,13 @@ def build_event(
         hits, particles, pt_min=pt_min, endcaps=endcaps, noise=noise
     ).assign(evtid=int(event_file[-9:]))
 
+    hits = clean_duplicates(hits)
+    
     # Handle which truth graph(s) are being produced
     modulewise_true_edges, layerwise_true_edges = None, None
 
     if modulewise:
-        modulewise_true_edges = get_modulewise_edges(hits)
+        modulewise_true_edges, hits = get_modulewise_edges(hits)
         logging.info(
             "Modulewise truth graph built for {} with size {}".format(
                 event_file, modulewise_true_edges.shape

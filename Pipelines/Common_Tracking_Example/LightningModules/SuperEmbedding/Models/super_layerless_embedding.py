@@ -22,30 +22,34 @@ class SuperLayerlessEmbedding(SuperEmbeddingBase):
         """
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
-
-          # Construct the MLP architecture
+        # Construct the MLP architecture
         if "ci" in hparams["regime"]:
             in_channels = hparams["spatial_channels"] + hparams["cell_channels"]
         else:
             in_channels = hparams["spatial_channels"]
-        layers = [Linear(in_channels, hparams["emb_hidden"])]
-        ln = [
-            Linear(hparams["emb_hidden"], hparams["emb_hidden"])
-            for _ in range(hparams["nb_layer"] - 1)
-        ]
-
-        layers.extend(ln)
-        self.layers = nn.ModuleList(layers)
-        self.emb_layer = nn.Linear(hparams["emb_hidden"], hparams["emb_dim"])
-        self.norm = nn.LayerNorm(hparams["emb_hidden"])
-        self.act = nn.Tanh()
+            
+        self.network1 = make_mlp(in_channels,
+                [hparams["emb_hidden"]]*hparams["nb_layer"] + [hparams["emb_dim"]],
+                hidden_activation=hparams["activation"],
+                output_activation=False,
+                layer_norm=True                        
+               )
+        
+        self.network2 = make_mlp(in_channels,
+                [hparams["emb_hidden"]]*hparams["nb_layer"] + [hparams["emb_dim"]],
+                hidden_activation=hparams["activation"],
+                output_activation=False,
+                layer_norm=True                        
+               )
+        
         self.save_hyperparameters()
 
     def forward(self, x):
-        #         hits = self.normalize(hits)
-        for l in self.layers:
-            x = l(x)
-            x = self.act(x)
-        #         x = self.norm(x) #Option of LayerNorm
-        x = self.emb_layer(x)
-        return x
+        
+        x1_out = self.network1(x)
+        x2_out = self.network2(x)
+        
+        if "norm" in self.hparams["regime"]:
+            return F.normalize(x1_out), F.normalize(x2_out)
+        else:
+            return x1_out, x2_out

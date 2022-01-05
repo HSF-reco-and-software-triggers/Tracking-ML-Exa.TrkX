@@ -1,6 +1,6 @@
 # Input/output configuration
 input_dir: ${ITK_DATA}/full_events_v4
-output_dir: ${ITK_DATA}/feature_store_modulewise_v2
+output_dir: ${ITK_DATA}/feature_store/feature_store_modulewise_all_v2
 n_files: 10000
 n_workers: 32
 n_tasks: 1

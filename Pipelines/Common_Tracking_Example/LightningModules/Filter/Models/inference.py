@@ -251,7 +251,6 @@ class SingleFileFilterBuilder(FilterBuilder):
         super().__init__()
         
     def setup(self, trainer, pl_module, stage = None):
-        
 
         print("Callback")
         input_dirs = [None, None, None]

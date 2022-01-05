@@ -1,0 +1,34 @@
+# Input/output configuration
+input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/filter_processed/0.5GeV_barrel
+# input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/embedding_processed/0.5GeV_barrel
+artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
+project: ITk_0.5GeV_Barrel_GNN
+
+# Dataset parameters
+pt_background_min: 500.
+pt_signal_min: 500.
+datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [7500, 100, 20] # Number of [training, validation, testing] examples
+endcaps: True
+true_edges: modulewise_true_edges
+noise: False
+
+# Model parameters
+edge_cut: 0.5
+spatial_channels: 3
+cell_channels: 8
+hidden: 256
+n_graph_iters: 8
+nb_node_layer: 3
+nb_edge_layer: 3
+emb_channels: 0
+layernorm: True
+aggregation: sum_max
+hidden_activation: Mish
+weight: 2
+warmup: 8000
+lr: 0.03
+factor: 0.8
+patience: 5
+regime: []
+max_epochs: 100

@@ -3,8 +3,8 @@ input_dir: /project/projectdirs/m3443/data/LRT/v3/PileUp40_10K_withTruth_Process
 project: LRT_mu40_0GeV_Embedding
 
 # Dataset parameters
-pt_signal_min: 0.
-pt_background_min: 0.
+pt_signal_cut: 0.
+pt_background_cut: 0.
 train_split: [25, 25, 25] # Number of [training, validation, testing] examples
 true_edges: layerless_true_edges
 noise: True

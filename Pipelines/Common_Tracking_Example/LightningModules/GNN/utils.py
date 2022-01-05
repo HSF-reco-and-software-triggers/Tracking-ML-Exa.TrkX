@@ -15,11 +15,14 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, n
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+        print("Loading events")
         loaded_events = [
             torch.load(event, map_location=torch.device("cpu"))
             for event in all_events[:num]
         ]
+        print("Events loaded!")
         loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise)
+        print("Events processed!")
         return loaded_events
     else:
         return None
@@ -31,11 +34,13 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
     if (pt_background_cut > 0):
-        for event in events:            
+        for i, event in enumerate(events):   
             edge_mask = (event.pt[event.edge_index] > pt_background_cut).all(0)
             event.edge_index = event.edge_index[:, edge_mask]
             event.y = event.y[edge_mask]
-            event.y_pid = event.y_pid[edge_mask]
+            
+            if "y_pid" in event.__dict__.keys():
+                event.y_pid = event.y_pid[edge_mask]
                 
             if "weights" in event.__dict__.keys():
                 if event.weights.shape[0] == edge_mask.shape[0]:
@@ -47,9 +52,8 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
     
     return events
 
-def purity_sample(batch, target_purity, regime):
+def purity_sample(truth, target_purity, regime):
     
-    truth = batch.y_pid.bool() if "pid" in regime else batch.y.bool()
     # Get true edges
     true_edges = torch.where(truth)[0]
     num_true = true_edges.shape[0]

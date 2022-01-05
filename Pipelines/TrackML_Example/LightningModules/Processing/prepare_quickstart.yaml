@@ -5,11 +5,10 @@ detector_path: ${EXATRKX_DATA}/detectors.csv
 n_files: 100
 n_workers: 32
 n_tasks: 1
-overwrite: True
+overwrite: False
 
 endcaps: True
-noise: False
-adjacent: True
-layerless: True
-layerwise: False
+noise: True
+layerwise: True
+modulewise: True
 cell_information: True

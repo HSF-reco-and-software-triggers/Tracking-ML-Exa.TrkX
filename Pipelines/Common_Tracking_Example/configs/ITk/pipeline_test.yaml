@@ -1,5 +1,5 @@
 stage_list:
-#     - {set: Processing, name: FeatureStore, config: prepare_feature_store.yaml, batch: configs/batch_cpu_default.yaml}
-#     - {set: Embedding, name: LayerlessEmbedding, config: train_embedding.yaml, batch: configs/batch_gpu_default.yaml}
-    - {set: Filter, name: PyramidFilter, config: train_filter_test.yaml, batch_config: configs/batch_gpu_default.yaml, resume_id: ii03fjrz}
+    - {set: Processing, name: FeatureStore, config: prepare_feature_store.yaml, batch: configs/batch_cpu_default.yaml}
+    # - {set: Embedding, name: LayerlessEmbedding, config: itk_single_test.yaml, batch_config: configs/batch_gpu_default.yaml}
+    # - {set: Filter, name: PyramidFilter, config: train_filter_test.yaml, batch_config: configs/batch_gpu_default.yaml, resume_id: ii03fjrz}
 #     - {set: GNN, name: CheckpointedPyramid, config: train_gnn.yaml, batch: configs/batch_gpu_default.yaml}

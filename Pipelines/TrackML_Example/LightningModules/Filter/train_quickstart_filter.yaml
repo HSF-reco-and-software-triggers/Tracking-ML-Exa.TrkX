@@ -1,13 +1,13 @@
 # Input/output configuration
-input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/embedding_processed/0_pt_cut_endcaps_unweighted
-output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_endcaps_unweighted
+input_dir: ${EXATRKX_DATA}/embedding_processed/1GeV_pt_cut_quickstart_example
+output_dir: ${EXATRKX_DATA}/filter_processed/1GeV_pt_cut_quickstart_example
 project: CodaFilteringStudy
 filter_cut: 0.15
 
 # Dataset parameters
-pt_min: 0
+pt_min: 1.
 datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [[200, 25, 25]] # Number of [training, validation, testing] examples
+datatype_split: [[90, 5, 5]] # Number of [training, validation, testing] examples
 endcaps: True
 layerwise: False
 layerless: True

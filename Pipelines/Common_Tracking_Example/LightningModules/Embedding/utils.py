@@ -3,6 +3,7 @@ import logging
     
 import torch
 from torch.utils.data import random_split
+from torch import nn
 import scipy as sp
 import numpy as np
 import pandas as pd
@@ -52,6 +53,7 @@ def split_datasets(input_dir="", train_split=[100,10,10], pt_background_cut=0, p
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
     """
+    
     torch.manual_seed(seed)
     loaded_events = load_dataset(input_dir, sum(train_split),  pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise)
     train_events, val_events, test_events = random_split(loaded_events, train_split)
@@ -85,8 +87,10 @@ def select_data(events, pt_background_cut, pt_signal_cut, nhits_min, primary_onl
             event[true_edges], edge_mask = get_edge_subset(event[true_edges], pt_where, inverse_mask)
 
             node_features = ["cell_data", "x", "hid", "pid", "pt", "nhits", "primary"]
+            
             for feature in node_features:
-                event[feature] = event[feature][pt_mask]
+                if feature in event.__dict__.keys():
+                    event[feature] = event[feature][pt_mask]
     
     for event in events:
         
@@ -275,3 +279,34 @@ def evaluate_set_metrics(r_test, model, trainer):
     print(mean_purity, mean_efficiency)
 
     return mean_efficiency, mean_purity
+
+# ------------------------- Convenience Utilities ---------------------------
+
+
+def make_mlp(
+    input_size,
+    sizes,
+    hidden_activation="ReLU",
+    output_activation="ReLU",
+    layer_norm=False,
+):
+    """Construct an MLP with specified fully-connected layers."""
+    hidden_activation = getattr(nn, hidden_activation)
+    if output_activation is not None:
+        output_activation = getattr(nn, output_activation)
+    layers = []
+    n_layers = len(sizes)
+    sizes = [input_size] + sizes
+    # Hidden layers
+    for i in range(n_layers - 1):
+        layers.append(nn.Linear(sizes[i], sizes[i + 1]))
+        if layer_norm:
+            layers.append(nn.LayerNorm(sizes[i + 1]))
+        layers.append(hidden_activation())
+    # Final layer
+    layers.append(nn.Linear(sizes[-2], sizes[-1]))
+    if output_activation is not None:
+        if layer_norm:
+            layers.append(nn.LayerNorm(sizes[-1]))
+        layers.append(output_activation())
+    return nn.Sequential(*layers)

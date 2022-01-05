@@ -2,7 +2,7 @@
 input_dir: ${ITK_DATA}/embedding_processed/0.5GeV_testing
 output_dir: ${ITK_DATA}/filter_processed/0.5GeV_testing
 project: ITk_0.5GeVFilter
-filter_cut: 0.15
+edge_cut: 0.15
 overwrite: True
 
 # Dataset parameters
