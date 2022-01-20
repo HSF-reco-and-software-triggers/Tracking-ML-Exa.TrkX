@@ -35,7 +35,6 @@ class GNNBase(LightningModule):
                 self.hparams["datatype_split"][i], 
                 self.hparams["pt_background_min"],
                 self.hparams["pt_signal_min"],
-                self.hparams["true_edges"],
                 self.hparams["noise"]
             )
             for i, input_dir in enumerate(input_dirs)
@@ -94,10 +93,6 @@ class GNNBase(LightningModule):
             else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
         )
         
-        print("Before:", torch.cuda.max_memory_allocated()/1024**3, "Gb")
-        
-        torch.cuda.reset_max_memory_allocated()
-        
         output = (
             self(
                 torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
@@ -115,8 +110,7 @@ class GNNBase(LightningModule):
             (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
             if "pid" in self.hparams["regime"]
             else batch.y
-        )
-        
+        )        
  
         loss = F.binary_cross_entropy_with_logits(
             output, truth.float(), weight=manual_weights, pos_weight=weight
@@ -124,8 +118,6 @@ class GNNBase(LightningModule):
 
 
         self.log("train_loss", loss)
-        
-        print("After:", torch.cuda.max_memory_allocated()/1024**3, "Gb")
 
         return loss
 

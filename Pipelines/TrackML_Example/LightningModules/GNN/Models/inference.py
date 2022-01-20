@@ -187,40 +187,15 @@ class GNNBuilder(Callback):
         }
         
         return datasets
-                    
+    
     def construct_downstream(self, batch, pl_module, datatype):
 
-        emb = (
-            None if (pl_module.hparams["emb_channels"] == 0) else batch.embedding
-        )  # Does this work??
+        output = pl_module(pl_module.get_input_data(batch)).squeeze()
+        cut_list = torch.sigmoid(output) > pl_module.hparams["edge_cut"]
 
-        cut_list = []
-        for j in range(pl_module.hparams["n_chunks"]):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), pl_module.hparams["n_chunks"])[
-                j
-            ]
-            output = (
-                pl_module(
-                    torch.cat([batch.cell_data, batch.x], axis=-1),
-                    batch.edge_index[:, subset_ind],
-                    emb,
-                ).squeeze()
-                if ("ci" in pl_module.hparams["regime"])
-                else pl_module(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-            )
-            cut = torch.sigmoid(output) > pl_module.hparams["filter_cut"]
-            cut_list.append(cut)
-
-        cut_list = torch.cat(cut_list)
-
-        if "pid" not in pl_module.hparams["regime"]:
-            batch.y = batch.y[cut_list]
-            
-        y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
-        batch.y_pid = y_pid[cut_list]
+        batch.y = batch.y[cut_list]
+        batch.y_pid = batch.y_pid[cut_list]
         batch.edge_index = batch.edge_index[:, cut_list]
-        if "weighting" in pl_module.hparams["regime"]:
-            batch.weights = batch.weights[cut_list]
             
         self.save_downstream(batch, pl_module, datatype)
         

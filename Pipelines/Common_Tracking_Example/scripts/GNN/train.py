@@ -15,9 +15,8 @@ sys.path.append("../../")
 from LightningModules.GNN.Models.checkpoint_pyramid import CheckpointedPyramid
 from LightningModules.GNN.Models.interaction_gnn import InteractionGNN
 
-from pytorch_lightning.plugins import DDPPlugin, DDP2Plugin, DDPSpawnPlugin
+from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning.overrides import LightningDistributedModule
-
 
 from pytorch_lightning import seed_everything
 import wandb
@@ -38,7 +37,7 @@ def main():
     print("Running main")
     print(time.ctime())
         
-    default_config_path = "interaction_config.yaml"
+    default_config_path = "default_config.yaml"
     
     with open(default_config_path) as file:
         default_configs = yaml.load(file, Loader=yaml.FullLoader)

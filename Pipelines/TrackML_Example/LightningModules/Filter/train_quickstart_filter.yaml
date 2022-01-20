@@ -8,11 +8,7 @@ filter_cut: 0.15
 pt_min: 1.
 datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
 datatype_split: [[90, 5, 5]] # Number of [training, validation, testing] examples
-endcaps: True
-layerwise: False
-layerless: True
 noise: False
-adjacent: False
 
 # Model parameters
 in_channels: 12
@@ -34,5 +30,3 @@ max_epochs: 100
 # Post-processing
 callbacks: #[FilterInferenceCallback]
 
-# Logging
-wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

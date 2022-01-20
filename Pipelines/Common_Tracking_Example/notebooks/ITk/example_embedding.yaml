@@ -1,7 +1,7 @@
 # Input/output configuration
-input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_all
+input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_barrel_v2
 artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
-project: ITk_1GeVSignal_Embedding
+project: ITk_1GeVSignal_Embedding_Barrel
 
 
 # Dataset parameters
@@ -9,7 +9,7 @@ pt_signal_cut: 1000.
 pt_background_cut: 0.
 nhits: 3.
 primary_only: True
-train_split: [1000, 25, 10] # Number of [training, validation, testing] examples
+train_split: [1000, 20, 10] # Number of [training, validation, testing] examples
 true_edges: modulewise_true_edges
 noise: True
 
@@ -17,23 +17,23 @@ noise: True
 spatial_channels: 3
 cell_channels: 8
 emb_hidden: 1024
-nb_layer: 6
-emb_dim: 8
+nb_layer: 2
+emb_dim: 14
+weight: 3
 activation: Tanh
-weight: 4
-randomisation: 2
+randomisation: 1
 points_per_batch: 100000
 r_train: 0.1
 r_val: 0.1
 r_test: 0.1
-knn: 100
-warmup: 1000
+knn: 150
+warmup: 500
 margin: 0.1
-lr: 0.001
-factor: 0.3
-patience: 30
-regime: [rp, ci, hnm, norm, query_noise_points]
-max_epochs: 50
+lr: 0.01
+factor: 0.7
+patience: 25
+regime: [rp, ci, hnm, norm]
+max_epochs: 100
 
 # Postprocessing
 callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 

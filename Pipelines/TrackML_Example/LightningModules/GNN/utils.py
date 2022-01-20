@@ -9,7 +9,7 @@ import cupy as cp
 # ---------------------------- Dataset Processing -------------------------
 
 
-def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, noise):
+def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, noise):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
@@ -17,14 +17,14 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, n
             torch.load(event, map_location=torch.device("cpu"))
             for event in all_events[:num]
         ]
-        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise)
+        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, noise)
         return loaded_events
     else:
         return None
 
     return included_edges, included_edges_mask
 
-def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
+def select_data(events, pt_background_cut, pt_signal_cut, noise):
     # Handle event in batched form
     if type(events) is not list:
         events = [events] 
@@ -41,7 +41,7 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
                 if event.weights.shape[0] == edge_mask.shape[0]:
                     event.weights = event.weights[edge_mask]
                     
-            if pt_signal_cut > pt_background_cut:
+            if (pt_signal_cut > pt_background_cut) and ("signal_true_edges" in event.__dict__.keys()):
                 signal_mask = (event.pt[event.signal_true_edges] > pt_signal_cut).all(0)
                 event.signal_true_edges = event.signal_true_edges[:, signal_mask]
     

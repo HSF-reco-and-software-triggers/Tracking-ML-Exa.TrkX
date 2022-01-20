@@ -1,7 +1,7 @@
 # Input/output configuration
-input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_all_v2
+input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_barrel_v2
 artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
-project: ITk_1GeVSignal_Embedding
+project: ITk_1GeVSignal_Embedding_Barrel
 
 # Dataset parameters
 pt_signal_cut: 1000.
@@ -16,8 +16,8 @@ noise: True
 spatial_channels: 3
 cell_channels: 8
 emb_hidden: 1024
-nb_layer: 4
-emb_dim: 12
+nb_layer: 2
+emb_dim: 14
 weight: 3
 activation: Tanh
 randomisation: 1
@@ -28,7 +28,7 @@ r_test: 0.1
 knn: 100
 warmup: 500
 margin: 0.1
-lr: 0.016
+lr: 0.01
 factor: 0.5
 patience: 25
 regime: [rp, ci, hnm, norm]

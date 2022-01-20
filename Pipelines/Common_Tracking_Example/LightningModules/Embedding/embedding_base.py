@@ -156,7 +156,6 @@ class EmbeddingBase(LightningModule):
             [
                 new_weights,
                 torch.ones(e_bidir.shape[1], device=self.device)
-                * self.hparams["weight"],
             ]
         )
         return e_spatial, y_cluster, new_weights
@@ -215,7 +214,7 @@ class EmbeddingBase(LightningModule):
         
         # Calculate truth from intersection between Prediction graph and Truth graph
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
-        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
+        new_weights = y_cluster.to(self.device)
 
         # Append all positive examples and their truth and weighting
         e_spatial, y_cluster, new_weights = self.get_true_pairs(e_spatial, y_cluster, new_weights, e_bidir)
@@ -227,8 +226,10 @@ class EmbeddingBase(LightningModule):
 
         # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
         new_weights[
-            y_cluster == 0
+            hinge == -1
         ] = 1  
+        
+        # d = d * new_weights ## Handle this later
 
         negative_loss = torch.nn.functional.hinge_embedding_loss(
             d[hinge == -1], hinge[hinge == -1], margin=self.hparams["margin"], reduction="mean"
@@ -258,12 +259,11 @@ class EmbeddingBase(LightningModule):
         
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
         new_weights = y_cluster.to(self.device) * self.hparams["weight"]
-
         
         hinge, d = self.get_hinge_distance(spatial, e_spatial.to(self.device), y_cluster)
 
         new_weights[y_cluster == 0] = 1
-        d = d # * new_weights THIS IS BETTER TO NOT INCLUDE
+        # d = d * new_weights # THIS IS BETTER TO NOT INCLUDE
 
         loss = torch.nn.functional.hinge_embedding_loss(
             d, hinge, margin=self.hparams["margin"], reduction="mean"
@@ -301,7 +301,7 @@ class EmbeddingBase(LightningModule):
         """
 
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_val"], 150, log=True
+            batch, batch_idx, self.hparams["r_val"], 500, log=True
         )
 
         return outputs["loss"]

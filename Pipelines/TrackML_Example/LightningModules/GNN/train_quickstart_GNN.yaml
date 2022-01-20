@@ -5,36 +5,30 @@ project: CodaGNNStudy
 edge_cut: 0.5
 
 # Dataset parameters
-pt_min: 1.
+pt_signal_min: 1.
+pt_background_min: 1.
 datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
 datatype_split: [[90, 5, 5]] # Number of [training, validation, testing] examples
-endcaps: True
-layerwise: False
-layerless: True
 noise: False
-adjacent: False
 
 # Model parameters
-in_channels: 3
+spatial_channels: 3
+cell_channels: 0
 hidden: 64
 n_graph_iters: 8
-nb_node_layer: 2
-nb_edge_layer: 2
+nb_node_layer: 3
+nb_edge_layer: 3
 emb_channels: 0
 layernorm: True
+aggregation: sum_max
 hidden_activation: ReLU
 weight: 2
-delta_eta: 1.2
-warmup: 1200
+warmup: 200
 lr: 0.001
 factor: 0.3
 patience: 5
-regime: [[weighting, non_ci, pid]]
-max_epochs: 60
-slack_alert: False
+regime: [[non_ci, pid]]
+max_epochs: 20
 
 # Post-processing
-callbacks: #[GNNInferenceCallback]
-
-# Logging
-wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
+callbacks: #[GNNTelemetry]

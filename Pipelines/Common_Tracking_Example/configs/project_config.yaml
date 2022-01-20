@@ -1,12 +1,12 @@
 # Location of libraries
 libraries:
     model_library: LightningModules
-    artifact_library: /global/cscratch1/sd/danieltm/ExaTrkX/lightning_checkpoints
+    artifact_library: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
     
 
 # The lines you would like/need in a batch script before the call to pipeline.py
 custom_batch_setup:
-    - conda activate exatrkx-test
+    - conda activate exa
     
 # If you need to set up some environment before a batch is submitted, define it here in order of commands to run
 command_line_setup:

@@ -42,7 +42,6 @@ class GNNBase(LightningModule):
                     self.hparams["datatype_split"][i], 
                     self.hparams["pt_background_min"],
                     self.hparams["pt_signal_min"],
-                    self.hparams["true_edges"],
                     self.hparams["noise"]
                 )
                 for i, input_dir in enumerate(input_dirs)
@@ -51,6 +50,7 @@ class GNNBase(LightningModule):
         if (self.trainer) and ("logger" in self.trainer.__dict__.keys()) and ("_experiment" in self.logger.__dict__.keys()):
             self.logger.experiment.define_metric("val_loss" , summary="min")
             self.logger.experiment.define_metric("auc" , summary="max")
+            self.logger.experiment.define_metric("sig_fake_ratio", summary="max")
 
     def train_dataloader(self):
         if self.trainset is not None:
@@ -147,6 +147,10 @@ class GNNBase(LightningModule):
         else:
             manual_weights = None
         
+        if "y-y_pid" in self.hparams["regime"]:
+            y_subset = (batch.y.bool() | ~batch.y_pid.bool()).repeat(2)
+            output, truth_sample = output[y_subset], truth_sample[y_subset]
+        
         loss = F.binary_cross_entropy_with_logits(
             output, truth_sample.float(), weight=manual_weights, pos_weight=weight
         )
@@ -155,30 +159,51 @@ class GNNBase(LightningModule):
                 
         return loss
 
-    def get_metrics(self, truth, output):
+    def log_metrics(self, output, batch, loss, log):
         
-        predictions = torch.sigmoid(output) > self.hparams["edge_cut"]
+        preds = torch.sigmoid(output) > self.hparams["edge_cut"]
         
-        edge_positive = predictions.sum().float()
-        edge_true = truth.sum().float()
-        edge_true_positive = (truth.bool() & predictions).sum().float()        
+        # Positives
+        edge_positive = preds.sum().float()
+        
+        # Signal true & signal tp
+        truth = batch.y.repeat(2)
+        sig_true = truth.sum().float()
+        sig_true_positive = (truth.bool() & preds).sum().float()   
+        sig_auc = roc_auc_score(truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach())
 
-        eff = edge_true_positive / edge_true
-        pur = edge_true_positive / edge_positive
-
-        auc = roc_auc_score(truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach())
+        # Total true & total tp
+        truth = batch.y_pid.repeat(2)
+        tot_true = truth.sum().float()
+        tot_true_positive = (truth.bool() & preds).sum().float() 
+        tot_auc = roc_auc_score(truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach())
         
-        return predictions, eff, pur, auc
+        # Eff, pur, auc
+        sig_eff = sig_true_positive / sig_true
+        sig_pur = sig_true_positive / edge_positive
+        tot_eff = tot_true_positive / tot_true
+        tot_pur = tot_true_positive / edge_positive
+        
+        # Combined metrics
+        double_auc = sig_auc * tot_auc
+        custom_f1 = 2*sig_eff*tot_pur / (sig_eff + tot_pur)
+        sig_fake_ratio = sig_true_positive / (edge_positive - tot_true_positive)
+        
+        if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
+            self.log_dict(
+                {
+                    "val_loss": loss, "current_lr": current_lr,
+                     "sig_eff": sig_eff, "sig_pur": sig_pur, "sig_auc": sig_auc, 
+                     "tot_eff": tot_eff, "tot_pur": tot_pur, "tot_auc": tot_auc, 
+                     "double_auc": double_auc, "custom_f1": custom_f1, "sig_fake_ratio": sig_fake_ratio
+                 }, sync_dist=True
+            )
+            
+        return preds
     
     def shared_evaluation(self, batch, batch_idx, log=True):
-
-        truth = batch.y_pid.bool() if "pid" in self.hparams["regime"] else batch.y.bool()
-        
-        if "subset" in self.hparams["regime"]:
-            subset_mask = np.isin(batch.edge_index.cpu(), batch.signal_true_edges.unique().cpu()).any(0)
-        else:
-            subset_mask = torch.ones(batch.edge_index.shape[1]).bool()
-            
+                    
         weight = (
             torch.tensor(self.hparams["weight"])
             if ("weight" in self.hparams)
@@ -187,7 +212,7 @@ class GNNBase(LightningModule):
 
         input_data = self.get_input_data(batch)
         
-        edge_sample, truth_sample = self.handle_directed(batch, batch.edge_index, truth)
+        edge_sample = torch.cat([batch.edge_index, batch.edge_index.flip(0)], dim=-1)
         output = self(input_data, edge_sample).squeeze()
 
         if "weighting" in self.hparams["regime"]:
@@ -196,22 +221,15 @@ class GNNBase(LightningModule):
             manual_weights = None
 
         loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float().squeeze(), weight=manual_weights
+            output, batch.y.repeat(2).float().squeeze(), weight=manual_weights
         )
 
-        predictions, eff, pur, auc = self.get_metrics(truth_sample, output)
-
-        if log:
-            current_lr = self.optimizers().param_groups[0]["lr"]
-            self.log_dict(
-                {"val_loss": loss, "eff": eff, "pur": pur, "auc": auc, "current_lr": current_lr}, sync_dist=True
-            )
+        preds = self.log_metrics(output, batch, loss, log)
 
         return {
             "loss": loss,
-            "preds": predictions,
-            "score": torch.sigmoid(output),
-            "truth": truth,
+            "preds": preds,
+            "score": torch.sigmoid(output)
         }
 
     

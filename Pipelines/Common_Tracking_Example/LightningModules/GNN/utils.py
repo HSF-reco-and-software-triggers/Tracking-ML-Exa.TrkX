@@ -11,7 +11,7 @@ import numpy as np
 # ---------------------------- Dataset Processing -------------------------
 
 
-def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, noise):
+def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, noise):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
@@ -21,13 +21,13 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, n
             for event in all_events[:num]
         ]
         print("Events loaded!")
-        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise)
+        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, noise)
         print("Events processed!")
         return loaded_events
     else:
         return None
 
-def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
+def select_data(events, pt_background_cut, pt_signal_cut, noise):
     # Handle event in batched form
     if type(events) is not list:
         events = [events] 
