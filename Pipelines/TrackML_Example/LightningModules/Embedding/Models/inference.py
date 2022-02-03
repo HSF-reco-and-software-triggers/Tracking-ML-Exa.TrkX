@@ -278,6 +278,7 @@ class EmbeddingBuilder(Callback):
 
         batch.edge_index = e_spatial
         batch.y = y_cluster
+        batch.y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
 
         self.save_downstream(batch, pl_module, datatype)
 

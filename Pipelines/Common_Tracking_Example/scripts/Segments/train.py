@@ -12,8 +12,8 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning import Trainer
 
 sys.path.append("../../")
-from LightningModules.GNN.Models.checkpoint_pyramid import CheckpointedPyramid
-from LightningModules.GNN.Models.interaction_gnn import InteractionGNN
+from LightningModules.Segmenting.Models.checkpoint_pyramid import CheckpointedPyramid
+from LightningModules.Segmenting.Models.interaction_gnn import InteractionGNN
 
 from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning.overrides import LightningDistributedModule
@@ -55,7 +55,7 @@ def main():
     logger = WandbLogger(save_dir=default_configs["artifacts"])
     logger.watch(model, log="all")
     
-    trainer = Trainer(gpus=1, max_epochs=default_configs["max_epochs"], logger=logger)
+    trainer = Trainer(gpus=1, max_epochs=default_configs["max_epochs"], logger=logger)#, strategy=CustomDDPPlugin(find_unused_parameters=False))
     trainer.fit(model)
     
     

@@ -10,6 +10,7 @@ from torch.nn import Linear
 import torch
 
 from .utils import load_dataset, random_edge_slice_v2
+from sklearn.metrics import roc_auc_score
 
 
 class GNNBase(LightningModule):
@@ -85,6 +86,29 @@ class GNNBase(LightningModule):
         ]
         return optimizer, scheduler
 
+    def get_input_data(self, batch):
+        
+        if self.hparams["cell_channels"] > 0:
+            input_data = torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1)
+            input_data[input_data != input_data] = 0
+        else:
+            input_data = batch.x
+            input_data[input_data != input_data] = 0
+
+        return input_data
+    
+    def handle_directed(self, batch, edge_sample, truth_sample):
+        
+        edge_sample = torch.cat([edge_sample, edge_sample.flip(0)], dim=-1)
+        truth_sample = truth_sample.repeat(2)  
+        
+        if ("directed" in self.hparams.keys()) and self.hparams["directed"]:
+            direction_mask = batch.x[edge_sample[0], 0] < batch.x[edge_sample[1], 0]
+            edge_sample = edge_sample[:, direction_mask]
+            truth_sample = truth_sample[direction_mask]
+        
+        return edge_sample, truth_sample
+    
     def training_step(self, batch, batch_idx):
 
         weight = (
@@ -93,34 +117,41 @@ class GNNBase(LightningModule):
             else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
         )
         
-        output = (
-            self(
-                torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
-            ).squeeze()
-            if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index).squeeze()
-        )
+        truth = batch.y_pid.bool() if "pid" in self.hparams["regime"] else batch.y.bool()      
+        
+        edge_sample, truth_sample = self.handle_directed(batch, batch.edge_index, truth)
+        input_data = self.get_input_data(batch)
+        output = self(input_data, edge_sample).squeeze()
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights
         else:
-            manual_weights = None
-
-        truth = (
-            (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-            if "pid" in self.hparams["regime"]
-            else batch.y
-        )        
+            manual_weights = None       
  
         loss = F.binary_cross_entropy_with_logits(
-            output, truth.float(), weight=manual_weights, pos_weight=weight
+            output, truth_sample.float(), weight=manual_weights, pos_weight=weight
         )
-
 
         self.log("train_loss", loss)
 
         return loss
 
+    def log_metrics(self, preds, truth, batch, loss):
+        
+        edge_positive = (preds > self.hparams["edge_cut"]).sum().float()
+        edge_true = truth.sum().float()
+        edge_true_positive = (truth.bool() & (preds > self.hparams["edge_cut"])).sum().float()
+
+        eff = torch.tensor(edge_true_positive / max(1, edge_true))
+        pur = torch.tensor(edge_true_positive / max(1, edge_positive))
+        
+        auc = roc_auc_score(truth.bool().cpu().detach(), preds.cpu().detach())
+        
+        current_lr = self.optimizers().param_groups[0]["lr"]
+        self.log_dict(
+                {"val_loss": loss, "auc": auc, "eff": eff, "pur": pur, "current_lr": current_lr}
+            )
+        
     def shared_evaluation(self, batch, batch_idx, log=False):
 
         weight = (
@@ -128,20 +159,12 @@ class GNNBase(LightningModule):
             if ("weight" in self.hparams)
             else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
         )
+        
+        truth = batch.y_pid.bool() if "pid" in self.hparams["regime"] else batch.y.bool()
 
-        output = (
-            self(
-                torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
-            ).squeeze()
-            if ("ci" in self.hparams["regime"])
-            else self(batch.x, batch.edge_index).squeeze()
-        )
-
-        truth = (
-            (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
-            if "pid" in self.hparams["regime"]
-            else batch.y
-        )
+        edge_sample, truth_sample = self.handle_directed(batch, batch.edge_index, truth)
+        input_data = self.get_input_data(batch)
+        output = self(input_data, edge_sample).squeeze()
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights
@@ -149,29 +172,19 @@ class GNNBase(LightningModule):
             manual_weights = None
 
         loss = F.binary_cross_entropy_with_logits(
-            output, truth.float(), weight=manual_weights, pos_weight=weight
+            output, truth_sample.float(), weight=manual_weights, pos_weight=weight
         )
 
         # Edge filter performance
-        preds = F.sigmoid(output) > self.hparams["edge_cut"]
-        edge_positive = preds.sum().float()
-
-        edge_true = truth.sum().float()
-        edge_true_positive = (truth.bool() & preds).sum().float()
-
-        eff = torch.tensor(edge_true_positive / max(1, edge_true))
-        pur = torch.tensor(edge_true_positive / max(1, edge_positive))
+        preds = F.sigmoid(output)
 
         if log:
-            current_lr = self.optimizers().param_groups[0]["lr"]
-            self.log_dict(
-                {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
-            )
+            self.log_metrics(preds, truth_sample, batch, loss)
 
         return {
             "loss": loss,
             "preds": preds,
-            "truth": truth,
+            "truth": truth_sample,
         }
 
 

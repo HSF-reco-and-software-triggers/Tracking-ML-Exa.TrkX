@@ -10,11 +10,11 @@ from torch.nn import Linear
 import torch
 import numpy as np
 
-from .utils import load_dataset, purity_sample
+from .utils.data_utils import load_dataset
 from sklearn.metrics import roc_auc_score
 
 
-class GNNBase(LightningModule):
+class StitcherBase(LightningModule):
     def __init__(self, hparams):
         super().__init__()
         """
@@ -47,13 +47,8 @@ class GNNBase(LightningModule):
         
         if (self.trainer) and ("logger" in self.trainer.__dict__.keys()) and ("_experiment" in self.logger.__dict__.keys()):
             self.logger.experiment.define_metric("val_loss" , summary="min")
-            self.logger.experiment.define_metric("sig_auc" , summary="max")
-            self.logger.experiment.define_metric("tot_auc" , summary="max")
-            self.logger.experiment.define_metric("sig_fake_ratio", summary="max")
-            self.logger.experiment.define_metric("custom_f1", summary="max")
-            self.logger.experiment.log({"sig_auc": 0})
-            self.logger.experiment.log({"sig_fake_ratio": 0})
-            self.logger.experiment.log({"custom_f1": 0})
+            self.logger.experiment.define_metric("auc" , summary="max")
+            self.logger.experiment.log({"auc": 0})
 
     def train_dataloader(self):
         if self.trainset is not None:
@@ -107,99 +102,46 @@ class GNNBase(LightningModule):
 
         return input_data
     
-    def handle_directed(self, batch, edge_sample, truth_sample):
-        
-        edge_sample = torch.cat([edge_sample, edge_sample.flip(0)], dim=-1)
-        truth_sample = truth_sample.repeat(2)  
-        
-        if ("directed" in self.hparams.keys()) and self.hparams["directed"]:
-            direction_mask = batch.x[edge_sample[0], 0] < batch.x[edge_sample[1], 0]
-            edge_sample = edge_sample[:, direction_mask]
-            truth_sample = truth_sample[direction_mask]
-        
-        return edge_sample, truth_sample
-    
     def training_step(self, batch, batch_idx):
-
-        truth = batch.y_pid.bool() if "y_pid" in self.hparams["regime"] else batch.y.bool()
         
-        if ("train_purity" in self.hparams.keys()) and (self.hparams["train_purity"] > 0):
-            edge_sample, truth_sample = purity_sample(truth, self.hparams["train_purity"], self.hparams["regime"])
-        else:
-            edge_sample, truth_sample = batch.edge_index, truth
+        edge_sample = torch.cat([batch.edge_index, batch.edge_index.flip(0)], dim=-1)
         
-        edge_sample, truth_sample = self.handle_directed(batch, edge_sample, truth_sample)
-        
-        # Handle training towards a subset of the data
-        if "subset" in self.hparams["regime"]:
-            subset_mask = np.isin(edge_sample.cpu(), batch.signal_true_edges.unique().cpu()).any(0)
-        else:
-            subset_mask = torch.ones(edge_sample.shape[1]).bool()
-        
-        weight = (
-            torch.tensor(self.hparams["weight"])
-            if ("weight" in self.hparams)
-            else torch.tensor((~truth_sample.bool()).sum() / truth_sample.sum())
-        )
-
         input_data = self.get_input_data(batch)
-        output = self(input_data, edge_sample).squeeze()
-            
-        if "weighting" in self.hparams["regime"]:
-            manual_weights = batch.weights[subset_mask]
-        else:
-            manual_weights = None
+        output = self(input_data, edge_sample, batch.labels, batch.label_pairs).squeeze()
         
-        if "y-y_pid" in self.hparams["regime"]:
-            y_subset = (batch.y.bool() | ~batch.y_pid.bool()).repeat(2)
-            output, truth_sample = output[y_subset], truth_sample[y_subset]
+        truth = batch.pid_pairs[0] == batch.pid_pairs[1]
         
         loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float(), weight=manual_weights, pos_weight=weight
+            output, truth.float(), pos_weight=torch.tensor(self.hparams["weight"])
         )
 
         self.log("train_loss", loss, on_step=False, on_epoch=True)
                 
         return loss
 
-    def log_metrics(self, output, batch, loss, log):
+    def log_metrics(self, output, batch, truth, loss, log):
         
         preds = torch.sigmoid(output) > self.hparams["edge_cut"]
         
         # Positives
-        edge_positive = preds.sum().float()
+        positive = preds.sum().float()
         
         # Signal true & signal tp
-        truth = batch.y.repeat(2)
-        sig_true = truth.sum().float()
-        sig_true_positive = (truth.bool() & preds).sum().float()   
-        sig_auc = roc_auc_score(truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach())
-
-        # Total true & total tp
-        truth = (batch.y_pid.bool() | batch.y.bool()).repeat(2)
-        tot_true = truth.sum().float()
-        tot_true_positive = (truth.bool() & preds).sum().float() 
-        tot_auc = roc_auc_score(truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach())
+        true = truth.sum().float()
+        true_positive = (truth.bool() & preds).sum().float()   
+        auc = roc_auc_score(truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach())
         
         # Eff, pur, auc
-        sig_eff = sig_true_positive / sig_true
-        sig_pur = sig_true_positive / edge_positive
-        tot_eff = tot_true_positive / tot_true
-        tot_pur = tot_true_positive / edge_positive
+        eff = true_positive / true
+        pur = true_positive / positive
         
         # Combined metrics
-        double_auc = sig_auc * tot_auc
-        custom_f1 = 2*sig_eff*tot_pur / (sig_eff + tot_pur)
-        sig_fake_ratio = sig_true_positive / (edge_positive - tot_true_positive)
-        
         if log:
             current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
                 {
                     "val_loss": loss, "current_lr": current_lr,
-                     "sig_eff": sig_eff, "sig_pur": sig_pur, "sig_auc": sig_auc, 
-                     "tot_eff": tot_eff, "tot_pur": tot_pur, "tot_auc": tot_auc, 
-                     "double_auc": double_auc, "custom_f1": custom_f1, "sig_fake_ratio": sig_fake_ratio
+                     "eff": eff, "pur": pur, "auc": auc
                  }, sync_dist=True
             )
             
@@ -207,28 +149,18 @@ class GNNBase(LightningModule):
     
     def shared_evaluation(self, batch, batch_idx, log=True):
                     
-        weight = (
-            torch.tensor(self.hparams["weight"])
-            if ("weight" in self.hparams)
-            else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
-        )
-
-        truth = batch.y_pid.bool() if "y_pid" in self.hparams["regime"] else batch.y.bool()
-        edge_sample, truth_sample = self.handle_directed(batch, batch.edge_index, truth)
+        edge_sample = torch.cat([batch.edge_index, batch.edge_index.flip(0)], dim=-1)
         
         input_data = self.get_input_data(batch)
-        output = self(input_data, edge_sample).squeeze()
-
-        if "weighting" in self.hparams["regime"]:
-            manual_weights = batch.weights
-        else:
-            manual_weights = None
-
+        output = self(input_data, edge_sample, batch.labels, batch.label_pairs).squeeze()
+        
+        truth = batch.pid_pairs[0] == batch.pid_pairs[1]
+        
         loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float().squeeze(), weight=manual_weights
+            output, truth.float(), pos_weight=torch.tensor(self.hparams["weight"])
         )
 
-        preds = self.log_metrics(output, batch, loss, log)
+        preds = self.log_metrics(output, batch, truth, loss, log)
 
         return {
             "loss": loss,

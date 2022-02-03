@@ -3,22 +3,22 @@ program: train.py
 method: bayes
 project: ITk_1GeVSignal_Barrel_GNN
 metric:
-    name: sig_fake_ratio.max
+    name: custom_f1.max
     goal: maximize
+    
 parameters:
     # Model hyperparameters
-    nb_graph_iters:
-        min: 4
-        max: 10
     hidden:
         min: 32
         max: 512
-    layer_norm:
-        values: [False, True]
+    batchnorm:
+        values: [True, False]
+    model:
+        values: [InteractionGNN, CheckpointedPyramid]
     regime:
         values: [[y], [y_pid], [y-y_pid]]
-    cell_channels:
-        values: [0, 4, 11]
+    datatype_split:
+        values: [[500, 50, 10], [1000, 50, 10]]
         
     # Training hyperparameters
     lr: 
@@ -26,12 +26,12 @@ parameters:
         max: 0.05
     patience: 
         min: 1
-        max: 25
+        max: 50
     factor: 
         min: 0.1
         max: 0.9
     weight:
-        min: 4
+        min: 2
         max: 20
 
 early_terminate:

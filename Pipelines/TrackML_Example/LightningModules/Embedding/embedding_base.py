@@ -272,9 +272,7 @@ class EmbeddingBase(LightningModule):
         cluster_true = e_bidir.shape[1]
         cluster_true_positive = y_cluster.sum()
         cluster_positive = len(e_spatial[0])
-        
-        print(f"Average nbhood: {cluster_positive / len(spatial)}")
-        
+                
         eff = torch.tensor(cluster_true_positive / cluster_true)
         pur = torch.tensor(cluster_true_positive / cluster_positive)
 

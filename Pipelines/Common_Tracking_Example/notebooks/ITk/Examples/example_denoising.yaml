@@ -1,35 +1,31 @@
+# Input/output configuration
 input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/filter_processed/0GeV_barrel
-output_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/gnn_processed/0GeV_barrel
 artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
-project: ITk_1GeVSignal_Barrel_GNN
-model: CheckpointedPyramid
+project: ITk_0GeVDenoising_GNN
 
 # Dataset parameters
-pt_background_cut: 0.
-pt_signal_cut: 1000.
+pt_background_min: 0.
+pt_signal_min: 1000.
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [500, 50, 10] # Number of [training, validation, testing] examples
-endcaps: False
-true_edges: modulewise_true_edges
+datatype_split: [1000, 50, 10] # Number of [training, validation, testing] examples
 noise: True
 
 # Model parameters
-edge_cut: 0.5
+cut: 0.5
 spatial_channels: 3
 cell_channels: 11
-hidden: 256
+hidden: 128
 n_graph_iters: 8
 nb_node_layer: 3
 nb_edge_layer: 3
 emb_channels: 0
 layernorm: True
-batchnorm: False
 aggregation: sum_max
 hidden_activation: SiLU
-weight: 20
-warmup: 500
-lr: 0.004
+weight: 1
+warmup: 4000
+lr: 0.015
 factor: 0.7
 patience: 10
-regime: ["y"]
-max_epochs: 50
+regime: [y]
+max_epochs: 30

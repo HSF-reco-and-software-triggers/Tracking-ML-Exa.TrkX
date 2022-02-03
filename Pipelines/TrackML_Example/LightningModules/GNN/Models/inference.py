@@ -12,6 +12,7 @@ import sklearn.metrics
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
+from sklearn.metrics import roc_curve
 
 """
 Class-based Callback inference for integration with Lightning
@@ -35,6 +36,8 @@ class GNNTelemetry(Callback):
         """
         self.preds = []
         self.truth = []
+        
+        print("Starting TELEMETRY")
 
     def on_test_batch_end(
         self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx
@@ -69,13 +72,10 @@ class GNNTelemetry(Callback):
         self.truth = torch.cat(self.truth)
         self.preds = torch.cat(self.preds)
         
-        score_cuts = np.arange(0., 1., 0.05)
+        fpr, eff, score_cuts = roc_curve(self.truth, self.preds)
+        pur = 1 - fpr
         
-        positives = np.array([(self.preds > score_cut).sum() for score_cut in score_cuts])
-        true_positives = np.array([((self.preds > score_cut) & self.truth).sum() for score_cut in score_cuts])
-                
-        eff = true_positives / self.truth.sum()
-        pur = true_positives / positives
+        eff, pur, score_cuts = eff[score_cuts <= 1], pur[score_cuts <= 1], score_cuts[score_cuts <= 1] # Make sure this is nicely plottable!
         
         return eff, pur, score_cuts
         
@@ -85,7 +85,8 @@ class GNNTelemetry(Callback):
         eff, pur, score_cuts = self.get_eff_pur_metrics()
         
         return {"eff_plot": {"eff": eff, "score_cuts": score_cuts}, 
-                "pur_plot": {"pur": pur, "score_cuts": score_cuts}}
+                "pur_plot": {"pur": pur, "score_cuts": score_cuts},
+                "auc_plot": {"eff": eff, "pur": pur}}
     
     def make_plot(self, x_val, y_val, x_lab, y_lab, title):
         
@@ -106,7 +107,9 @@ class GNNTelemetry(Callback):
         eff_fig, eff_axs = self.make_plot(metrics["eff_plot"]["score_cuts"], metrics["eff_plot"]["eff"], "cut", "Eff", "Efficiency vs. cut")
         pur_fig, pur_axs = self.make_plot(metrics["pur_plot"]["score_cuts"], metrics["pur_plot"]["pur"], "cut", "Pur", "Purity vs. cut")
         
-        return {"eff_plot": [eff_fig, eff_axs], "pur_plot": [pur_fig, pur_axs]}
+        auc_fig, auc_axs = self.make_plot(metrics["auc_plot"]["eff"], metrics["auc_plot"]["pur"], "Eff", "Pur", "Purity vs. Eff")
+        
+        return {"eff_plot": [eff_fig, eff_axs], "pur_plot": [pur_fig, pur_axs], "auc_plot": [auc_fig, auc_axs]}
     
     def save_metrics(self, metrics_plots, output_dir):
         
@@ -190,13 +193,9 @@ class GNNBuilder(Callback):
     
     def construct_downstream(self, batch, pl_module, datatype):
 
-        output = pl_module(pl_module.get_input_data(batch)).squeeze()
-        cut_list = torch.sigmoid(output) > pl_module.hparams["edge_cut"]
-
-        batch.y = batch.y[cut_list]
-        batch.y_pid = batch.y_pid[cut_list]
-        batch.edge_index = batch.edge_index[:, cut_list]
-            
+        output = pl_module(pl_module.get_input_data(batch), torch.cat([batch.edge_index, batch.edge_index.flip(0)], dim=-1)).squeeze()
+        batch.scores = torch.sigmoid(output)
+        
         self.save_downstream(batch, pl_module, datatype)
         
 
