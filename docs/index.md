@@ -20,14 +20,18 @@ Thank god that almost every package used in this library is available on conda a
 
 **CPU-only installation**
 ```
-conda env create -f cpu_environment.yml 
+conda env create -f cpu_environment.yml python=3.9
+conda activate exatrkx-cpu
+pip install -e .
 ```
 
 Or, after ensuring your GPU drivers are [updated to run CUDA v11.3](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html):
 
-**GPU installation (may take several minutes to solve the more complex environment)**
+**GPU installation**
 ```
-conda env create -f gpu_environment.yml
+conda env create -f gpu_environment.yml python=3.9
+conda activate exatrkx-gpu
+pip install -e .
 ```
 
 

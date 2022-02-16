@@ -1,16 +1,17 @@
 name: exatrkx-cpu
 
 channels:
-    - defaults
+    - conda-forge
     - pytorch
     - pyg
-    - conda-forge
+    - defaults
 
 dependencies:
+    - pip
     - numpy
     - pandas
     - scipy
-    
+    - matplotlib
     - cpuonly
     - pytorch==1.10.2
     - pytorch-lightning

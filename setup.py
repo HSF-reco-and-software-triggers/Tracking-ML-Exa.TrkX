@@ -7,16 +7,7 @@ def read(fname):
 
 
 dependencies = [
-    "numpy",
-    "scipy",
-    "pandas",
-    "matplotlib",
-    "sklearn",
-    "pyyaml>=5.1",
-    "pytorch-lightning",
     "decorator",
-    "more_itertools",
-    "simple_slurm",
     "memory_profiler",
     "traintrack",
     "trackml@ https://github.com/LAL/trackml-library/tarball/master#egg=trackml-3",
@@ -24,7 +15,7 @@ dependencies = [
 
 setup(
     name="exatrkx-pipeline",
-    version="0.3.0",
+    version="0.4.0",
     description="Models, pipelines, and utilities for solving tracking problems with machine learning.",
     author="Daniel Murnane",
     install_requires=dependencies,

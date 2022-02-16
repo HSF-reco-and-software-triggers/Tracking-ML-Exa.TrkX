@@ -1,17 +1,19 @@
 name: exatrkx-gpu
 
 channels:
-    - defaults
+    - conda-forge
     - pytorch
     - pyg
     - rapidsai
     - nvidia
-    - conda-forge
+    - defaults
 
 dependencies:
+    - pip
     - numpy
     - pandas
     - scipy
+    - matplotlib
     - cupy
     - cudatoolkit=11.3
     - pytorch==1.10.2
