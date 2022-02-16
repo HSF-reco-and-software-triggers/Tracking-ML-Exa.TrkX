@@ -28,7 +28,7 @@ class SegmentBase(LightningDataModule):
             if "n_workers" in self.hparams
             else len(os.sched_getaffinity(0))
         )
-        )
+        
         self.show_progress = (
             self.hparams["show_progress"] if "show_progress" in self.hparams else True
         )

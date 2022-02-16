@@ -45,11 +45,6 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
                 signal_mask = (event.pt[event.signal_true_edges] > pt_signal_cut).all(0)
                 event.signal_true_edges = event.signal_true_edges[:, signal_mask]
     
-    for event in events:
-        
-        
-    
-    
     return events
 
 

@@ -26,7 +26,7 @@ def get_metrics_matrices(edge_scores, particles_df, truth_df, edge_cut_range = N
             n_selected_tracks = len(selected_tracks)
             
             n_matched_tracks, n_trackable_particles, n_matched_tracks_ROI, n_trackable_particles_ROI = evaluate_tracks(truth, particles, tracks,
-                                                                                                                      frac_reco_matched = 0.5, frac_truth_matched = 0.5, ROI)
+                                                                                                                      frac_reco_matched = 0.5, frac_truth_matched = 0.5, ROI = ROI)
             
             # IGNORE ROI (Region of Interest) FOR NOW...
             

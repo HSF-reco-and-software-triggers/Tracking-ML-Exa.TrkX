@@ -27,6 +27,8 @@ class GNNTrackingTelemetry(Callback):
 
     def setup(self, trainer, pl_module, stage=None):
         
+        pass
+    
         # IDEALLY: Load particle and truth dataframes and attach them to the data
         
         # Process particles and truth and merge, trim particles by provided selection config file

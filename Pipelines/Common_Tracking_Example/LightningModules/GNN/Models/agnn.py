@@ -75,13 +75,10 @@ class NodeNetwork(nn.Module):
 
     def forward(self, x, e, edge_index):
         start, end = edge_index
-#         Aggregate edge-weighted incoming/outgoing features
-                mi = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0])
-                mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
-                node_inputs = torch.cat([mi, mo, x], dim=1)
-#         messages = scatter_add(
-#             e[:, None] * x[start], end, dim=0, dim_size=x.shape[0]
-#         ) + scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
+#       Aggregate edge-weighted incoming/outgoing features
+        mi = scatter_add(e[:, None] * x[start], end, dim=0, dim_size=x.shape[0])
+        mo = scatter_add(e[:, None] * x[end], start, dim=0, dim_size=x.shape[0])
+        node_inputs = torch.cat([mi, mo, x], dim=1)
         node_inputs = torch.cat([messages, x], dim=1)
         return self.network(node_inputs)
 
