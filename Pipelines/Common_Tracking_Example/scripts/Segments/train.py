@@ -55,7 +55,11 @@ def main():
     logger = WandbLogger(save_dir=default_configs["artifacts"])
     logger.watch(model, log="all")
     
-    trainer = Trainer(gpus=1, max_epochs=default_configs["max_epochs"], logger=logger)#, strategy=CustomDDPPlugin(find_unused_parameters=False))
+    if default_configs["gpus"] == 1:
+        trainer = Trainer(gpus=1, max_epochs=default_configs["max_epochs"], logger=logger)#, strategy=CustomDDPPlugin(find_unused_parameters=False))
+    else:
+        trainer = Trainer(gpus=default_configs["gpus"], max_epochs=default_configs["max_epochs"], logger=logger, strategy=CustomDDPPlugin(find_unused_parameters=False))
+        
     trainer.fit(model)
     
     

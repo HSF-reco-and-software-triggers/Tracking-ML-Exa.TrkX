@@ -62,10 +62,10 @@ def labelSegments(input_edges, num_nodes):
 def sparse_score_segments(labels, pids, signal_pids):
     
     unique_pids, new_pids = pids.unique(return_inverse=True)
-    signal_segments_pids, unique_signal_segments_pids = get_unique_signal_segments(labels, new_pids, signal_pids)
+    _, new_labels = labels.unique(return_inverse=True)
+    signal_segments_pids, unique_signal_segments_pids = get_unique_signal_segments(new_labels, new_pids, signal_pids)
     
-    
-    iou, segment_count, pid_count = get_jaccard_matrix(labels, new_pids, signal_segments_pids, unique_signal_segments_pids)
+    iou, segment_count, pid_count = get_jaccard_matrix(new_labels, new_pids, signal_segments_pids, unique_signal_segments_pids)
     
     sparse_segment_count = sp.coo_matrix((segment_count[unique_signal_segments_pids[0]].cpu(), unique_signal_segments_pids.cpu().numpy())).tocsr()
     sparse_pid_count = sp.coo_matrix((pid_count[unique_signal_segments_pids[1]].cpu(), unique_signal_segments_pids.cpu().numpy())).tocsr()
