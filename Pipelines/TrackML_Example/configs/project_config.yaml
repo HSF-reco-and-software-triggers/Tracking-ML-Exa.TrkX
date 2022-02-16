@@ -16,4 +16,4 @@ command_line_setup:
 serial: False
 
 # Which logger to use - options are Weights & Biases [wandb], TensorBoard [tb], or [None]
-logger: wandb
+logger: tb

@@ -31,19 +31,18 @@ kaggle competitions download \
 A pipeline runs at three layers of configuration, to allow for as much flexibility as possible. To get running immediately however, you needn't change any of the defaults. From the `Pipelines/TrackML_Example/` directory, we run
 
 ```
-traintrack
+traintrack configs/pipeline_quickstart.yaml
 ```
-which by default loads the pipeline specified in `configs/pipeline_test`. 
 
 While it's running, get a cup of tea and a Tim-Tam, and let's see what it's doing:
 
 ### Default behaviour
 
-Our quickstart pipeline is running **three** stages, with a single configuration for each. You can see in `config/pipeline_test.yaml` that the three stages are:
+Our quickstart pipeline is running **three** stages, with a single configuration for each. You can see in `config/pipeline_quickstart.yaml` that the three stages are:
 
 - A **Processing** stage with the class `FeatureStore` and config `prepare_small_feature_store.yaml`;
 - An **Embedding** stage with the class `LayerlessEmbedding` and config `train_small_embedding.yaml`; and
-- A **Filter** stage with the class `VanillaFilter` and config `train_small_filter.yaml`.
+- A **GNN** stage with the class `VanillaFilter` and config `train_small_filter.yaml`.
 
 The **Processing** stage is exactly that: data processing. It is not "trainable", and so the pipeline treats it differently than a trainable stage. Under the hood, it is a LightningDataModule, rather than the trainable models, which inherit from LightningModule. In this case, `FeatureStore` is performing some calculations on the cell information in the detector, and constructing truth graphs that will later be used for training. These calculations are computationally expensive, so it doesn't make sense to calculate them on-the-fly while training. 
 

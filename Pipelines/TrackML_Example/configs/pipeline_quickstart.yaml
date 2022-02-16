@@ -1,5 +1,4 @@
 stage_list:
-    # - {set: Processing, name: TrackMLFeatureStore, config: prepare_quickstart.yaml, batch_config: batch_cpu_default.yaml}
-    # - {set: Embedding, name: LayerlessEmbedding, config: train_quickstart_embedding.yaml, batch_config: batch_gpu_default.yaml, resume_id: 2secnofz}
-    - {set: GNN, name: InteractionGNN, config: train_quickstart_GNN.yaml, batch_config: batch_gpu_default.yaml, resume_id: 8xpv2pcv, override: {callbacks: [GNNTelemetry, GNNBuilder]}}
-    - {}
+    - {set: Processing, name: TrackMLFeatureStore, config: prepare_quickstart.yaml, batch_config: batch_cpu_default.yaml}
+    - {set: Embedding, name: LayerlessEmbedding, config: train_quickstart_embedding.yaml, batch_config: batch_gpu_default.yaml, resume_id: }
+    - {set: GNN, name: InteractionGNN, config: train_quickstart_GNN.yaml, batch_config: batch_gpu_default.yaml, resume_id: }
