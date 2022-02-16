@@ -19,6 +19,7 @@ import faiss.contrib.torch_utils
 
 try:
     import frnn
+
     using_faiss = False
 except ImportError:
     using_faiss = True
