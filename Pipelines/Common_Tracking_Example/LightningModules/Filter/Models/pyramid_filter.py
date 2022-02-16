@@ -27,14 +27,18 @@ class PyramidFilter(FilterBaseBalanced):
 
         # Construct the MLP architecture
         self.input_layer = Linear(
-            (hparams["spatial_channels"] + hparams["cell_channels"]) * 2 + hparams["emb_channels"] * 2, hparams["hidden"]
+            (hparams["spatial_channels"] + hparams["cell_channels"]) * 2
+            + hparams["emb_channels"] * 2,
+            hparams["hidden"],
         )
         layers = [
-            Linear(hparams["hidden"]//(2**i), hparams["hidden"]//(2**(i+1)))
+            Linear(hparams["hidden"] // (2**i), hparams["hidden"] // (2 ** (i + 1)))
             for i in range(hparams["nb_layer"] - 1)
         ]
         self.layers = nn.ModuleList(layers)
-        self.output_layer = nn.Linear(hparams["hidden"]//(2**(hparams["nb_layer"]-1)), 1)
+        self.output_layer = nn.Linear(
+            hparams["hidden"] // (2 ** (hparams["nb_layer"] - 1)), 1
+        )
         self.act = nn.Tanh()
 
     def forward(self, x, e, emb=None):

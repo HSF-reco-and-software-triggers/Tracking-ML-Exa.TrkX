@@ -13,6 +13,7 @@ from torch.utils.checkpoint import checkpoint
 from ..gnn_base import GNNBase
 from ..utils import make_mlp
 
+
 class VanillaResAGNN(GNNBase):
     def __init__(self, hparams):
         super().__init__(hparams)
@@ -20,28 +21,32 @@ class VanillaResAGNN(GNNBase):
         Initialise the Lightning Module that can scan over different GNN training regimes
         """
         self.edge_network = make_mlp(
-            (hparams["spatial_channels"] + hparams["cell_channels"] + hparams["hidden"]) * 2,
-            [hparams["spatial_channels"] + hparams["cell_channels"] + hparams["hidden"]] * hparams["nb_edge_layer"] + [1],
+            (hparams["spatial_channels"] + hparams["cell_channels"] + hparams["hidden"])
+            * 2,
+            [hparams["spatial_channels"] + hparams["cell_channels"] + hparams["hidden"]]
+            * hparams["nb_edge_layer"]
+            + [1],
             hidden_activation=hparams["hidden_activation"],
             output_activation=None,
             layer_norm=hparams["layernorm"],
         )
-        
+
         self.node_network = make_mlp(
-            (hparams["spatial_channels"] + hparams["cell_channels"] + hparams["hidden"]) * 2,
+            (hparams["spatial_channels"] + hparams["cell_channels"] + hparams["hidden"])
+            * 2,
             [hparams["hidden"]] * hparams["nb_node_layer"],
             hidden_activation=hparams["hidden_activation"],
             output_activation=None,
             layer_norm=hparams["layernorm"],
         )
-        
+
         self.input_network = make_mlp(
-            hparams["spatial_channels"] + hparams["cell_channels"], 
-            [hparams["hidden"]]*hparams["nb_node_layer"],
+            hparams["spatial_channels"] + hparams["cell_channels"],
+            [hparams["hidden"]] * hparams["nb_node_layer"],
             output_activation=hparams["hidden_activation"],
-            layer_norm=hparams["layernorm"]
+            layer_norm=hparams["layernorm"],
         )
-            
+
     def forward(self, x, edge_index):
         start, end = edge_index
         input_x = x
@@ -60,10 +65,9 @@ class VanillaResAGNN(GNNBase):
             e = torch.sigmoid(self.edge_network(edge_inputs))
 
             # Apply node network
-            messages = (
-                scatter_add(e * x[start], end, dim=0, dim_size=x.shape[0]) 
-                + scatter_add(e * x[end], start, dim=0, dim_size=x.shape[0])
-            )
+            messages = scatter_add(
+                e * x[start], end, dim=0, dim_size=x.shape[0]
+            ) + scatter_add(e * x[end], start, dim=0, dim_size=x.shape[0])
             node_inputs = torch.cat([messages, x], dim=1)
             x = self.node_network(node_inputs)
 
@@ -72,7 +76,6 @@ class VanillaResAGNN(GNNBase):
 
             # Residual connection
             x = x_inital + x
-    
+
         edge_inputs = torch.cat([x[start], x[end]], dim=1)
         return self.edge_network(edge_inputs)
-

@@ -1,6 +1,6 @@
 import os
 import logging
-    
+
 import torch
 from torch.utils.data import random_split
 from torch import nn
@@ -19,18 +19,28 @@ import faiss.contrib.torch_utils
 
 try:
     import frnn
+
     using_faiss = False
 except ImportError:
     using_faiss = True
-    
+
 if torch.cuda.is_available():
-    device = "cuda" 
+    device = "cuda"
 else:
     device = "cpu"
     using_faiss = True
 
 
-def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise):
+def load_dataset(
+    input_dir,
+    num,
+    pt_background_cut,
+    pt_signal_cut,
+    nhits,
+    primary_only,
+    true_edges,
+    noise,
+):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
@@ -42,34 +52,65 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, nhits, primar
                 logging.info("Loaded event: {}".format(loaded_event.event_file))
             except:
                 logging.info("Corrupted event file: {}".format(event))
-        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise)
+        loaded_events = select_data(
+            loaded_events,
+            pt_background_cut,
+            pt_signal_cut,
+            nhits,
+            primary_only,
+            true_edges,
+            noise,
+        )
         return loaded_events
     else:
         return None
 
 
-def split_datasets(input_dir="", train_split=[100,10,10], pt_background_cut=0, pt_signal_cut=0, nhits=0, primary_only=False, true_edges=None, noise=True, seed=1, **kwargs):
+def split_datasets(
+    input_dir="",
+    train_split=[100, 10, 10],
+    pt_background_cut=0,
+    pt_signal_cut=0,
+    nhits=0,
+    primary_only=False,
+    true_edges=None,
+    noise=True,
+    seed=1,
+    **kwargs
+):
     """
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
     """
-    
+
     torch.manual_seed(seed)
-    loaded_events = load_dataset(input_dir, sum(train_split),  pt_background_cut, pt_signal_cut, nhits, primary_only, true_edges, noise)
+    loaded_events = load_dataset(
+        input_dir,
+        sum(train_split),
+        pt_background_cut,
+        pt_signal_cut,
+        nhits,
+        primary_only,
+        true_edges,
+        noise,
+    )
     train_events, val_events, test_events = random_split(loaded_events, train_split)
 
     return train_events, val_events, test_events
 
 
 def get_edge_subset(edges, mask_where, inverse_mask):
-    
-    included_edges_mask = np.isin(edges, mask_where).all(0)    
+
+    included_edges_mask = np.isin(edges, mask_where).all(0)
     included_edges = edges[:, included_edges_mask]
     included_edges = inverse_mask[included_edges]
-    
+
     return included_edges, included_edges_mask
 
-def select_data(events, pt_background_cut, pt_signal_cut, nhits_min, primary_only, true_edges, noise):
+
+def select_data(
+    events, pt_background_cut, pt_signal_cut, nhits_min, primary_only, true_edges, noise
+):
     # Handle event in batched form
     if type(events) is not list:
         events = [events]
@@ -77,36 +118,41 @@ def select_data(events, pt_background_cut, pt_signal_cut, nhits_min, primary_onl
     # NOTE: Cutting background by pT BY DEFINITION removes noise
     if pt_background_cut > 0 or not noise:
         for event in events:
-            
+
             pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid)
             pt_where = torch.where(pt_mask)[0]
-            
-            inverse_mask = torch.zeros(pt_where.max()+1).long()
+
+            inverse_mask = torch.zeros(pt_where.max() + 1).long()
             inverse_mask[pt_where] = torch.arange(len(pt_where))
-            
-            event[true_edges], edge_mask = get_edge_subset(event[true_edges], pt_where, inverse_mask)
+
+            event[true_edges], edge_mask = get_edge_subset(
+                event[true_edges], pt_where, inverse_mask
+            )
 
             node_features = ["cell_data", "x", "hid", "pid", "pt", "nhits", "primary"]
-            
+
             for feature in node_features:
                 if feature in event.__dict__.keys():
                     event[feature] = event[feature][pt_mask]
-    
-    for event in events:
-        
-        event.signal_true_edges = event[true_edges]
-        
-        if ("pt" in event.__dict__.keys()) & ("primary" in event.__dict__.keys()) & ("nhits" in event.__dict__.keys()):
-            edge_subset = (
-                (event.pt[event[true_edges]] > pt_signal_cut).all(0) &
-                (event.nhits[event[true_edges]] >= nhits_min).all(0) &
-                (event.primary[event[true_edges]].bool().all(0) | (not primary_only))
-            )
-        
-            event.signal_true_edges = event.signal_true_edges[:, edge_subset]
-        
-    return events
 
+    for event in events:
+
+        event.signal_true_edges = event[true_edges]
+
+        if (
+            ("pt" in event.__dict__.keys())
+            & ("primary" in event.__dict__.keys())
+            & ("nhits" in event.__dict__.keys())
+        ):
+            edge_subset = (
+                (event.pt[event[true_edges]] > pt_signal_cut).all(0)
+                & (event.nhits[event[true_edges]] >= nhits_min).all(0)
+                & (event.primary[event[true_edges]].bool().all(0) | (not primary_only))
+            )
+
+            event.signal_true_edges = event.signal_true_edges[:, edge_subset]
+
+    return events
 
 
 def reset_edge_id(subset, graph):
@@ -170,19 +216,33 @@ def graph_intersection(
         return new_pred_graph, y
 
 
-def build_edges(query, database, indices=None, r_max=1.0, k_max=10, return_indices=False):
-    
-    dists, idxs, nn, grid = frnn.frnn_grid_points(points1=query.unsqueeze(0), points2=database.unsqueeze(0), lengths1=None, lengths2=None, K=k_max, r=r_max, grid=None, return_nn=False, return_sorted=True)
-    
+def build_edges(
+    query, database, indices=None, r_max=1.0, k_max=10, return_indices=False
+):
+
+    dists, idxs, nn, grid = frnn.frnn_grid_points(
+        points1=query.unsqueeze(0),
+        points2=database.unsqueeze(0),
+        lengths1=None,
+        lengths2=None,
+        K=k_max,
+        r=r_max,
+        grid=None,
+        return_nn=False,
+        return_sorted=True,
+    )
+
     idxs = idxs.squeeze().int()
-    ind = torch.Tensor.repeat(torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1).T.int()
+    ind = torch.Tensor.repeat(
+        torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1
+    ).T.int()
     positive_idxs = idxs >= 0
     edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]]).long()
-    
-    # Reset indices subset to correct global index 
+
+    # Reset indices subset to correct global index
     if indices is not None:
         edge_list[0] = indices[edge_list[0]]
-    
+
     # Remove self-loops
     edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
@@ -279,6 +339,7 @@ def evaluate_set_metrics(r_test, model, trainer):
     print(mean_purity, mean_efficiency)
 
     return mean_efficiency, mean_purity
+
 
 # ------------------------- Convenience Utilities ---------------------------
 

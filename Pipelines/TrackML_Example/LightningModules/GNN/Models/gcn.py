@@ -57,7 +57,7 @@ class VanillaGCN(GNNBase):
 
         for i in range(self.hparams["n_graph_iters"]):
 
-#             x_initial = x
+            #             x_initial = x
 
             messages = scatter_add(
                 x[start], end, dim=0, dim_size=x.shape[0]
@@ -68,7 +68,7 @@ class VanillaGCN(GNNBase):
 
             x = self.node_network(node_inputs)
 
-#             x = x + x_initial
+        #             x = x + x_initial
 
         edge_inputs = torch.cat([x[start], x[end]], dim=1)
         return self.edge_network(edge_inputs)

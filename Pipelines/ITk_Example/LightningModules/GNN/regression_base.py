@@ -86,9 +86,7 @@ class RegressionBase(LightningModule):
         )
 
         node_output, _ = (
-            self(
-                torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
-            )
+            self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index)
             if ("ci" in self.hparams["regime"])
             else self(batch.x, batch.edge_index)
         )
@@ -104,15 +102,12 @@ class RegressionBase(LightningModule):
         else:
             manual_weights = None
 
-        loss = F.mse_loss(
-            node_output.squeeze(), node_truth.float()
-        )
-        
+        loss = F.mse_loss(node_output.squeeze(), node_truth.float())
+
         if "hybrid" in self.hparams["regime"]:
             loss += F.binary_cross_entropy_with_logits(
-            output, truth.float(), weight=manual_weights, pos_weight=weight
-        )
-        
+                output, truth.float(), weight=manual_weights, pos_weight=weight
+            )
 
         self.log("train_loss", loss)
 
@@ -127,9 +122,7 @@ class RegressionBase(LightningModule):
         )
 
         node_output, edge_output = (
-            self(
-                torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
-            )
+            self(torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index)
             if ("ci" in self.hparams["regime"])
             else self(batch.x, batch.edge_index)
         )
@@ -146,20 +139,18 @@ class RegressionBase(LightningModule):
         else:
             manual_weights = None
 
-        loss = F.mse_loss(
-            node_output.squeeze(), node_truth.float()
-        )
-        
+        loss = F.mse_loss(node_output.squeeze(), node_truth.float())
+
         # Node regression performance
         # True positive defined as prediction being within 10% of true pT
-        node_error = torch.abs(node_output.squeeze() - node_truth)/node_truth
+        node_error = torch.abs(node_output.squeeze() - node_truth) / node_truth
         node_true_positive = (node_error < 0.1).sum()
-        
+
         node_accuracy = node_true_positive / node_truth.shape[0]
 
         # Edge classification performance
         edge_preds = F.sigmoid(edge_output) > self.hparams["edge_cut"]
-        
+
         edge_positive = edge_preds.sum().float()
         edge_true = edge_truth.sum().float()
         edge_true_positive = (edge_truth.bool() & edge_preds).sum().float()
@@ -168,16 +159,22 @@ class RegressionBase(LightningModule):
         edge_pur = torch.tensor(edge_true_positive / edge_positive)
 
         current_lr = self.optimizers().param_groups[0]["lr"]
-        
+
         self.log_dict(
-            {"val_loss": loss, "edge_eff": edge_eff, "edge_pur": edge_pur, "node_accuracy": node_accuracy, "current_lr": current_lr}
+            {
+                "val_loss": loss,
+                "edge_eff": edge_eff,
+                "edge_pur": edge_pur,
+                "node_accuracy": node_accuracy,
+                "current_lr": current_lr,
+            }
         )
 
         return {
             "loss": loss,
             "edge_preds": edge_preds.cpu().numpy(),
             "edge_truth": edge_truth.cpu().numpy(),
-            "node_accuracy": node_accuracy
+            "node_accuracy": node_accuracy,
         }
 
     def validation_step(self, batch, batch_idx):

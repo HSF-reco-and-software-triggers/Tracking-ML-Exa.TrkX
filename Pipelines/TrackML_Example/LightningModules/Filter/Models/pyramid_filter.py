@@ -30,11 +30,13 @@ class PyramidFilter(FilterBaseBalanced):
             hparams["in_channels"] * 2 + hparams["emb_channels"] * 2, hparams["hidden"]
         )
         layers = [
-            Linear(hparams["hidden"]//(2**i), hparams["hidden"]//(2**(i+1)))
+            Linear(hparams["hidden"] // (2**i), hparams["hidden"] // (2 ** (i + 1)))
             for i in range(hparams["nb_layer"] - 1)
         ]
         self.layers = nn.ModuleList(layers)
-        self.output_layer = nn.Linear(hparams["hidden"]//(2**(hparams["nb_layer"]-1)), 1)
+        self.output_layer = nn.Linear(
+            hparams["hidden"] // (2 ** (hparams["nb_layer"] - 1)), 1
+        )
         self.act = nn.Tanh()
         batch_norms = [torch.nn.BatchNorm1d(l.out_features) for l in self.layers]
         self.batch_norms = nn.ModuleList(batch_norms)
@@ -55,4 +57,3 @@ class PyramidFilter(FilterBaseBalanced):
                 x = b(x)  # Option of BatchNorm
         x = self.output_layer(x)
         return x
-

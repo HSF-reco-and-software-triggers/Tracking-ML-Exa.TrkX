@@ -31,7 +31,8 @@ class CustomDDPPlugin(DDPPlugin):
         self._model = self._setup_model(LightningDistributedModule(self.model))
         self._register_ddp_hooks()
         self._model._set_static_graph()
-        
+
+
 class CustomDDPSpawnPlugin(DDPSpawnPlugin):
     def configure_ddp(self):
         self.pre_configure_ddp()
@@ -39,30 +40,33 @@ class CustomDDPSpawnPlugin(DDPSpawnPlugin):
         self._register_ddp_hooks()
         self._model._set_static_graph()
 
+
 class CustomDDP2Plugin(DDP2Plugin):
     def setup(self):
         # set the task idx
         self.task_idx = self.cluster_environment.local_rank()
         # self._model._set_static_graph()
 
+
 def set_random_seed(seed):
     torch.random.manual_seed(seed)
     print("Random seed:", seed)
     seed_everything(seed)
-    
-        
+
+
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser('train_gnn.py')
+    parser = argparse.ArgumentParser("train_gnn.py")
     add_arg = parser.add_argument
-    add_arg('config', nargs='?', default='default_config.yaml')
-    add_arg('random_seed', nargs='?', default=None)
+    add_arg("config", nargs="?", default="default_config.yaml")
+    add_arg("random_seed", nargs="?", default=None)
     return parser.parse_args()
+
 
 def main():
     print("Running main")
     print(time.ctime())
-    
+
     args = parse_args()
 
     with open(args.config) as file:
@@ -72,22 +76,32 @@ def main():
     if args.random_seed is not None:
         set_random_seed(args.random_seed)
         default_configs["random_seed"] = args.random_seed
-        
+
     elif "random_seed" in default_configs.keys():
         set_random_seed(default_configs["random_seed"])
-    
+
     print("Initialising model")
     print(time.ctime())
     model_name = eval(default_configs["model"])
     model = model_name(default_configs)
-    
-    logger = WandbLogger(project=default_configs["project"], group="InitialTest", save_dir=default_configs["artifacts"])
+
+    logger = WandbLogger(
+        project=default_configs["project"],
+        group="InitialTest",
+        save_dir=default_configs["artifacts"],
+    )
     logger.watch(model, log="all")
-    
-    trainer = Trainer(gpus=4, num_nodes=2, max_epochs=default_configs["max_epochs"], logger=logger, strategy=CustomDDPPlugin(find_unused_parameters=False))
+
+    trainer = Trainer(
+        gpus=4,
+        num_nodes=2,
+        max_epochs=default_configs["max_epochs"],
+        logger=logger,
+        strategy=CustomDDPPlugin(find_unused_parameters=False),
+    )
     trainer.fit(model)
-    
-    
+
+
 if __name__ == "__main__":
-    
+
     main()

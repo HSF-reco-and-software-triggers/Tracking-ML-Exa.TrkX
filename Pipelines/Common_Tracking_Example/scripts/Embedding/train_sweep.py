@@ -15,34 +15,38 @@ from LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbed
 
 import wandb
 
+
 def main():
     print("Running main")
     print(time.ctime())
-    
+
     default_config_path = "default_config.yaml"
-    
+
     with open(default_config_path) as file:
         default_configs = yaml.load(file, Loader=yaml.FullLoader)
 
-    wandb.init(config = default_configs, project=default_configs["project"])
+    wandb.init(config=default_configs, project=default_configs["project"])
     config = wandb.config
-    
+
     print("Initialising model")
     print(time.ctime())
     model = LayerlessEmbedding(dict(config))
     save_dir = config["artifacts"]
-    logger = WandbLogger(save_dir = save_dir, id=None)
-    
+    logger = WandbLogger(save_dir=save_dir, id=None)
+
     checkpoint_callback = ModelCheckpoint(
-        monitor='eff',
-        mode="max",
-        save_top_k=2,
-        save_last=True)
-    
-    trainer = Trainer(gpus=1, max_epochs=config["max_epochs"], logger=logger, callbacks=[checkpoint_callback])
+        monitor="eff", mode="max", save_top_k=2, save_last=True
+    )
+
+    trainer = Trainer(
+        gpus=1,
+        max_epochs=config["max_epochs"],
+        logger=logger,
+        callbacks=[checkpoint_callback],
+    )
     trainer.fit(model)
-    
-    
+
+
 if __name__ == "__main__":
-    
+
     main()

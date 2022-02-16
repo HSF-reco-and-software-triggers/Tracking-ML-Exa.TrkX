@@ -31,12 +31,12 @@ class GNNBase(LightningModule):
         ]
         self.trainset, self.valset, self.testset = [
             load_dataset(
-                input_dir, 
-                self.hparams["datatype_split"][i], 
+                input_dir,
+                self.hparams["datatype_split"][i],
                 self.hparams["pt_background_min"],
                 self.hparams["pt_signal_min"],
                 self.hparams["true_edges"],
-                self.hparams["noise"]
+                self.hparams["noise"],
             )
             for i, input_dir in enumerate(input_dirs)
         ]
@@ -83,25 +83,29 @@ class GNNBase(LightningModule):
         return optimizer, scheduler
 
     def get_input_data(self, batch):
-        
+
         if self.hparams["cell_channels"] > 0:
             print(batch.cell_data.shape)
-            input_data = torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1)
+            input_data = torch.cat(
+                [batch.cell_data[:, : self.hparams["cell_channels"]], batch.x], axis=-1
+            )
             input_data[input_data != input_data] = 0
         else:
             input_data = batch.x
             input_data[input_data != input_data] = 0
 
         return input_data
-    
+
     def training_step(self, batch, batch_idx):
 
         # Handle training towards a subset of the data
         if "subset" in self.hparams["regime"]:
-            subset_mask = np.isin(batch.edge_index.cpu(), batch.modulewise_true_edges.unique().cpu()).any(0)
+            subset_mask = np.isin(
+                batch.edge_index.cpu(), batch.modulewise_true_edges.unique().cpu()
+            ).any(0)
         else:
             subset_mask = torch.ones(batch.edge_index.shape[1]).bool()
-        
+
         weight = (
             torch.tensor(self.hparams["weight"])
             if ("weight" in self.hparams)
@@ -109,23 +113,22 @@ class GNNBase(LightningModule):
         )
 
         input_data = self.get_input_data(batch)
-        
+
         output = self(input_data, batch.edge_index).squeeze()
-            
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights[subset_mask]
         else:
             manual_weights = None
 
-#         print(output[subset_mask].shape, batch.y.float().squeeze()[subset_mask].shape, batch.y.float().squeeze().sum(), batch.y.float().squeeze()[subset_mask].sum())
-            
+        #         print(output[subset_mask].shape, batch.y.float().squeeze()[subset_mask].shape, batch.y.float().squeeze().sum(), batch.y.float().squeeze()[subset_mask].sum())
+
         truth = (
             (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float()
             if "pid" in self.hparams["regime"]
             else batch.y
         )
-        
+
         loss = F.binary_cross_entropy_with_logits(
             output, truth.float(), weight=manual_weights, pos_weight=weight
         )
@@ -137,10 +140,12 @@ class GNNBase(LightningModule):
     def shared_evaluation(self, batch, batch_idx, log=True):
 
         if "subset" in self.hparams["regime"]:
-            subset_mask = np.isin(batch.edge_index.cpu(), batch.modulewise_true_edges.unique().cpu()).any(0)
+            subset_mask = np.isin(
+                batch.edge_index.cpu(), batch.modulewise_true_edges.unique().cpu()
+            ).any(0)
         else:
             subset_mask = torch.ones(batch.edge_index.shape[1]).bool()
-            
+
         weight = (
             torch.tensor(self.hparams["weight"])
             if ("weight" in self.hparams)
@@ -148,11 +153,13 @@ class GNNBase(LightningModule):
         )
 
         input_data = self.get_input_data(batch)
-        
+
         output = self(input_data, batch.edge_index).squeeze()
 
         truth = (
-            (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]).float().squeeze()
+            (batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]])
+            .float()
+            .squeeze()
             if "pid" in self.hparams["regime"]
             else batch.y.squeeze()
         )
@@ -175,7 +182,6 @@ class GNNBase(LightningModule):
 
         eff = torch.tensor(edge_true_positive / edge_true)
         pur = torch.tensor(edge_true_positive / edge_positive)
-
 
         if log:
             current_lr = self.optimizers().param_groups[0]["lr"]

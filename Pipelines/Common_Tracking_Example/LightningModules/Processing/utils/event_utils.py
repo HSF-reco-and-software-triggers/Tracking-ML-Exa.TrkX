@@ -26,23 +26,30 @@ import itertools
 from torch_geometric.data import Data
 
 
-def get_cell_information(
-    hits, cell_features
-):
+def get_cell_information(hits, cell_features):
     cell_data = hits[cell_features]
     pixel_bool = (hits["hardware"] == "PIXEL").astype(int)
-    
+
     cell_data = cell_data.assign(pixel=pixel_bool)
-    
+
     return cell_data
 
 
 def get_layerwise_edges(hits):
-    
-    hits = hits.assign(R=np.sqrt((hits.x - hits.vx)**2 + (hits.y - hits.vy)**2 + (hits.z - hits.vz)**2))
-    hits = hits.sort_values('R').reset_index(drop=True).reset_index(drop=False)
+
+    hits = hits.assign(
+        R=np.sqrt(
+            (hits.x - hits.vx) ** 2 + (hits.y - hits.vy) ** 2 + (hits.z - hits.vz) ** 2
+        )
+    )
+    hits = hits.sort_values("R").reset_index(drop=True).reset_index(drop=False)
     hits.particle_id[hits.particle_id == 0] = np.nan
-    hit_list = hits.groupby(['particle_id', 'layer'], sort=False)['index'].agg(lambda x: list(x)).groupby(level=0).agg(lambda x: list(x))
+    hit_list = (
+        hits.groupby(["particle_id", "layer"], sort=False)["index"]
+        .agg(lambda x: list(x))
+        .groupby(level=0)
+        .agg(lambda x: list(x))
+    )
 
     true_edges = []
     for row in hit_list.values:
@@ -52,80 +59,110 @@ def get_layerwise_edges(hits):
 
     return true_edges, hits
 
+
 def remap_edges(true_edges, hits):
-    
+
     unique_hid = np.unique(hits.hit_id)
     hid_mapping = np.zeros(unique_hid.max() + 1).astype(int)
     hid_mapping[unique_hid] = np.arange(len(unique_hid))
-    
+
     hits = hits.drop_duplicates(subset="hit_id").sort_values("hit_id")
-    assert (hits.hit_id == unique_hid).all(), "If hit IDs are not sequential, this will mess up graph structure!"
-    
+    assert (
+        hits.hit_id == unique_hid
+    ).all(), "If hit IDs are not sequential, this will mess up graph structure!"
+
     true_edges = hid_mapping[true_edges]
-    
+
     return true_edges, hits
 
+
 def get_modulewise_edges(hits):
-    
-    signal = hits[((~hits.particle_id.isna()) & (hits.particle_id != 0)) & (~hits.vx.isna())]
-    
+
+    signal = hits[
+        ((~hits.particle_id.isna()) & (hits.particle_id != 0)) & (~hits.vx.isna())
+    ]
+
     # Sort by increasing distance from production
-    signal = signal.assign(R=np.sqrt((signal.x - signal.vx)**2 + (signal.y - signal.vy)**2 + (signal.z - signal.vz)**2))
-    signal = signal.sort_values('R').reset_index(drop=False)
-    
+    signal = signal.assign(
+        R=np.sqrt(
+            (signal.x - signal.vx) ** 2
+            + (signal.y - signal.vy) ** 2
+            + (signal.z - signal.vz) ** 2
+        )
+    )
+    signal = signal.sort_values("R").reset_index(drop=False)
+
     # Group by particle ID
-    signal_list = signal.groupby(["particle_id", "barrel_endcap", "layer_disk", "eta_module", "phi_module"], sort=False)['hit_id'].agg(lambda x: list(x)).groupby(level=0).agg(lambda x: list(x))
-    
+    signal_list = (
+        signal.groupby(
+            ["particle_id", "barrel_endcap", "layer_disk", "eta_module", "phi_module"],
+            sort=False,
+        )["hit_id"]
+        .agg(lambda x: list(x))
+        .groupby(level=0)
+        .agg(lambda x: list(x))
+    )
+
     true_edges = []
     for row in signal_list.values:
         for i, j in zip(row[:-1], row[1:]):
             true_edges.extend(list(itertools.product(i, j)))
-            
+
     true_edges = np.array(true_edges).T
-    
+
     # Remap
     true_edges, hits = remap_edges(true_edges, hits)
-    
+
     return true_edges, hits
+
 
 def calc_eta(r, z):
     theta = np.arctan2(r, z)
-    return -1. * np.log(np.tan(theta / 2.))
+    return -1.0 * np.log(np.tan(theta / 2.0))
 
 
 def select_hits(hits, particles, pt_min=0, endcaps=True, noise=True):
-    
+
     particles = particles[(particles.pt > pt_min)]
     particles = particles.assign(primary=(particles.barcode < 200000).astype(int))
-    
+
     if not endcaps:
         hits = hits[hits["barrel_endcap"] == 0]
-    
+
     if noise:
-        hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]], on="particle_id", how="left")
+        hits = hits.merge(
+            particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]],
+            on="particle_id",
+            how="left",
+        )
     else:
-        hits = hits.merge(particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]], on="particle_id")
-    
-    hits["nhits"] = hits.groupby('particle_id')["particle_id"].transform("count")
+        hits = hits.merge(
+            particles[["particle_id", "pt", "vx", "vy", "vz", "primary"]],
+            on="particle_id",
+        )
+
+    hits["nhits"] = hits.groupby("particle_id")["particle_id"].transform("count")
     hits.loc[hits.particle_id == 0, "nhits"] = -1
-    
+
     r = np.sqrt(hits.x**2 + hits.y**2)
     phi = np.arctan2(hits.y, hits.x)
     eta = calc_eta(r, hits.z)
     # Select the data columns we need
     hits = hits.assign(r=r, phi=phi, eta=eta)
-    
+
     return hits
 
+
 def clean_duplicates(hits):
-    
+
     noise_hits = hits[hits.particle_id == 0].drop_duplicates(subset="hit_id")
     signal_hits = hits[hits.particle_id != 0]
-    
+
     non_duplicate_noise_hits = noise_hits[~noise_hits.isin(signal_hits.hit_id)]
     hits = pd.concat([signal_hits, non_duplicate_noise_hits], ignore_index=True)
-    
-    return hits    
+
+    return hits
+
 
 def build_event(
     event_file,
@@ -139,15 +176,15 @@ def build_event(
     noise=False,
 ):
     # Get true edge list using the ordering by R' = distance from production vertex of each particle
-    particles = pd.read_csv(event_file+"-particles.csv")
-    hits = pd.read_csv(event_file+"-truth.csv")
-    
+    particles = pd.read_csv(event_file + "-particles.csv")
+    hits = pd.read_csv(event_file + "-truth.csv")
+
     hits = select_hits(
         hits, particles, pt_min=pt_min, endcaps=endcaps, noise=noise
     ).assign(evtid=int(event_file[-9:]))
 
     hits = clean_duplicates(hits)
-    
+
     # Handle which truth graph(s) are being produced
     modulewise_true_edges, layerwise_true_edges = None, None
 
@@ -169,11 +206,8 @@ def build_event(
 
     if cell_information:
         logging.info("Getting cell info")
-        cell_data = get_cell_information(
-                    hits, cell_features
-                )
-        
-        
+        cell_data = get_cell_information(hits, cell_features)
+
     logging.info("Weights constructed")
 
     return (
@@ -185,7 +219,7 @@ def build_event(
         hits["hit_id"].to_numpy(),
         hits.pt.to_numpy(),
         hits.primary.to_numpy(),
-        hits.nhits.to_numpy()
+        hits.nhits.to_numpy(),
     )
 
 
@@ -221,7 +255,7 @@ def prepare_event(
                 hid,
                 pt,
                 primary,
-                nhits
+                nhits,
             ) = build_event(
                 event_file,
                 pt_min,
@@ -233,7 +267,7 @@ def prepare_event(
                 layerwise=layerwise,
                 noise=noise,
             )
-           
+
             hit_data = Data(
                 x=torch.from_numpy(X).float(),
                 cell_data=torch.from_numpy(cell_data).float(),
@@ -242,17 +276,15 @@ def prepare_event(
                 hid=torch.from_numpy(hid),
                 pt=torch.from_numpy(pt),
                 primary=torch.from_numpy(primary),
-                nhits=torch.from_numpy(nhits)
+                nhits=torch.from_numpy(nhits),
             )
             if modulewise_true_edges is not None:
                 hit_data.modulewise_true_edges = torch.from_numpy(modulewise_true_edges)
             if layerwise_true_edges is not None:
                 hit_data.layerwise_true_edges = torch.from_numpy(layerwise_true_edges)
-                           
+
             with open(filename, "wb") as pickle_file:
                 torch.save(hit_data, pickle_file)
-            
-            
 
         else:
             logging.info("{} already exists".format(evtid))

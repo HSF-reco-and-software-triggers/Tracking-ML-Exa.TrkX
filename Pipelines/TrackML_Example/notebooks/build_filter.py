@@ -19,9 +19,10 @@ from sklearn.metrics import precision_recall_curve
 
 import copy
 
-sys.path.append('..')
+sys.path.append("..")
 from LightningModules.Filter.Models.vanilla_filter import VanillaFilter
 from LightningModules.Filter.Models.pyramid_filter import PyramidFilter
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -38,14 +39,18 @@ class FilterInferenceBuilder:
             os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
             for datatype in self.datatypes
         ]
-        
+
         # Get [train, val, test] lists of files
         self.dataset_list = []
         for dataname in model.hparams["datatype_names"]:
             dataset = os.listdir(os.path.join(model.hparams["input_dir"], dataname))
-            dataset = sorted([os.path.join(model.hparams["input_dir"], dataname, event) for event in dataset])
+            dataset = sorted(
+                [
+                    os.path.join(model.hparams["input_dir"], dataname, event)
+                    for event in dataset
+                ]
+            )
             self.dataset_list.append(dataset)
-        
 
     def build(self):
         print("Training finished, running inference to build graphs...")
@@ -83,16 +88,15 @@ class FilterInferenceBuilder:
 
     def construct_downstream(self, batch, datatype):
 
-        
         emb = (
             None if (self.model.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
 
         cut_list = []
         for j in range(self.model.hparams["n_chunks"]):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.model.hparams["n_chunks"])[
-                j
-            ]
+            subset_ind = torch.chunk(
+                torch.arange(batch.edge_index.shape[1]), self.model.hparams["n_chunks"]
+            )[j]
             output = (
                 self.model(
                     torch.cat([batch.cell_data, batch.x], axis=-1),
@@ -117,8 +121,6 @@ class FilterInferenceBuilder:
             batch.weights = batch.weights[cut_list]
 
         self.save_downstream(batch, datatype)
-        
-        
 
     def save_downstream(self, batch, datatype):
 
@@ -128,21 +130,21 @@ class FilterInferenceBuilder:
             torch.save(batch, pickle_file)
 
 
-
 def main():
-    
+
     checkpoint_path = "/global/cscratch1/sd/danieltm/ExaTrkX/lightning_checkpoints/TrackML_filter/ecm2jh9e/checkpoints/last.ckpt"
     checkpoint = torch.load(checkpoint_path)
 
     model = PyramidFilter.load_from_checkpoint(checkpoint_path).to(device)
-    model.eval();
-    
+    model.eval()
+
     output_dir = "/global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_noise_high_pur"
     model.hparams["filter_cut"] = 0.25
 
     edge_builder = FilterInferenceBuilder(model, output_dir, overwrite=False)
-    
+
     edge_builder.build()
+
 
 if __name__ == "__main__":
     main()

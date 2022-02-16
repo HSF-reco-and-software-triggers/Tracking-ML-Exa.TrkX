@@ -23,7 +23,7 @@ class SuperLayerlessEmbedding(SuperEmbeddingBase):
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
 
-          # Construct the MLP architecture
+        # Construct the MLP architecture
         if "ci" in hparams["regime"]:
             in_channels = hparams["spatial_channels"] + hparams["cell_channels"]
         else:

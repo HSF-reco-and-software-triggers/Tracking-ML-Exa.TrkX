@@ -30,7 +30,7 @@ def fetch_pt(event):
     merged_truth = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(
         truth, on="hit_id"
     )
-    pt = np.sqrt(merged_truth.tpx ** 2 + merged_truth.tpy ** 2)
+    pt = np.sqrt(merged_truth.tpx**2 + merged_truth.tpy**2)
 
     return pt
 

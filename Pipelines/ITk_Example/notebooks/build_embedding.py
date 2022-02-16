@@ -19,9 +19,10 @@ from sklearn.metrics import precision_recall_curve
 
 import copy
 
-sys.path.append('..')
+sys.path.append("..")
 from LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 from LightningModules.Embedding.utils import build_edges, graph_intersection
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -38,7 +39,6 @@ class EmbeddingInferenceBuilder:
             os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
             for datatype in self.datatypes
         ]
-
 
     def build(self):
         print("Training finished, running inference to build graphs...")
@@ -76,7 +76,10 @@ class EmbeddingInferenceBuilder:
     def construct_downstream(self, batch, datatype):
 
         if "ci" in self.model.hparams["regime"]:
-            input_data = torch.cat([batch.cell_data[:, :self.model.hparams["cell_channels"]], batch.x], axis=-1)
+            input_data = torch.cat(
+                [batch.cell_data[:, : self.model.hparams["cell_channels"]], batch.x],
+                axis=-1,
+            )
             input_data[input_data != input_data] = 0
             spatial = self.model(input_data)
         else:
@@ -98,7 +101,11 @@ class EmbeddingInferenceBuilder:
 
         # Build the radius graph with radius < r_test
         e_spatial = build_edges(
-            spatial, spatial, indices=None, r_max=self.model.hparams["r_test"], k_max =500
+            spatial,
+            spatial,
+            indices=None,
+            r_max=self.model.hparams["r_test"],
+            k_max=500,
         )  # This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
 
         # Arbitrary ordering to remove half of the duplicate edges
@@ -127,24 +134,23 @@ class EmbeddingInferenceBuilder:
             torch.save(batch, pickle_file)
 
 
-
-
 def main():
-    
+
     checkpoint_path = "/global/cscratch1/sd/danieltm/ExaTrkX/itk_lightning_checkpoints/ITk_1GeV/wnhns4e7/checkpoints/last.ckpt"
     checkpoint = torch.load(checkpoint_path)
 
     model = LayerlessEmbedding.load_from_checkpoint(checkpoint_path).to(device)
-    model.eval();
-    
+    model.eval()
+
     output_dir = "/project/projectdirs/m3443/data/ITk-upgrade/processed/embedding_processed/1_GeV_unweighted"
     model.hparams["train_split"] = [2000, 20, 20]
     model.hparams["r_test"] = 0.9
 
     model.setup(stage="fit")
     edge_builder = EmbeddingInferenceBuilder(model, output_dir, overwrite=True)
-    
+
     edge_builder.build()
+
 
 if __name__ == "__main__":
     main()

@@ -19,31 +19,34 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, n
             torch.load(event, map_location=torch.device("cpu"))
             for event in all_events[:num]
         ]
-        loaded_events = select_data(loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise)
+        loaded_events = select_data(
+            loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise
+        )
         return loaded_events
     else:
         return None
 
+
 def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
     # Handle event in batched form
     if type(events) is not list:
-        events = [events] 
+        events = [events]
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
-    if (pt_background_cut > 0):
+    if pt_background_cut > 0:
         for event in events:
-            
+
             edge_mask = (event.pt[event.edge_index] > pt_background_cut).all(0)
             event.edge_index = event.edge_index[:, edge_mask]
             event.y = event.y[edge_mask]
-                
+
             if "weights" in event.__dict__.keys():
                 if event.weights.shape[0] == edge_mask.shape[0]:
                     event.weights = event.weights[edge_mask]
-                    
+
             signal_mask = (event.pt[event.signal_true_edges] > pt_signal_cut).all(0)
             event.signal_true_edges = event.signal_true_edges[:, signal_mask]
-    
+
     return events
 
 

@@ -27,7 +27,9 @@ class VanillaFilter(FilterBaseBalanced):
 
         # Construct the MLP architecture
         self.input_layer = Linear(
-            (hparams["spatial_channels"] + hparams["cell_channels"]) * 2 + hparams["emb_channels"] * 2, hparams["hidden"]
+            (hparams["spatial_channels"] + hparams["cell_channels"]) * 2
+            + hparams["emb_channels"] * 2,
+            hparams["hidden"],
         )
         layers = [
             Linear(hparams["hidden"], hparams["hidden"])

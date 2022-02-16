@@ -2,7 +2,14 @@ import sys
 
 import torch.nn as nn
 from torch.nn import Linear
-from torch.nn.init import uniform_, normal_, xavier_uniform_, xavier_normal_, kaiming_uniform_, kaiming_normal_
+from torch.nn.init import (
+    uniform_,
+    normal_,
+    xavier_uniform_,
+    xavier_normal_,
+    kaiming_uniform_,
+    kaiming_normal_,
+)
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
@@ -22,11 +29,15 @@ class InteractionGNN(GNNBase):
         """
         Initialise the Lightning Module that can scan over different GNN training regimes
         """
-        
-        concatenation_factor = 3 if (self.hparams["aggregation"] in ["sum_max", "mean_max"]) else 2
 
-        hparams["batchnorm"] = False if "batchnorm" not in hparams else hparams["batchnorm"]
-        
+        concatenation_factor = (
+            3 if (self.hparams["aggregation"] in ["sum_max", "mean_max"]) else 2
+        )
+
+        hparams["batchnorm"] = (
+            False if "batchnorm" not in hparams else hparams["batchnorm"]
+        )
+
         # Setup input network
         self.node_encoder = make_mlp(
             hparams["spatial_channels"] + hparams["cell_channels"],
@@ -70,7 +81,7 @@ class InteractionGNN(GNNBase):
         # Final edge output classification network
         self.output_edge_classifier = make_mlp(
             3 * hparams["hidden"],
-            [hparams["hidden"]]* hparams["nb_edge_layer"] + [1],
+            [hparams["hidden"]] * hparams["nb_edge_layer"] + [1],
             layer_norm=hparams["layernorm"],
             batch_norm=hparams["batchnorm"],
             output_activation=None,
@@ -78,45 +89,49 @@ class InteractionGNN(GNNBase):
         )
 
     def reset_parameters(self):
-        
+
         for layer in self.modules():
             if type(layer) is Linear:
                 eval(self.hparams["initialization"])(layer.weight)
                 layer.bias.data.fill_(0)
-        
-        
+
     def message_step(self, x, start, end, e):
-        
-        # Compute new node features        
-        if self.hparams["aggregation"] == "sum":  
-            edge_messages = scatter_add(e, end, dim=0, dim_size=x.shape[0]) 
-        
+
+        # Compute new node features
+        if self.hparams["aggregation"] == "sum":
+            edge_messages = scatter_add(e, end, dim=0, dim_size=x.shape[0])
+
         elif self.hparams["aggregation"] == "max":
             edge_messages = scatter_max(e, end, dim=0, dim_size=x.shape[0])[0]
 
         elif self.hparams["aggregation"] == "sum_max":
-            edge_messages = torch.cat([scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
-                                 scatter_add(e, end, dim=0, dim_size=x.shape[0])], dim=-1)
+            edge_messages = torch.cat(
+                [
+                    scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
+                    scatter_add(e, end, dim=0, dim_size=x.shape[0]),
+                ],
+                dim=-1,
+            )
         node_inputs = torch.cat([x, edge_messages], dim=-1)
-        
+
         x_out = self.node_network(node_inputs)
-        
+
         x_out += x
 
         # Compute new edge features
         edge_inputs = torch.cat([x_out[start], x_out[end], e], dim=-1)
-        e_out = self.edge_network(edge_inputs)   
-        
+        e_out = self.edge_network(edge_inputs)
+
         e_out += e
-        
+
         return x_out, e_out
-        
+
     def output_step(self, x, start, end, e):
-        
+
         classifier_inputs = torch.cat([x[start], x[end], e], dim=1)
-        
+
         return self.output_edge_classifier(classifier_inputs).squeeze(-1)
-    
+
     def forward(self, x, edge_index):
 
         start, end = edge_index
@@ -131,8 +146,6 @@ class InteractionGNN(GNNBase):
         for i in range(self.hparams["n_graph_iters"]):
 
             x, e = checkpoint(self.message_step, x, start, end, e)
-        
-        # Compute final edge scores; use original edge directions only        
+
+        # Compute final edge scores; use original edge directions only
         return checkpoint(self.output_step, x, start, end, e)
-        
-        

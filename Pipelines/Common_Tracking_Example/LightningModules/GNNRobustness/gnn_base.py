@@ -23,7 +23,7 @@ class GNNBase(LightningModule):
 
     def setup(self, stage):
         # Handle any subset of [train, val, test] data split, assuming that ordering
-                
+
         input_dirs = [None, None, None]
         input_dirs[: len(self.hparams["datatype_names"])] = [
             os.path.join(self.hparams["input_dir"], datatype)
@@ -31,24 +31,24 @@ class GNNBase(LightningModule):
         ]
         self.trainset, self.valset, self.testset = [
             load_dataset(
-                input_dir, 
-                self.hparams["datatype_split"][i], 
+                input_dir,
+                self.hparams["datatype_split"][i],
                 self.hparams["pt_background_min"],
                 self.hparams["pt_signal_min"],
                 self.hparams["true_edges"],
-                self.hparams["noise"]
+                self.hparams["noise"],
             )
             for i, input_dir in enumerate(input_dirs)
         ]
-        
+
     def setup_data(self):
-        
+
         self.setup(stage="fit")
 
     def train_dataloader(self):
         if ("trainset" not in self.__dict__.keys()) or (self.trainset is None):
             self.setup_data()
-            
+
         return DataLoader(self.trainset, batch_size=1, num_workers=1)
 
     def val_dataloader(self):
@@ -93,11 +93,11 @@ class GNNBase(LightningModule):
             if ("weight" in self.hparams)
             else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
         )
-        
-        print("Before:", torch.cuda.max_memory_allocated()/1024**3, "Gb")
-        
+
+        print("Before:", torch.cuda.max_memory_allocated() / 1024**3, "Gb")
+
         torch.cuda.reset_max_memory_allocated()
-        
+
         output = (
             self(
                 torch.cat([batch.cell_data, batch.x], axis=-1), batch.edge_index
@@ -116,16 +116,14 @@ class GNNBase(LightningModule):
             if "pid" in self.hparams["regime"]
             else batch.y
         )
-        
- 
+
         loss = F.binary_cross_entropy_with_logits(
             output, truth.float(), weight=manual_weights, pos_weight=weight
         )
 
-
         self.log("train_loss", loss)
-        
-        print("After:", torch.cuda.max_memory_allocated()/1024**3, "Gb")
+
+        print("After:", torch.cuda.max_memory_allocated() / 1024**3, "Gb")
 
         return loss
 
@@ -181,7 +179,6 @@ class GNNBase(LightningModule):
             "preds": preds,
             "truth": truth,
         }
-
 
     def validation_step(self, batch, batch_idx):
 

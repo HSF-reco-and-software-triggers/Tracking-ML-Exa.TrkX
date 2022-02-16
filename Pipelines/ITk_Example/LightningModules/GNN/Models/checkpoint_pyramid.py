@@ -25,7 +25,7 @@ class CheckpointedPyramid(GNNBase):
         # Setup input network
         self.node_encoder = make_mlp(
             hparams["in_channels"],
-            [hparams["hidden"], int(hparams["hidden"]/2)],
+            [hparams["hidden"], int(hparams["hidden"] / 2)],
             output_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
         )
@@ -33,7 +33,7 @@ class CheckpointedPyramid(GNNBase):
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
             hparams["hidden"],
-            [hparams["hidden"], int(hparams["hidden"]/2), 1],
+            [hparams["hidden"], int(hparams["hidden"] / 2), 1],
             layer_norm=hparams["layernorm"],
             output_activation=None,
             hidden_activation=hparams["hidden_activation"],
@@ -42,7 +42,7 @@ class CheckpointedPyramid(GNNBase):
         # The node network computes new node features
         self.node_network = make_mlp(
             hparams["hidden"],
-            [hparams["hidden"], int(hparams["hidden"]/2)],
+            [hparams["hidden"], int(hparams["hidden"] / 2)],
             layer_norm=hparams["layernorm"],
             output_activation=hparams["hidden_activation"],
             hidden_activation=hparams["hidden_activation"],
@@ -59,7 +59,7 @@ class CheckpointedPyramid(GNNBase):
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
             # Previous hidden state
-#             x0 = x
+            #             x0 = x
 
             # Compute new edge score
             edge_inputs = torch.cat([x[start], x[end]], dim=1)
@@ -77,12 +77,12 @@ class CheckpointedPyramid(GNNBase):
             # Compute new node features
             #             node_inputs = torch.cat([x, weighted_messages_in, weighted_messages_out], dim=1)
             node_inputs = torch.cat([x, weighted_messages], dim=1)
-#             node_inputs = weighted_messages + x
-    
+            #             node_inputs = weighted_messages + x
+
             x = checkpoint(self.node_network, node_inputs)
 
             # Residual connection
-#             x = x + x0
+        #             x = x + x0
 
         # Compute final edge scores; use original edge directions only
         clf_inputs = torch.cat([x[start], x[end]], dim=1)

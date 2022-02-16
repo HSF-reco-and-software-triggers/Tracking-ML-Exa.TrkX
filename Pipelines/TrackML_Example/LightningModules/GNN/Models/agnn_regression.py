@@ -92,7 +92,7 @@ class AGNNRegression(RegressionBase):
         # Setup input network
         self.input_network = make_mlp(
             hparams["in_channels"],
-            [hparams["hidden"]]*hparams["nb_node_layer"],
+            [hparams["hidden"]] * hparams["nb_node_layer"],
             output_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
         )
@@ -114,9 +114,9 @@ class AGNNRegression(RegressionBase):
         )
         # The output network has the structure of the input network, with a final single track param output (hardcoded for now!)
         self.output_network = make_mlp(
-            hparams["in_channels"]+hparams["hidden"],
-            [hparams["hidden"]]*hparams["nb_node_layer"] + [1],
-            output_activation=None
+            hparams["in_channels"] + hparams["hidden"],
+            [hparams["hidden"]] * hparams["nb_node_layer"] + [1],
+            output_activation=None,
         )
 
     def forward(self, x, edge_index):

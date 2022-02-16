@@ -86,42 +86,42 @@ class FilterBase(LightningModule):
         return optimizer, scheduler
 
     def get_input_data(self, batch):
-        
+
         if "ci" in self.hparams["regime"]:
-            input_data = torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1)
+            input_data = torch.cat(
+                [batch.cell_data[:, : self.hparams["cell_channels"]], batch.x], axis=-1
+            )
             input_data[input_data != input_data] = 0
         else:
             input_data = batch.x
             input_data[input_data != input_data] = 0
-            
+
         return input_data
-    
+
     def training_step(self, batch, batch_idx):
-        
+
         positive_weight = (
             torch.tensor(self.hparams["weight"])
             if ("weight" in self.hparams)
             else torch.tensor(self.hparams["ratio"])
         )
 
-        batch["cell_data"], batch["x"], batch["edge_index"], batch["y"] = (batch["cell_data"].squeeze(), 
-                                                                           batch["x"].squeeze(), 
-                                                                           batch["edge_index"].squeeze(), 
-                                                                           batch["y"].squeeze())
+        batch["cell_data"], batch["x"], batch["edge_index"], batch["y"] = (
+            batch["cell_data"].squeeze(),
+            batch["x"].squeeze(),
+            batch["edge_index"].squeeze(),
+            batch["y"].squeeze(),
+        )
         input_data = self.get_input_data(batch)
-        
-        output = self(
-                    input_data,
-                    batch["edge_index"]
-                ).squeeze()
-            
+
+        output = self(input_data, batch["edge_index"]).squeeze()
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights[combined_indices]
             manual_weights[batch.y[combined_indices] == 0] = 1
         else:
             manual_weights = None
-        
+
         if "pid" in self.hparams["regime"]:
             y_pid = (
                 batch.pid[batch.edge_index[0, combined_indices]]
@@ -154,19 +154,22 @@ class FilterBase(LightningModule):
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
         for j in range(self.hparams["n_chunks"]):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
-                j
-            ]
-            
-            if ("ci" in self.hparams["regime"]):
+            subset_ind = torch.chunk(
+                torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
+            )[j]
+
+            if "ci" in self.hparams["regime"]:
                 output = self(
-                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
-                        batch.edge_index[:, subset_ind],
-                        emb
-                    ).squeeze()
+                    torch.cat(
+                        [batch.cell_data[:, : self.hparams["cell_channels"]], batch.x],
+                        axis=-1,
+                    ),
+                    batch.edge_index[:, subset_ind],
+                    emb,
+                ).squeeze()
             else:
                 self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-            
+
             scores = F.sigmoid(output)
             score_list.append(scores)
 
@@ -198,14 +201,14 @@ class FilterBase(LightningModule):
             true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
             true_y = batch.y
-            
+
         edge_true = true_y.sum()
         edge_true_positive = (true_y.bool() & cut_list).sum().float()
 
         if log:
-            
+
             current_lr = self.optimizers().param_groups[0]["lr"]
-            
+
             self.log_dict(
                 {
                     "eff": torch.tensor(edge_true_positive / edge_true),
@@ -215,7 +218,6 @@ class FilterBase(LightningModule):
                 }
             )
         return {"loss": val_loss, "preds": score_list, "truth": true_y}
-
 
     def validation_step(self, batch, batch_idx):
 
@@ -272,35 +274,41 @@ class FilterBaseBalanced(FilterBase):
             return GeoLoader(self.trainset, batch_size=1, num_workers=1)
         else:
             return None
-        
+
     def training_step(self, batch, batch_idx):
 
-        emb = (
-            None if (self.hparams["emb_channels"] == 0) else batch.embedding
-        )  
+        emb = None if (self.hparams["emb_channels"] == 0) else batch.embedding
 
         # Handle training towards a subset of the data
         if "subset" in self.hparams["regime"]:
-            subset_mask = np.isin(batch.edge_index.cpu(), batch.signal_true_edges.unique().cpu()).any(0)
+            subset_mask = np.isin(
+                batch.edge_index.cpu(), batch.signal_true_edges.unique().cpu()
+            ).any(0)
             batch.edge_index = batch.edge_index[:, subset_mask]
             batch.y = batch.y[subset_mask]
-        
-#         print("Starting chunks")
+
+        #         print("Starting chunks")
         with torch.no_grad():
             cut_list = []
             for j in range(self.hparams["n_chunks"]):
                 subset_ind = torch.chunk(
                     torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
                 )[j]
-                if ("ci" in self.hparams["regime"]):
+                if "ci" in self.hparams["regime"]:
                     output = self(
-                            torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
-                            batch.edge_index[:, subset_ind],
-                            emb,
-                        ).squeeze()
+                        torch.cat(
+                            [
+                                batch.cell_data[:, : self.hparams["cell_channels"]],
+                                batch.x,
+                            ],
+                            axis=-1,
+                        ),
+                        batch.edge_index[:, subset_ind],
+                        emb,
+                    ).squeeze()
                 else:
                     self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-                
+
                 cut = F.sigmoid(output) > self.hparams["filter_cut"]
                 cut_list.append(cut)
 
@@ -322,18 +330,23 @@ class FilterBaseBalanced(FilterBase):
             combined_indices = torch.cat([true_indices, hard_indices, easy_indices])
 
             # Shuffle indices:
-            combined_indices = combined_indices[torch.randperm(len(combined_indices))][:self.hparams["edges_per_batch"]]
+            combined_indices = combined_indices[torch.randperm(len(combined_indices))][
+                : self.hparams["edges_per_batch"]
+            ]
             weight = torch.tensor(self.hparams["weight"])
 
-        if ("ci" in self.hparams["regime"]):
+        if "ci" in self.hparams["regime"]:
             output = self(
-                    torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
-                    batch.edge_index[:, combined_indices],
-                    emb,
-                ).squeeze()
+                torch.cat(
+                    [batch.cell_data[:, : self.hparams["cell_channels"]], batch.x],
+                    axis=-1,
+                ),
+                batch.edge_index[:, combined_indices],
+                emb,
+            ).squeeze()
         else:
             self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
-                    
+
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights[combined_indices]
             manual_weights[batch.y[combined_indices] == 0] = 1
@@ -385,19 +398,22 @@ class FilterBaseBalanced(FilterBase):
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
         for j in range(self.hparams["n_chunks"]):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
-                j
-            ]
-            
-            if ("ci" in self.hparams["regime"]):
+            subset_ind = torch.chunk(
+                torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
+            )[j]
+
+            if "ci" in self.hparams["regime"]:
                 output = self(
-                        torch.cat([batch.cell_data[:, :self.hparams["cell_channels"]], batch.x], axis=-1),
-                        batch.edge_index[:, subset_ind],
-                        emb,
-                    ).squeeze()
+                    torch.cat(
+                        [batch.cell_data[:, : self.hparams["cell_channels"]], batch.x],
+                        axis=-1,
+                    ),
+                    batch.edge_index[:, subset_ind],
+                    emb,
+                ).squeeze()
             else:
                 self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
-            
+
             scores = F.sigmoid(output)
             score_list.append(scores)
 
@@ -419,7 +435,7 @@ class FilterBaseBalanced(FilterBase):
                 val_loss = +F.binary_cross_entropy_with_logits(
                     output, y_pid.float(), weight=manual_weights
                 )
-                
+
         score_list = torch.cat(score_list)
         cut_list = score_list > self.hparams["filter_cut"]
 
@@ -429,10 +445,10 @@ class FilterBaseBalanced(FilterBase):
             true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
             true_y = batch.y.bool()
-            
+
         edge_true = true_y.sum()
         edge_true_positive = (true_y & cut_list).sum().float()
-        
+
         eff = torch.tensor(edge_true_positive / edge_true)
         pur = torch.tensor(edge_true_positive / edge_positive)
 
@@ -446,7 +462,7 @@ class FilterBaseBalanced(FilterBase):
                     "current_lr": current_lr,
                 }
             )
-            
+
         print("Eff:", eff, "Pur:", pur)
 
         return {"loss": val_loss, "preds": score_list, "truth": true_y}

@@ -32,8 +32,7 @@ class NewLayerlessEmbedding(EmbeddingBase):
             Linear(hparams["emb_hidden"], hparams["emb_hidden"])
             for _ in range(hparams["nb_layer"] - 1)
         ]
-        
-        
+
         layers.extend(ln)
         self.layers = nn.ModuleList(layers)
         self.emb_layer = nn.Linear(hparams["emb_hidden"], hparams["emb_dim"])
