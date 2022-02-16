@@ -20,15 +20,15 @@ import faiss.contrib.torch_utils
 try:
     import frnn
 
-    using_faiss = False
+    FRNN_AVAILABLE = True
 except ImportError:
-    using_faiss = True
+    FRNN_AVAILABLE = False
 
 if torch.cuda.is_available():
     device = "cuda"
 else:
     device = "cpu"
-    using_faiss = True
+    FRNN_AVAILABLE = False
 
 
 def load_dataset(
@@ -218,25 +218,44 @@ def graph_intersection(
 def build_edges(
     query, database, indices=None, r_max=1.0, k_max=10, return_indices=False
 ):
+    
+    if FRNN_AVAILABLE:
+    
+        D, I, nn, grid = frnn.frnn_grid_points(
+            points1=query.unsqueeze(0),
+            points2=database.unsqueeze(0),
+            lengths1=None,
+            lengths2=None,
+            K=k_max,
+            r=r_max,
+            grid=None,
+            return_nn=False,
+            return_sorted=True,
+        )
 
-    dists, idxs, nn, grid = frnn.frnn_grid_points(
-        points1=query.unsqueeze(0),
-        points2=database.unsqueeze(0),
-        lengths1=None,
-        lengths2=None,
-        K=k_max,
-        r=r_max,
-        grid=None,
-        return_nn=False,
-        return_sorted=True,
-    )
+        I = I.squeeze().int()
+        ind = torch.Tensor.repeat(
+            torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
+        ).T.int()
+        positive_idxs = I >= 0
+        edge_list = torch.stack([ind[positive_idxs], I[positive_idxs]]).long()
+    
+    else:
+        
+        if device == "cuda":
+            res = faiss.StandardGpuResources()
+            D, I = faiss.knn_gpu(res, query, database, k_max)
+        elif device == "cpu":
+            index = faiss.IndexFlatL2(database.shape[1])
+            index.add(database)
+            D, I = index.search(query, k_max)
 
-    idxs = idxs.squeeze().int()
-    ind = torch.Tensor.repeat(
-        torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1
-    ).T.int()
-    positive_idxs = idxs >= 0
-    edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]]).long()
+        ind = torch.Tensor.repeat(
+            torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
+        ).T
+        
+        edge_list = torch.stack([ind[D <= r_max**2], I[D <= r_max**2]])
+        
 
     # Reset indices subset to correct global index
     if indices is not None:
@@ -246,7 +265,7 @@ def build_edges(
     edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
     if return_indices:
-        return edge_list, dists, idxs, ind
+        return edge_list, D, I, ind
     else:
         return edge_list
 
