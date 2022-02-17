@@ -26,9 +26,9 @@ jobs:
       - run: |
           conda info
           conda list
-      - run: $CONDA/bin/activate exatrkx-cpu
+      - name: Test Import
       - run: |
+          $CONDA/bin/activate exatrkx-cpu
           conda info
           conda list
-      - name: Test Import
-        run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
+          python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
