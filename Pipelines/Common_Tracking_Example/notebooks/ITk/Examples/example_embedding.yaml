@@ -9,7 +9,7 @@ pt_signal_cut: 1000.
 pt_background_cut: 0.
 nhits: 3.
 primary_only: True
-train_split: [1000, 20, 10] # Number of [training, validation, testing] examples
+train_split: [100, 20, 10] # Number of [training, validation, testing] examples
 true_edges: modulewise_true_edges
 noise: True
 

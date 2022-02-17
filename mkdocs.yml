@@ -44,7 +44,13 @@ theme:
 
 plugins:
   - search
-  - mkdocstrings
+  - mkdocstrings:
+      handlers: 
+          python:
+              setup_commands:
+                  - import sys
+                  - sys.path.append("Pipelines/TrackML_Example/LightningModules/GNN")
+  
       # watch:
       #     - Pipelines/TrackML_Example/LightningModules
       # handlers: 
