@@ -14,7 +14,7 @@ The other definition of truth is `modulewise_truth`. This is based on the concep
 
 <figure>
   <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/truth_graph.png"/>
-  <figcaption>A cartoon of a truth graph. Each blue line is a module here (note the dashed layers of the barrel - the layers are made of many small modules)</figcaption>
+  <figcaption>A cartoon of a truth graph, with orange edges and X nodes. Each blue line is a module here (note the dashed layers of the barrel - the layers are made of many small modules)</figcaption>
 </figure>
 
 A truth graph is simply some target graph that tries to represent the underlying physics in some way. It must be opinionated, and there is clearly not a single, correct way to define it. That said, for the ITk geometry, we define it by:
@@ -51,3 +51,14 @@ for row in signal_list.values:
     for i, j in zip(row[:-1], row[1:]):
         true_edges.extend(list(itertools.product(i, j)))
 ```
+
+Given these definitions of truth, we can visualize them both on an example graph constructed across two track:
+
+<figure>
+  <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/truth_definitions.png"/>
+  <figcaption>Two graphs with different ground truth definitions for the edges. Black edges are true positives, red a false positives, blue are false negatives</figcaption>
+</figure>
+
+Note that PID truth is fairly obvious: if an edge connects nodes of the same color (i.e. from the same particle) then it's a true positive, otherwise it's a false positive. In the construction of a graph with this definition of truth, there's no real concept of a "missing true edge" - or false negative - since a track of N spacepoints has N choose 2 (O(N^2)) "true edges", which is computationally expensive to handle (see [Embedding training](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/models/taxonomy#embedding) to understand why). This is why this definition is not used in graph construction. Once constructed, and each existing edge is being classified, it makes more sense to use this definition. 
+
+The modulewise truth takes the graph on the left, but applies our truth graph to it. Thus, we see that edges that skip across the sequence are treated as false. We also see that we can efficiently define false positives, since each particle of N spacepoints will only have O(N) true edges. The trade-off for this more physically-motivated truth definition is that it's more expensive to calculate the accuracy and loss functions. Instead of simply checking the PID, we have to do a [graph intersection](https://hsf-reco-and-software-triggers.github.io/Tracking-ML-Exa.TrkX/tools/data#graph_intersection), which provides a full list of true/fake positive/negative edges in the prediction graph.
