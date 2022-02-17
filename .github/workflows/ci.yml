@@ -20,5 +20,5 @@ jobs:
         run: $CONDA/bin/activate exatrkx-cpu
       - name: Setup libraries
         run: pip install -e .
-#       - name: Test Import
-#         run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
+      - name: Test Import
+        run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
