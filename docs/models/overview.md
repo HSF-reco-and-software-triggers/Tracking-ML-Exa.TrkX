@@ -1,6 +1,7 @@
 # Models for Tracking ML
 
 This repository aims to collect modular ML models that can be reused for various HEP applications. However, it is generally directed towards the Exatrkx pipeline for track reconstruction, which **handles HEP data as graph-structured**. This means that many of the models are related to either:
+
 1. Constructing graphs (e.g. metric learning, filtering)
 2. Learning node or edge feature representations (e.g. edge classification)
 3. Segmenting and processing graphs (e.g. segment stitching, splitting)

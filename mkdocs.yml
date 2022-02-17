@@ -22,7 +22,7 @@ nav:
     # - Zoology and Taxonomy: models/taxonomy.md
   - Performance:
     - Overview: performance/overview.md
-    # - Definitions: performance/definitions.md
+    - Truth Definitions: performance/truth_definitions.md
     # - Use Cases: performance/usage.md
   - Tools:
     - Overview: tools/overview.md
