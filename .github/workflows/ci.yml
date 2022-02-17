@@ -13,7 +13,6 @@ jobs:
           python-version: 3.9
           mamba-version: "*"
           channels: conda-forge   
-      - run: ls -lh
       - name: Install libraries
         run: mamba env create -f cpu_environment.yml python=3.9 
       - name: Activate environment
