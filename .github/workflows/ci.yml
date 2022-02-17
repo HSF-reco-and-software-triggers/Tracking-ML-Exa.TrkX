@@ -13,10 +13,8 @@ jobs:
           python-version: 3.9
       - name: Install libraries
         run: conda env create -f cpu_environment.yml python=3.9 
-      - name: Prep conda for bash
-        run: conda init bash
       - name: Activate environment
-        run: conda activate exatrkx-cpu
+        run: $CONDA/bin/activate exatrkx-cpu
       - name: Setup libraries
         run: pip install -e .
       - name: Test Import
