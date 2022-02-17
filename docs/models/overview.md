@@ -57,7 +57,7 @@ In the TrackML example, the most important tasks of `FeatureStore` processing ar
       show_root_heading: true
       show_source: true -->
 
-::: src.Pipelines.Examples.LightningModules.GNN.gnn_base
+::: Pipelines.Examples.LightningModules.GNN.gnn_base
     handler: python
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.Models.interaction_gnn.InteractionGNN
