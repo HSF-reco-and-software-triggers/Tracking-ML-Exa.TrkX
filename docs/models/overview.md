@@ -47,8 +47,8 @@ In the TrackML example, the most important tasks of `FeatureStore` processing ar
 
 ## Test Model
 
-::: Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base.EmbeddingBase
-    handler: python
+<!-- ::: Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base.EmbeddingBase
+    handler: python -->
 <!--     selection:
       members:
         - training_step
