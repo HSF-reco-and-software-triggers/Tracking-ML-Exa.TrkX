@@ -8,27 +8,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-#       - uses: actions/setup-python@v2
       - uses: conda-incubator/setup-miniconda@v2
         with:
           python-version: 3.9
           mamba-version: "*"
-          channels: conda-forge
-      - run: conda list
-      - run: mamba install numpy
-      
-      
-#       - name: Create mamba env
-#         run: conda create --name=mymambaenv python=3.9
-#       - name: Activate mamba env
-#         run: $CONDA/bin/activate mymambaenv
-#       - name: Install mamba
-#         run: conda install mamba -n base -c conda-forge
-#       - name: Install libraries
-#         run: mamba create -f cpu_environment.yml python=3.9 
-#       - name: Activate environment
-#         run: $CONDA/bin/activate exatrkx-cpu
-# #       - name: Setup libraries
-# #         run: pip install -e .
+          channels: conda-forge   
+      - name: Install libraries
+        run: mamba create -f cpu_environment.yml python=3.9 
+      - name: Activate environment
+        run: $CONDA/bin/activate exatrkx-cpu
+      - name: Setup libraries
+        run: pip install -e .
 #       - name: Test Import
 #         run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
