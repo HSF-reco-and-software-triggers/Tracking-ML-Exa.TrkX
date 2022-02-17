@@ -47,9 +47,9 @@ In the TrackML example, the most important tasks of `FeatureStore` processing ar
 
 ## Test Model
 
-<!-- ::: Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base.EmbeddingBase
+::: Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base.EmbeddingBase
     handler: python
-    selection:
+<!--     selection:
       members:
         - training_step
         - validation_step
@@ -57,8 +57,8 @@ In the TrackML example, the most important tasks of `FeatureStore` processing ar
       show_root_heading: true
       show_source: true -->
 
-::: gnn_base.GNNBase
-    handler: python
+<!-- ::: gnn_base.GNNBase
+    handler: python -->
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.Models.interaction_gnn.InteractionGNN
     handler: python
