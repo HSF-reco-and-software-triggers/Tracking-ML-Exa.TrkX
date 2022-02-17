@@ -45,6 +45,9 @@ theme:
 plugins:
   - search
   - mkdocstrings
-      default_handler: python
-      watch:
-        - Pipelines/TrackML_Example/LightningModules
+      # watch:
+      #     - Pipelines/TrackML_Example/LightningModules
+      # handlers: 
+      #     python:
+      #         selection:
+      #             docstring_style: google
