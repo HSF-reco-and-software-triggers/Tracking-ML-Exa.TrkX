@@ -11,12 +11,6 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: 3.9
-#       - name: Install libraries
-#         run: conda env update -f cpu_environment.yml --name=base 
-#       - name: Prep conda for bash
-#         run: conda init bash
-#       - name: Activate environment
-#         run: conda activate exatrkx-cpu
       - name: Install Docs
         run: pip install mkdocs-material mkdocstrings
       - name: Deploy Docs
