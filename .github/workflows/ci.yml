@@ -13,11 +13,13 @@ jobs:
           python-version: 3.9
           mamba-version: "*"
           channels: conda-forge   
+#           activate-environment: exatrkx-cpu
+#           environment-file: cpu_environment.yml
       - name: Install libraries
-        run: mamba env create -f cpu_environment.yml python=3.9 
-      - name: Activate environment
-        run: $CONDA/bin/activate exatrkx-cpu
-      - name: Setup libraries
-        run: pip install -e .
+        run: mamba install -f cpu_environment.yml
+#       - name: Activate environment
+#         run: $CONDA/bin/activate exatrkx-cpu
+#       - name: Setup libraries
+#         run: pip install -e .
       - name: Test Import
         run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
