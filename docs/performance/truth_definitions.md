@@ -35,7 +35,8 @@ Therefore our edge list becomes
 ```
 
 This is achieved quite efficiently in code with:
-```
+``` py title="get_modulewise_edges()"
+...
 signal_list = (
     signal.groupby(
         ["particle_id", "barrel_endcap", "layer_disk", "eta_module", "phi_module"],

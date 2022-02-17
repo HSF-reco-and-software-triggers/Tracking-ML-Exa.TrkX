@@ -218,9 +218,9 @@ def graph_intersection(
 def build_edges(
     query, database, indices=None, r_max=1.0, k_max=10, return_indices=False
 ):
-    
+
     if FRNN_AVAILABLE:
-    
+
         D, I, nn, grid = frnn.frnn_grid_points(
             points1=query.unsqueeze(0),
             points2=database.unsqueeze(0),
@@ -239,9 +239,9 @@ def build_edges(
         ).T.int()
         positive_idxs = I >= 0
         edge_list = torch.stack([ind[positive_idxs], I[positive_idxs]]).long()
-    
+
     else:
-        
+
         if device == "cuda":
             res = faiss.StandardGpuResources()
             D, I = faiss.knn_gpu(res, query, database, k_max)
@@ -253,9 +253,8 @@ def build_edges(
         ind = torch.Tensor.repeat(
             torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
         ).T
-        
+
         edge_list = torch.stack([ind[D <= r_max**2], I[D <= r_max**2]])
-        
 
     # Reset indices subset to correct global index
     if indices is not None:

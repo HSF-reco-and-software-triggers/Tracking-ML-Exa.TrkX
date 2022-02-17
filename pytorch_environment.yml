@@ -6,14 +6,8 @@ channels:
     - pytorch
     - pyg
     - conda-forge
-
+    
 dependencies:
-    - pip
-    - numpy
-    - pandas
-    - scipy
-    - matplotlib
-    - cupy
     - cudatoolkit=11.3
     - pytorch==1.10.2
     - pytorch-lightning

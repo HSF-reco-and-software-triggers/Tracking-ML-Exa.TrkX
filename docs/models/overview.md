@@ -38,8 +38,6 @@ In the TrackML example, the most important tasks of `FeatureStore` processing ar
 ### Segmentation
 
 
-- Static GNNs
-- Dynamic GNNs
 
 
 ## Top Takeaways
@@ -49,7 +47,7 @@ In the TrackML example, the most important tasks of `FeatureStore` processing ar
 
 ## Test Model
 
-<!-- ::: src.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base.EmbeddingBase
+::: src.Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base.EmbeddingBase
     handler: python
     selection:
       members:
@@ -57,7 +55,7 @@ In the TrackML example, the most important tasks of `FeatureStore` processing ar
         - validation_step
     rendering:
       show_root_heading: true
-      show_source: true -->
+      show_source: true
 
 <!-- ::: src.Pipelines.Examples.LightningModules.GNN.gnn_base.GNNBase -->
 
