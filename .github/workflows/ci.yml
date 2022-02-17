@@ -13,10 +13,10 @@ jobs:
           python-version: 3.9
           mamba-version: "*"
           channels: conda-forge   
-#           activate-environment: exatrkx-cpu
+          activate-environment: exatrkx-cpu
 #           environment-file: cpu_environment.yml
       - name: Install libraries
-        run: mamba install -f cpu_environment.yml
+        run: mamba env update -n exatrkx-cpu -f cpu_environment.yml
 #       - name: Activate environment
 #         run: $CONDA/bin/activate exatrkx-cpu
 #       - name: Setup libraries
