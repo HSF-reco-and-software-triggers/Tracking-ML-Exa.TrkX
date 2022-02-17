@@ -2,20 +2,20 @@
 
 ## TrackML Tracking
 
-
-
-## ITk Tracking
-
-### Edge-wise Truth
+## Edge-wise Truth
 
 In training the various stages of the pipeline, two definitions of pair-wise or edge-wise truth are used. The first is the simplest: `pid_truth`. If two spacepoints share a particle ID (`pid`), an edge between them is given `pid_truth=1`. Otherwise `pid_truth=0`. This also shows up in the library as `y_pid`, as a toggle that can be turned on/off in GNN training. This truth definition is useful when a graph *has already been constructed*, as in GNN training. 
 
 The other definition of truth is `modulewise_truth`. This is based on the concept of a module-wise truth graph, which will be useful to visualize.
 
+### Truth Graph
+
 <figure>
   <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/truth_graph.png"/>
   <figcaption>A cartoon of a truth graph, with orange edges and X nodes. Each blue line is a module here (note the dashed layers of the barrel - the layers are made of many small modules)</figcaption>
 </figure>
+
+
 
 A truth graph is simply some target graph that tries to represent the underlying physics in some way. It must be opinionated, and there is clearly not a single, correct way to define it. That said, for the ITk geometry, we define it by:
 1. Order all spacepoints of a track by increasing distance from its creation vertex
@@ -52,6 +52,8 @@ for row in signal_list.values:
     for i, j in zip(row[:-1], row[1:]):
         true_edges.extend(list(itertools.product(i, j)))
 ```
+
+### Modulewise and PID Truth
 
 Given these definitions of truth, we can visualize them both on an example graph constructed across two track:
 
