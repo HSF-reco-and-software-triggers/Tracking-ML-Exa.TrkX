@@ -16,11 +16,15 @@ jobs:
           channel-priority: true
           activate-environment: exatrkx-cpu
           environment-file: cpu_environment.yml
+          auto-activate-base: false
 #       - name: Install libraries
 #         run: mamba env update -n exatrkx-cpu -f cpu_environment.yml
 #       - name: Activate environment
 #         run: $CONDA/bin/activate exatrkx-cpu
 #       - name: Setup libraries
 #         run: pip install -e .
+      - run: |
+          conda info
+          conda list
       - name: Test Import
         run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
