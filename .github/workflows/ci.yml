@@ -12,13 +12,13 @@ jobs:
         with:
           python-version: 3.9
       - name: Create mamba env
-        run: conda env create --name=mymambaenv python=3.9
+        run: conda create --name=mymambaenv python=3.9
       - name: Activate mamba env
         run: $CONDA/bin/activate mymambaenv
       - name: Install mamba
         run: conda install mamba -n base -c conda-forge
       - name: Install libraries
-        run: mamba env create -f cpu_environment.yml python=3.9 
+        run: mamba create -f cpu_environment.yml python=3.9 
       - name: Activate environment
         run: $CONDA/bin/activate exatrkx-cpu
 #       - name: Setup libraries
