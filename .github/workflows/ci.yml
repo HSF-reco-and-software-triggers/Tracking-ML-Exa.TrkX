@@ -27,7 +27,7 @@ jobs:
           conda info
           conda list
       - name: Test Import
-      - run: |
+        run: |
           $CONDA/bin/activate exatrkx-cpu
           conda info
           conda list
