@@ -1,0 +1,40 @@
+# Input/output configuration
+input_dir: ${ITK_DATA}/feature_store/feature_store_modulewise_barrel_quickstart
+output_dir: ${ITK_DATA}/embedding_processed/1GeV_barrel_quickstart
+project: ITk_1GeVSignal_Embedding_Barrel
+overwrite: True
+sanity_steps: 0
+
+# Dataset parameters
+pt_signal_cut: 1000.
+pt_background_cut: 1000.
+nhits: 3.
+primary_only: True
+train_split: [250, 20, 10] # Number of [training, validation, testing] examples
+true_edges: modulewise_true_edges
+noise: False
+
+# Model parameters
+spatial_channels: 3
+cell_channels: 8
+emb_hidden: 1024
+nb_layer: 2
+emb_dim: 14
+weight: 3
+activation: Tanh
+randomisation: 1
+points_per_batch: 100000
+r_train: 0.1
+r_val: 0.1
+r_test: 0.1
+knn: 100
+warmup: 500
+margin: 0.1
+lr: 0.01
+factor: 0.5
+patience: 25
+regime: [rp, ci, hnm, norm]
+max_epochs: 100
+
+# Postprocessing
+callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 
