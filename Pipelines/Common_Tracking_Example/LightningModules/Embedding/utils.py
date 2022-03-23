@@ -1,9 +1,11 @@
 import os
 import logging
+import random
 
 import torch
 from torch.utils.data import random_split
 from torch import nn
+from tqdm import tqdm
 import scipy as sp
 import numpy as np
 import pandas as pd
@@ -20,15 +22,15 @@ import faiss.contrib.torch_utils
 try:
     import frnn
 
-    using_faiss = False
+    FRNN_AVAILABLE = True
 except ImportError:
-    using_faiss = True
+    FRNN_AVAILABLE = False
 
 if torch.cuda.is_available():
     device = "cuda"
 else:
     device = "cpu"
-    using_faiss = True
+    FRNN_AVAILABLE = False
 
 
 def load_dataset(
@@ -40,12 +42,19 @@ def load_dataset(
     primary_only,
     true_edges,
     noise,
+    **kwargs
 ):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
-        all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+        if "sorted_events" in kwargs.keys() and kwargs["sorted_events"]:
+            all_events = sorted(all_events)
+        else:
+            random.shuffle(all_events)
+        
+        all_events = [os.path.join(input_dir, event) for event in all_events]   
+        
         loaded_events = []
-        for event in all_events[:num]:
+        for event in tqdm(all_events[:num]):
             try:
                 loaded_event = torch.load(event, map_location=torch.device("cpu"))
                 loaded_events.append(loaded_event)
@@ -117,9 +126,10 @@ def select_data(
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
     if pt_background_cut > 0 or not noise:
-        for event in events:
+        
+        for event in tqdm(events):
 
-            pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid)
+            pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid) & (event.pid != 0)
             pt_where = torch.where(pt_mask)[0]
 
             inverse_mask = torch.zeros(pt_where.max() + 1).long()
@@ -132,17 +142,15 @@ def select_data(
             node_features = ["cell_data", "x", "hid", "pid", "pt", "nhits", "primary"]
 
             for feature in node_features:
-                if feature in event.__dict__.keys():
+                if feature in event.keys:
                     event[feature] = event[feature][pt_mask]
 
     for event in events:
-
         event.signal_true_edges = event[true_edges]
-
         if (
-            ("pt" in event.__dict__.keys())
-            & ("primary" in event.__dict__.keys())
-            & ("nhits" in event.__dict__.keys())
+            ("pt" in event.keys)
+            & ("primary" in event.keys)
+            & ("nhits" in event.keys)
         ):
             edge_subset = (
                 (event.pt[event[true_edges]] > pt_signal_cut).all(0)
@@ -151,7 +159,7 @@ def select_data(
             )
 
             event.signal_true_edges = event.signal_true_edges[:, edge_subset]
-
+                    
     return events
 
 

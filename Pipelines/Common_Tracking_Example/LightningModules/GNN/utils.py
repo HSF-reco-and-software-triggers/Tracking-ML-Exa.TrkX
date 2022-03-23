@@ -1,13 +1,15 @@
 import os, sys
 import logging
+import random
 
 import torch.nn as nn
 import torch
 import pandas as pd
 import numpy as np
 
-# import cupy as cp
-# import trackml.dataset
+from tqdm import tqdm
+
+from torch_geometric.data import Dataset
 
 # ---------------------------- Dataset Processing -------------------------
 
@@ -19,34 +21,43 @@ def load_dataset(
     pt_signal_cut=0,
     noise=False,
     triplets=False,
+    input_cut=None,
     **kwargs
 ):
     if input_subdir is not None:
         all_events = os.listdir(input_subdir)
-        all_events = sorted([os.path.join(input_subdir, event) for event in all_events])
-        print("Loading events")
-        loaded_events = [
-            torch.load(event, map_location=torch.device("cpu"))
-            for event in all_events[:num_events]
-        ]
+        if "sorted_events" in kwargs.keys() and kwargs["sorted_events"]:
+            all_events = sorted(all_events)
+        else:
+            random.shuffle(all_events)
+        
+        all_events = [os.path.join(input_subdir, event) for event in all_events]    
+        print(f"Loading events from {input_subdir}")
+        
+        loaded_events = []
+        for event in tqdm(all_events[:num_events]):
+            loaded_events.append(torch.load(event, map_location=torch.device("cpu")))
+        
         print("Events loaded!")
+        
         loaded_events = process_data(
-            loaded_events, pt_background_cut, pt_signal_cut, noise, triplets
+            loaded_events, pt_background_cut, pt_signal_cut, noise, triplets, input_cut
         )
+        
         print("Events processed!")
         return loaded_events
     else:
         return None
 
 
-def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets):
+def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets, input_cut):
     # Handle event in batched form
     if type(events) is not list:
         events = [events]
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
     if pt_background_cut > 0:
-        for i, event in enumerate(events):
+        for i, event in tqdm(enumerate(events)):
 
             if triplets:  # Keep all event data for posterity!
                 event = convert_triplet_graph(event)
@@ -71,10 +82,57 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets):
                         event.pt[event.signal_true_edges] > pt_signal_cut
                     ).all(0)
                     event.signal_true_edges = event.signal_true_edges[:, signal_mask]
+                    
+    for i, event in tqdm(enumerate(events)):
+        
+        # Ensure PID definition is correct
+        event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+        event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
+        
+        if (input_cut is not None) and "scores" in event.keys:
+            score_mask = event.scores > input_cut
+            for edge_attr in ["edge_index", "y", "y_pid", "pid_signal", "scores"]:
+                event[edge_attr] = event[edge_attr][..., score_mask]            
 
     return events
 
+class LargeDataset(Dataset):
+    def __init__(self, root, subdir, num_events, hparams, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+        
+        self.subdir = subdir
+        self.hparams = hparams
+        
+        self.input_paths = os.listdir(os.path.join(root, subdir))
+        if "sorted_events" in hparams.keys() and hparams["sorted_events"]:
+            self.input_paths = sorted(self.input_paths)
+        else:
+            random.shuffle(self.input_paths)
+        
+        self.input_paths = [os.path.join(root, subdir, event) for event in self.input_paths][:num_events]
+        
+    def len(self):
+        return len(self.input_paths)
 
+    def get(self, idx):
+        event = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
+        
+        # Ensure PID definition is correct
+        event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+        event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
+        
+        if ("delta_eta" in self.hparams.keys()) and (self.subdir == "train"):
+            eta_mask = hard_eta_edge_slice(delta_eta, batch)
+            for edge_attr in ["edge_index", "y", "y_pid", "pid_signal", "scores"]:
+                event[edge_attr] = event[edge_attr][..., eta_mask]    
+            
+        if ("input_cut" in self.hparams.keys()) and (self.hparams["input_cut"] is not None) and "scores" in event.keys:
+            score_mask = event.scores > self.hparams["input_cut"]
+            for edge_attr in ["edge_index", "y", "y_pid", "pid_signal", "scores"]:
+                event[edge_attr] = event[edge_attr][..., score_mask]
+                
+        return event
+    
 def convert_triplet_graph(event, edge_cut=0.5, directed=True):
 
     triplet_edges, triplet_y_truth, triplet_y_pid_truth = build_triplets(
@@ -172,7 +230,7 @@ def get_symmetric_values(x, e):
     return torch.cat([x_mean, x_diff], dim=-1)
 
 
-def purity_sample(truth, target_purity, regime):
+def purity_sample(truth, edges, target_purity):
 
     # Get true edges
     true_edges = torch.where(truth)[0]
@@ -187,13 +245,17 @@ def purity_sample(truth, target_purity, regime):
         torch.randperm(len(fake_edges))[:num_fakes_to_sample]
     ]
 
-    # Mix together
-    combined_edges = torch.cat([true_edges, fake_edges_sample])
-    combined_edges = combined_edges[torch.randperm(len(combined_edges))]
-
-    edge_sample = batch.edge_index[:, combined_edges]
-    truth_sample = batch.y_pid[combined_edges]
-    return edge_sample, truth_sample
+    # Combine
+    edge_indices = torch.cat([true_edges, fake_edges_sample])
+    combined_truth = torch.cat([torch.ones(len(true_edges)), torch.zeros(len(fake_edges_sample))]).to(edge_indices.device)
+    
+    # Mix together   
+    random_perm = torch.randperm(len(edge_indices))
+    edge_indices = edge_indices[random_perm]
+    permuted_edges = edges[:, edge_indices]
+    permuted_truth = combined_truth[random_perm]
+    
+    return permuted_edges, permuted_truth, edge_indices
 
 
 def random_edge_slice_v2(delta_phi, batch):
@@ -301,15 +363,15 @@ def calc_eta(r, z):
 
 def hard_eta_edge_slice(delta_eta, batch):
 
-    e = batch.e_radius.to("cpu")
-    x = batch.x.to("cpu")
+    e = batch.edge_index
+    x = batch.x
 
     etas = calc_eta(x[:, 0], x[:, 2])
     random_eta = (np.random.rand() - 0.5) * 2 * (etas.max() - delta_eta)
 
     e_average = (etas[e[0]] + etas[e[1]]) / 2
     dif = abs(e_average - random_eta)
-    subset_edges_ind = ((dif < delta_eta)).numpy()
+    subset_edges_ind = (dif < delta_eta)
 
     return subset_edges_ind
 
@@ -336,17 +398,17 @@ def make_mlp(
     for i in range(n_layers - 1):
         layers.append(nn.Linear(sizes[i], sizes[i + 1]))
         if layer_norm:
-            layers.append(nn.LayerNorm(sizes[i + 1]))
+            layers.append(nn.LayerNorm(sizes[i + 1], elementwise_affine=False))
         if batch_norm:
-            layers.append(nn.BatchNorm1d(sizes[i + 1]))
+            layers.append(nn.BatchNorm1d(sizes[i + 1], track_running_stats=False, affine=False))
         layers.append(hidden_activation())
     # Final layer
     layers.append(nn.Linear(sizes[-2], sizes[-1]))
     if output_activation is not None:
         if layer_norm:
-            layers.append(nn.LayerNorm(sizes[-1]))
+            layers.append(nn.LayerNorm(sizes[-1], elementwise_affine=False))
         if batch_norm:
-            layers.append(nn.BatchNorm1d(sizes[i + 1]))
+            layers.append(nn.BatchNorm1d(sizes[-1], track_running_stats=False, affine=False))
         layers.append(output_activation())
     return nn.Sequential(*layers)
 

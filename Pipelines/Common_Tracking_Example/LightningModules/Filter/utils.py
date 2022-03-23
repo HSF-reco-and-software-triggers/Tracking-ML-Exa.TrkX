@@ -1,22 +1,31 @@
 import sys
 import os
 import logging
+import random
 
 import torch
+import torch.nn as nn
 import scipy as sp
 import numpy as np
+from tqdm import tqdm
 
-from torch.utils.data import Dataset, DataLoader
+# from torch.utils.data import Dataset, DataLoader
+from torch_geometric.data import Dataset
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-
-def load_dataset(input_dir, num):
-    if input_dir is not None:
-        all_events = os.listdir(input_dir)
-        all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+def load_dataset(input_subdir, num, **kwargs):
+    if input_subdir is not None:
+        all_events = os.listdir(input_subdir)
+        if "sorted_events" in kwargs.keys() and kwargs["sorted_events"]:
+            all_events = sorted(all_events)
+        else:
+            random.shuffle(all_events)
+        
+        all_events = [os.path.join(input_subdir, event) for event in all_events]   
+        
         loaded_events = []
-        for event in all_events[:num]:
+        for event in tqdm(all_events[:num]):
             try:
                 loaded_event = torch.load(event, map_location=torch.device("cpu"))
                 loaded_events.append(loaded_event)
@@ -50,6 +59,28 @@ def graph_intersection(pred_graph, truth_graph):
 
     return new_pred_graph, y
 
+class LargeDataset(Dataset):
+    def __init__(self, root, num_events, hparams, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+        
+        self.input_paths = os.listdir(root)
+        if "sorted_events" in hparams.keys() and hparams["sorted_events"]:
+            self.input_paths = sorted(self.input_paths)
+        else:
+            random.shuffle(self.input_paths)
+        
+        self.input_paths = [os.path.join(root, event) for event in self.input_paths][:num_events]
+        
+    def len(self):
+        return len(self.input_paths)
+
+    def get(self, idx):
+        # print("Loading:", self.input_paths[idx])
+        # data = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
+        data = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
+        # print("Loaded:", self.input_paths[idx])
+        return data
+        
 
 class filter_dataset(Dataset):
     def __init__(self, dataset, hparams):
@@ -122,3 +153,36 @@ class filter_dataset(Dataset):
         }
 
         return subbatch
+
+def make_mlp(
+    input_size,
+    sizes,
+    hidden_activation="ReLU",
+    output_activation="ReLU",
+    layer_norm=False,
+    batch_norm=False,
+):
+    """Construct an MLP with specified fully-connected layers."""
+    hidden_activation = getattr(nn, hidden_activation)
+    if output_activation is not None:
+        output_activation = getattr(nn, output_activation)
+    layers = []
+    n_layers = len(sizes)
+    sizes = [input_size] + sizes
+    # Hidden layers
+    for i in range(n_layers - 1):
+        layers.append(nn.Linear(sizes[i], sizes[i + 1]))
+        if layer_norm:
+            layers.append(nn.LayerNorm(sizes[i + 1], elementwise_affine=False))
+        if batch_norm:
+            layers.append(nn.BatchNorm1d(sizes[i + 1], track_running_stats=False, affine=False))
+        layers.append(hidden_activation())
+    # Final layer
+    layers.append(nn.Linear(sizes[-2], sizes[-1]))
+    if output_activation is not None:
+        if layer_norm:
+            layers.append(nn.LayerNorm(sizes[-1], elementwise_affine=False))
+        if batch_norm:
+            layers.append(nn.BatchNorm1d(sizes[-1], track_running_stats=False, affine=False))
+        layers.append(output_activation())
+    return nn.Sequential(*layers)

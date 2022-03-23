@@ -11,7 +11,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 sys.path.append("../../")
-from LightningModules.Filter.Models.pyramid_filter import PyramidFilter
+from LightningModules.Filter.Models.VanillaFilter import VanillaFilter
 
 import wandb
 
@@ -30,12 +30,12 @@ def main():
 
     print("Initialising model")
     print(time.ctime())
-    model = PyramidFilter(dict(config))
+    model = VanillaFilter(dict(config))
     save_dir = config["artifacts"]
     logger = WandbLogger(save_dir=save_dir, id=None)
 
     checkpoint_callback = ModelCheckpoint(
-        monitor="eff", mode="max", save_top_k=2, save_last=True
+        monitor="double_auc", mode="max", save_top_k=2, save_last=True
     )
 
     trainer = Trainer(

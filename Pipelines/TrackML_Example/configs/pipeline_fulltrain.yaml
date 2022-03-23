@@ -1,0 +1,4 @@
+stage_list:
+    - {set: Processing, name: TrackMLFeatureStore, config: prepare_alldata.yaml, batch_config: batch_cpu_default.yaml}
+    # - {set: Embedding, name: LayerlessEmbedding, config: train_quickstart_embedding.yaml, batch_config: batch_gpu_default.yaml, resume_id: }
+    # - {set: GNN, name: InteractionGNN, config: train_quickstart_GNN.yaml, batch_config: batch_gpu_default.yaml, resume_id: }

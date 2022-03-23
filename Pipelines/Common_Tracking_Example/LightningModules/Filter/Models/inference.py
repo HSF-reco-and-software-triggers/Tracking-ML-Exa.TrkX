@@ -12,6 +12,7 @@ import sklearn.metrics
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
+from tqdm import tqdm
 
 from ..utils import load_dataset, filter_dataset
 
@@ -84,7 +85,7 @@ class FilterTelemetry(Callback):
         eff = true_positives / self.truth.sum()
         pur = true_positives / positives
 
-        print("Eff vs. Pur:", zip(eff, pur))
+        print("Eff vs. Pur:", list(zip(score_cuts, eff, pur)))
 
         return eff, pur, score_cuts
 
@@ -251,6 +252,8 @@ class FilterBuilder(Callback):
         y_pid = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         batch.y_pid = y_pid[cut_list]
         batch.edge_index = batch.edge_index[:, cut_list]
+        batch = self.attach_pedigree(batch)
+        
         if ("weights" in batch.__dict__.keys()) and (
             batch.weights.shape == cut_list.shape
         ):
@@ -311,7 +314,8 @@ class SingleFileFilterBuilder(FilterBuilder):
     def on_test_end(self, trainer, pl_module):
 
         print("Testing finished, running inference to build graphs...")
-
+        
+        self.checkpoint_dir = self.get_checkpoint_dir(trainer)
         datasets = self.prepare_datastructure(pl_module)
 
         total_length = sum([len(dataset) for dataset in datasets.values()])
@@ -320,7 +324,7 @@ class SingleFileFilterBuilder(FilterBuilder):
         with torch.no_grad():
             batch_incr = 0
             for set_idx, (datatype, dataset) in enumerate(datasets.items()):
-                for batch_idx, event_file in enumerate(dataset):
+                for batch_idx, event_file in tqdm(enumerate(dataset)):
                     percent = (batch_incr / total_length) * 100
                     sys.stdout.flush()
                     sys.stdout.write(f"{percent:.01f}% inference complete \r")
@@ -339,7 +343,31 @@ class SingleFileFilterBuilder(FilterBuilder):
                         self.construct_downstream(batch_to_save, pl_module, datatype)
 
                     batch_incr += 1
-
+                    
+    def get_checkpoint_dir(self, trainer):
+        
+        logger = trainer.logger
+        root_dir, project, run_id = logger._save_dir, logger._wandb_init["project"], logger._experiment._run_id
+        
+        return os.path.join(root_dir, project, run_id, "last.ckpt")
+    
+    def attach_pedigree(self, event):
+        
+        """Add the checkpoint information used in this building to the list of checkpoints in the event "pedigree". 
+        A pedigree is the full set of checkpoints that has led to this event.
+            
+        """
+        
+        if ("pedigree" in event.__dict__.keys()):
+            if isinstance(event.pedigree, list):
+                event.pedigree = event.pedigree + [self.checkpoint_dir]
+            elif isinstance(event.pedigree, str):
+                event.pedigree = [event.pedigree] + [self.checkpoint_dir]
+        else:
+            event.pedigree = [self.checkpoint_dir]
+            
+        return event
+    
     def prepare_datastructure(self, pl_module):
         # Prep the directory to produce inference data to
         self.output_dir = pl_module.hparams.output_dir

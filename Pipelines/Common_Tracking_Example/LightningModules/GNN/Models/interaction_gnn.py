@@ -14,11 +14,11 @@ import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
 
-from ..gnn_base import GNNBase
+from ..gnn_base import GNNBase, LargeGNNBase
 from ..utils import make_mlp
 
 
-class InteractionGNN(GNNBase):
+class InteractionGNN(LargeGNNBase):
 
     """
     An interaction network class
@@ -31,7 +31,7 @@ class InteractionGNN(GNNBase):
         """
 
         concatenation_factor = (
-            3 if (self.hparams["aggregation"] in ["sum_max", "mean_max"]) else 2
+            3 if (self.hparams["aggregation"] in ["sum_max", "mean_max", "mean_sum"]) else 2
         )
 
         hparams["batchnorm"] = (
@@ -101,6 +101,9 @@ class InteractionGNN(GNNBase):
         if self.hparams["aggregation"] == "sum":
             edge_messages = scatter_add(e, end, dim=0, dim_size=x.shape[0])
 
+        elif self.hparams["aggregation"] == "mean":
+            edge_messages = scatter_mean(e, end, dim=0, dim_size=x.shape[0])
+            
         elif self.hparams["aggregation"] == "max":
             edge_messages = scatter_max(e, end, dim=0, dim_size=x.shape[0])[0]
 
@@ -111,7 +114,24 @@ class InteractionGNN(GNNBase):
                     scatter_add(e, end, dim=0, dim_size=x.shape[0]),
                 ],
                 dim=-1,
+            )        
+        elif self.hparams["aggregation"] == "mean_sum":
+            edge_messages = torch.cat(
+                [
+                    scatter_mean(e, end, dim=0, dim_size=x.shape[0]),
+                    scatter_add(e, end, dim=0, dim_size=x.shape[0]),
+                ],
+                dim=-1,
+            )            
+        elif self.hparams["aggregation"] == "mean_max":
+            edge_messages = torch.cat(
+                [
+                    scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
+                    scatter_mean(e, end, dim=0, dim_size=x.shape[0]),
+                ],
+                dim=-1,
             )
+            
         node_inputs = torch.cat([x, edge_messages], dim=-1)
 
         x_out = self.node_network(node_inputs)

@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
-from fairscale.nn import checkpoint_wrapper
+# from fairscale.nn import checkpoint_wrapper
 
 from ..gnn_base import GNNBase
 from ..utils import make_mlp

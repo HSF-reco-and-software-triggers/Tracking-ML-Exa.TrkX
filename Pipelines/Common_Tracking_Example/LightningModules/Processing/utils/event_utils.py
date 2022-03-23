@@ -76,7 +76,7 @@ def remap_edges(true_edges, hits):
     return true_edges, hits
 
 
-def get_modulewise_edges(hits):
+def get_modulewise_edges(hits, module_ID = None):
 
     signal = hits[
         ((~hits.particle_id.isna()) & (hits.particle_id != 0)) & (~hits.vx.isna())
@@ -93,9 +93,11 @@ def get_modulewise_edges(hits):
     signal = signal.sort_values("R").reset_index(drop=False)
 
     # Group by particle ID
+    if module_ID is None:
+        module_ID = ["barrel_endcap", "hardware", "layer_disk", "eta_module", "phi_module"]
     signal_list = (
         signal.groupby(
-            ["particle_id", "barrel_endcap", "layer_disk", "eta_module", "phi_module"],
+            ["particle_id"] + module_ID,
             sort=False,
         )["hit_id"]
         .agg(lambda x: list(x))
@@ -184,7 +186,7 @@ def build_event(
     ).assign(evtid=int(event_file[-9:]))
 
     hits = clean_duplicates(hits)
-
+    
     # Handle which truth graph(s) are being produced
     modulewise_true_edges, layerwise_true_edges = None, None
 
@@ -204,6 +206,11 @@ def build_event(
             )
         )
 
+    # Make a unique module ID and attach to hits
+    module_lookup = pd.read_pickle(os.path.join(os.path.split(os.path.split(event_file)[0])[0], "module_lookup"))
+    hits = hits.merge(module_lookup, on=["hardware", "layer_disk", "eta_module", "phi_module", "barrel_endcap"], how="left")
+    module_id = hits.module_index.to_numpy()
+    
     if cell_information:
         logging.info("Getting cell info")
         cell_data = get_cell_information(hits, cell_features)
@@ -220,6 +227,7 @@ def build_event(
         hits.pt.to_numpy(),
         hits.primary.to_numpy(),
         hits.nhits.to_numpy(),
+        module_id
     )
 
 
@@ -256,6 +264,7 @@ def prepare_event(
                 pt,
                 primary,
                 nhits,
+                module_id
             ) = build_event(
                 event_file,
                 pt_min,
@@ -277,6 +286,7 @@ def prepare_event(
                 pt=torch.from_numpy(pt),
                 primary=torch.from_numpy(primary),
                 nhits=torch.from_numpy(nhits),
+                modules=torch.from_numpy(module_id)
             )
             if modulewise_true_edges is not None:
                 hit_data.modulewise_true_edges = torch.from_numpy(modulewise_true_edges)

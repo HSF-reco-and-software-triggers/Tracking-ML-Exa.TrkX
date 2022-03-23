@@ -1,8 +1,9 @@
 job_name: train_gpu
 constraint: gpu
-nodes: 1
+ntasks: 1
+cpus_per_task: 32
 gpus: 1
-time: "4:00:00"
-qos: regular
+time: "6:00:00"
+qos: early_science
 output: logs/%x-%j.out
-account: m1759
+account: m3443_g

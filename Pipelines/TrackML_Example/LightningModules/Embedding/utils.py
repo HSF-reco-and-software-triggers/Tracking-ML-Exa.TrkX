@@ -218,10 +218,13 @@ def graph_intersection(
 def build_edges(
     query, database, indices=None, r_max=1.0, k_max=10, return_indices=False
 ):
+    """
+    NOTE: These KNN/FRNN algorithms return the distances**2. Therefore we need to be careful when comparing them to the target distances (r_val, r_test), and to the margin parameter (which is L1 distance)
+    """
 
     if FRNN_AVAILABLE:
 
-        D, I, nn, grid = frnn.frnn_grid_points(
+        Dsq, I, nn, grid = frnn.frnn_grid_points(
             points1=query.unsqueeze(0),
             points2=database.unsqueeze(0),
             lengths1=None,
@@ -244,17 +247,17 @@ def build_edges(
 
         if device == "cuda":
             res = faiss.StandardGpuResources()
-            D, I = faiss.knn_gpu(res, query, database, k_max)
+            Dsq, I = faiss.knn_gpu(res, query, database, k_max)
         elif device == "cpu":
             index = faiss.IndexFlatL2(database.shape[1])
             index.add(database)
-            D, I = index.search(query, k_max)
+            Dsq, I = index.search(query, k_max)
 
         ind = torch.Tensor.repeat(
             torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
         ).T
 
-        edge_list = torch.stack([ind[D <= r_max**2], I[D <= r_max**2]])
+        edge_list = torch.stack([ind[Dsq <= r_max**2], I[Dsq <= r_max**2]])
 
     # Reset indices subset to correct global index
     if indices is not None:
@@ -264,7 +267,7 @@ def build_edges(
     edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
     if return_indices:
-        return edge_list, D, I, ind
+        return edge_list, Dsq, I, ind
     else:
         return edge_list
 

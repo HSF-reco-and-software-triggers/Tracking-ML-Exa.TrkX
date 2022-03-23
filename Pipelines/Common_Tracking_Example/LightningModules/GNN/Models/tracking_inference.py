@@ -12,7 +12,7 @@ import numpy as np
 Class-based Callback tracking performance for integration with Lightning
 """
 
-from track_utils import get_tracking_metrics
+from .track_utils import get_tracking_metrics
 
 
 class GNNTrackingTelemetry(Callback):

@@ -1,0 +1,14 @@
+# Input/output configuration
+input_dir: ${EXATRKX_DATA}/train_all
+output_dir: ${EXATRKX_DATA}/feature_store/all_data
+detector_path: ${EXATRKX_DATA}/detectors.csv
+n_files: 9000
+n_workers: 32
+n_tasks: 1
+overwrite: True
+
+endcaps: True
+noise: True
+layerwise: False
+modulewise: True
+cell_information: True

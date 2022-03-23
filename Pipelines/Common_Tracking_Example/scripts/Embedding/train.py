@@ -38,12 +38,15 @@ def main():
 
     logger = WandbLogger(
         project=default_configs["project"],
-        group="InitialTest",
         save_dir=default_configs["artifacts"],
     )
+    logger.watch(model, log="all")
 
     trainer = Trainer(
-        gpus=4, max_epochs=default_configs["max_epochs"], logger=logger, strategy="ddp"
+        gpus=default_configs["gpus"], 
+        max_epochs=default_configs["max_epochs"], 
+        logger=logger, 
+        strategy="ddp"
     )
     trainer.fit(model)
 

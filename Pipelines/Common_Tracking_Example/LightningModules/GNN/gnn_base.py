@@ -10,7 +10,7 @@ from torch.nn import Linear
 import torch
 import numpy as np
 
-from .utils import load_dataset, purity_sample
+from .utils import load_dataset, purity_sample, LargeDataset
 from sklearn.metrics import roc_auc_score
 
 
@@ -61,7 +61,7 @@ class GNNBase(LightningModule):
     def train_dataloader(self):
         if self.trainset is not None:
             return DataLoader(
-                self.trainset, batch_size=1, num_workers=0
+                self.trainset, batch_size=1, num_workers=4
             )  # , pin_memory=True, persistent_workers=True)
         else:
             return None
@@ -118,44 +118,33 @@ class GNNBase(LightningModule):
 
         return input_data
 
-    def handle_directed(self, batch, edge_sample, truth_sample):
+    def handle_directed(self, batch, edge_sample, truth_sample, sample_indices):
 
         edge_sample = torch.cat([edge_sample, edge_sample.flip(0)], dim=-1)
         truth_sample = truth_sample.repeat(2)
+        sample_indices = sample_indices.repeat(2)
 
         if ("directed" in self.hparams.keys()) and self.hparams["directed"]:
             direction_mask = batch.x[edge_sample[0], 0] < batch.x[edge_sample[1], 0]
             edge_sample = edge_sample[:, direction_mask]
             truth_sample = truth_sample[direction_mask]
 
-        return edge_sample, truth_sample
-
+        return edge_sample, truth_sample, sample_indices
+    
     def training_step(self, batch, batch_idx):
 
-        truth = (
-            batch.y_pid.bool() if "y_pid" in self.hparams["regime"] else batch.y.bool()
-        )
+        truth = batch[self.hparams["truth_key"]]
 
         if ("train_purity" in self.hparams.keys()) and (
             self.hparams["train_purity"] > 0
         ):
-            edge_sample, truth_sample = purity_sample(
-                truth, self.hparams["train_purity"], self.hparams["regime"]
+            edge_sample, truth_sample, sample_indices = purity_sample(
+                truth, batch.edge_index, self.hparams["train_purity"]
             )
         else:
-            edge_sample, truth_sample = batch.edge_index, truth
-
-        edge_sample, truth_sample = self.handle_directed(
-            batch, edge_sample, truth_sample
-        )
-
-        # Handle training towards a subset of the data
-        if "subset" in self.hparams["regime"]:
-            subset_mask = np.isin(
-                edge_sample.cpu(), batch.signal_true_edges.unique().cpu()
-            ).any(0)
-        else:
-            subset_mask = torch.ones(edge_sample.shape[1]).bool()
+            edge_sample, truth_sample, sample_indices = batch.edge_index, truth, torch.arange(batch.edge_index.shape[1])
+            
+        edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
 
         weight = (
             torch.tensor(self.hparams["weight"])
@@ -166,24 +155,19 @@ class GNNBase(LightningModule):
         input_data = self.get_input_data(batch)
         output = self(input_data, edge_sample).squeeze()
 
-        if "weighting" in self.hparams["regime"]:
-            manual_weights = batch.weights[subset_mask]
-        else:
-            manual_weights = None
-
-        if "y-y_pid" in self.hparams["regime"]:
-            y_subset = (batch.y.bool() | ~batch.y_pid.bool()).repeat(2)
+        if self.hparams["mask_background"]:
+            y_subset = truth_sample | ~batch.y_pid[sample_indices].bool()
             output, truth_sample = output[y_subset], truth_sample[y_subset]
 
         loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float(), weight=manual_weights, pos_weight=weight
+            output, truth_sample.float(), pos_weight=weight
         )
 
         self.log("train_loss", loss, on_step=False, on_epoch=True)
 
         return loss
 
-    def log_metrics(self, output, batch, loss, log):
+    def log_metrics(self, output, sample_indices, batch, loss, log):
 
         preds = torch.sigmoid(output) > self.hparams["edge_cut"]
 
@@ -191,19 +175,19 @@ class GNNBase(LightningModule):
         edge_positive = preds.sum().float()
 
         # Signal true & signal tp
-        truth = batch.y.repeat(2)
-        sig_true = truth.sum().float()
-        sig_true_positive = (truth.bool() & preds).sum().float()
+        sig_truth = batch.pid_signal[sample_indices]
+        sig_true = sig_truth.sum().float()
+        sig_true_positive = (sig_truth.bool() & preds).sum().float()
         sig_auc = roc_auc_score(
-            truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach()
+            sig_truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach()
         )
 
         # Total true & total tp
-        truth = (batch.y_pid.bool() | batch.y.bool()).repeat(2)
-        tot_true = truth.sum().float()
-        tot_true_positive = (truth.bool() & preds).sum().float()
+        tot_truth = (batch.y_pid.bool() | batch.y.bool())[sample_indices]
+        tot_true = tot_truth.sum().float()
+        tot_true_positive = (tot_truth.bool() & preds).sum().float()
         tot_auc = roc_auc_score(
-            truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach()
+            tot_truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach()
         )
 
         # Eff, pur, auc
@@ -240,30 +224,33 @@ class GNNBase(LightningModule):
 
     def shared_evaluation(self, batch, batch_idx, log=True):
 
+        truth = batch[self.hparams["truth_key"]]
+        
+        if ("train_purity" in self.hparams.keys()) and (
+            self.hparams["train_purity"] > 0
+        ):
+            edge_sample, truth_sample, sample_indices = purity_sample(
+                truth, batch.edge_index, self.hparams["train_purity"]
+            )
+        else:
+            edge_sample, truth_sample, sample_indices = batch.edge_index, truth, torch.arange(batch.edge_index.shape[1])
+            
+        edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
+
         weight = (
             torch.tensor(self.hparams["weight"])
             if ("weight" in self.hparams)
-            else torch.tensor((~batch.y_pid.bool()).sum() / batch.y_pid.sum())
+            else torch.tensor((~truth_sample.bool()).sum() / truth_sample.sum())
         )
-
-        truth = (
-            batch.y_pid.bool() if "y_pid" in self.hparams["regime"] else batch.y.bool()
-        )
-        edge_sample, truth_sample = self.handle_directed(batch, batch.edge_index, truth)
-
+        
         input_data = self.get_input_data(batch)
         output = self(input_data, edge_sample).squeeze()
 
-        if "weighting" in self.hparams["regime"]:
-            manual_weights = batch.weights
-        else:
-            manual_weights = None
-
         loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float().squeeze(), weight=manual_weights
+            output, truth_sample.float().squeeze(), pos_weight=weight
         )
 
-        preds = self.log_metrics(output, batch, loss, log)
+        preds = self.log_metrics(output, sample_indices, batch, loss, log)
 
         return {"loss": loss, "preds": preds, "score": torch.sigmoid(output)}
 
@@ -300,10 +287,10 @@ class GNNBase(LightningModule):
     ):
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
-            self.trainer.global_step < self.hparams["warmup"]
+            self.current_epoch < self.hparams["warmup"]
         ):
             lr_scale = min(
-                1.0, float(self.trainer.global_step + 1) / self.hparams["warmup"]
+                1.0, float(self.current_epoch + 1) / self.hparams["warmup"]
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
@@ -311,3 +298,35 @@ class GNNBase(LightningModule):
         # update params
         optimizer.step(closure=optimizer_closure)
         optimizer.zero_grad()
+
+        
+class LargeGNNBase(GNNBase):
+    def __init__(self, hparams):
+        super().__init__(hparams)
+
+    def setup(self, stage):
+        # Handle any subset of [train, val, test] data split, assuming that ordering
+
+        self.trainset, self.valset, self.testset = [
+            LargeDataset(
+                self.hparams["input_dir"],
+                subdir,
+                split,
+                self.hparams
+            )
+            for subdir, split in zip(self.hparams["datatype_names"], self.hparams["datatype_split"])
+        ]
+
+        if (
+            (self.trainer)
+            and ("logger" in self.trainer.__dict__.keys())
+            and ("_experiment" in self.logger.__dict__.keys())
+        ):
+            self.logger.experiment.define_metric("val_loss", summary="min")
+            self.logger.experiment.define_metric("sig_auc", summary="max")
+            self.logger.experiment.define_metric("tot_auc", summary="max")
+            self.logger.experiment.define_metric("sig_fake_ratio", summary="max")
+            self.logger.experiment.define_metric("custom_f1", summary="max")
+            self.logger.experiment.log({"sig_auc": 0})
+            self.logger.experiment.log({"sig_fake_ratio": 0})
+            self.logger.experiment.log({"custom_f1": 0})

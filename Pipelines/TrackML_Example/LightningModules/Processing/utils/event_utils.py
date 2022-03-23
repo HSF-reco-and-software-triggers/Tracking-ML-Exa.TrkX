@@ -213,6 +213,7 @@ def build_event(
     modulewise=True,
     layerwise=True,
     noise=False,
+    detector=None,
 ):
     # Get true edge list using the ordering by R' = distance from production vertex of each particle
     hits, particles, truth = trackml.dataset.load_event(
@@ -221,7 +222,16 @@ def build_event(
     hits = select_hits(hits, truth, particles, endcaps=endcaps, noise=noise).assign(
         evtid=int(event_file[-9:])
     )
-    layers = hits.layer.to_numpy()
+    
+    # Make a unique module ID and attach to hits
+    if detector is not None:
+        module_lookup = detector.reset_index()[["index", "volume_id", "layer_id", "module_id"]].rename(columns={"index": "module_index"})
+        hits = hits.merge(module_lookup, on=["volume_id", "layer_id", "module_id"], how="left")
+        module_id = hits.module_index.to_numpy()
+    else:
+        module_id = None
+
+    layer_id = hits.layer.to_numpy()
 
     # Handle which truth graph(s) are being produced
     modulewise_true_edges, layerwise_true_edges = None, None
@@ -255,7 +265,8 @@ def build_event(
     return (
         hits[["r", "phi", "z"]].to_numpy() / feature_scale,
         hits.particle_id.to_numpy(),
-        layers,
+        layer_id,
+        module_id,
         modulewise_true_edges,
         layerwise_true_edges,
         hits["hit_id"].to_numpy(),
@@ -291,7 +302,8 @@ def prepare_event(
             (
                 X,
                 pid,
-                layers,
+                layer_id,
+                module_id,
                 modulewise_true_edges,
                 layerwise_true_edges,
                 hid,
@@ -304,12 +316,13 @@ def prepare_event(
                 modulewise=modulewise,
                 layerwise=layerwise,
                 noise=noise,
+                detector=detector_orig
             )
 
             data = Data(
                 x=torch.from_numpy(X).float(),
                 pid=torch.from_numpy(pid),
-                layers=torch.from_numpy(layers),
+                modules=torch.from_numpy(module_id),
                 event_file=event_file,
                 hid=torch.from_numpy(hid),
                 pt=torch.from_numpy(pt),

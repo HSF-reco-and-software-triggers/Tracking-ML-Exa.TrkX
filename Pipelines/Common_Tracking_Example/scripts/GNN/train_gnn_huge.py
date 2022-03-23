@@ -26,21 +26,6 @@ class CustomDDPPlugin(DDPPlugin):
         self._model._set_static_graph()
 
 
-class CustomDDPSpawnPlugin(DDPSpawnPlugin):
-    def configure_ddp(self):
-        self.pre_configure_ddp()
-        self._model = self._setup_model(LightningDistributedModule(self.model))
-        self._register_ddp_hooks()
-        self._model._set_static_graph()
-
-
-class CustomDDP2Plugin(DDP2Plugin):
-    def setup(self):
-        # set the task idx
-        self.task_idx = self.cluster_environment.local_rank()
-        # self._model._set_static_graph()
-
-
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser("train_gnn.py")

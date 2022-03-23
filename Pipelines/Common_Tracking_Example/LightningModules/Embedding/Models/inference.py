@@ -12,6 +12,7 @@ import sklearn.metrics
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
+from tqdm import tqdm
 
 from ..utils import build_edges, graph_intersection
 
@@ -55,7 +56,7 @@ class EmbeddingTelemetry(Callback):
         true_positives = outputs["preds"][:, outputs["truth"]]
         true = outputs["truth_graph"]
 
-        if "pt" in batch.__dict__.keys():
+        if "pt" in batch.keys:
             pts = batch.pt
             self.pt_true_pos.append(pts[true_positives].cpu())
             self.pt_true.append(pts[true].cpu())
@@ -104,17 +105,13 @@ class EmbeddingTelemetry(Callback):
         self.truth = torch.cat(self.truth)
         self.truth_graph = torch.cat(self.truth_graph, axis=1)
 
-        r_cuts = np.arange(0.1, self.hparams["r_test"], 0.1)
-
-        print(self.truth.shape)
-        print(self.distances < r_cuts[0])
-        print(self.distances.shape)
+        r_cuts = np.linspace(self.hparams["r_test"]/10, self.hparams["r_test"], 10)
 
         positives = np.array(
-            [self.truth[self.distances < r_cut].shape[0] for r_cut in r_cuts]
+            [self.truth[self.distances < r_cut**2].shape[0] for r_cut in r_cuts]
         )
         true_positives = np.array(
-            [self.truth[self.distances < r_cut].sum() for r_cut in r_cuts]
+            [self.truth[self.distances < r_cut**2].sum() for r_cut in r_cuts]
         )
 
         eff = true_positives / self.truth_graph.shape[1]
@@ -127,7 +124,7 @@ class EmbeddingTelemetry(Callback):
         centers, ratio_hist = self.get_pt_metrics()
 
         eff, pur, r_cuts = self.get_eff_pur_metrics()
-
+        
         return {
             "pt_plot": {"centers": centers, "ratio_hist": ratio_hist},
             "eff_plot": {"eff": eff, "r_cuts": r_cuts},
@@ -206,6 +203,7 @@ class EmbeddingBuilder(Callback):
 
         print("Testing finished, running inference to build graphs...")
 
+        self.checkpoint_dir = self.get_checkpoint_dir(trainer)
         datasets = self.prepare_datastructure(pl_module)
 
         total_length = sum([len(dataset) for dataset in datasets.values()])
@@ -214,7 +212,7 @@ class EmbeddingBuilder(Callback):
         with torch.no_grad():
             batch_incr = 0
             for set_idx, (datatype, dataset) in enumerate(datasets.items()):
-                for batch_idx, batch in enumerate(dataset):
+                for batch_idx, batch in tqdm(enumerate(dataset)):
                     percent = (batch_incr / total_length) * 100
                     sys.stdout.flush()
                     sys.stdout.write(f"{percent:.01f}% inference complete \r")
@@ -233,6 +231,13 @@ class EmbeddingBuilder(Callback):
 
                     batch_incr += 1
 
+    def get_checkpoint_dir(self, trainer):
+        
+        logger = trainer.logger
+        root_dir, project, run_id = logger._save_dir, logger._wandb_init["project"], logger._experiment._run_id
+        
+        return os.path.join(root_dir, project, run_id, "last.ckpt")
+                    
     def prepare_datastructure(self, pl_module):
         # Prep the directory to produce inference data to
         self.output_dir = pl_module.hparams.output_dir
@@ -277,10 +282,27 @@ class EmbeddingBuilder(Callback):
 
         return e_spatial, y_cluster
 
+    def attach_pedigree(self, event):
+        
+        """Add the checkpoint information used in this building to the list of checkpoints in the event "pedigree". 
+        A pedigree is the full set of checkpoints that has led to this event.
+            
+        """
+        
+        if ("pedigree" in event.__dict__.keys()):
+            if isinstance(event.pedigree, list):
+                event.pedigree = event.pedigree + [self.checkpoint_dir]
+            elif isinstance(event.pedigree, str):
+                event.pedigree = [event.pedigree] + [self.checkpoint_dir]
+        else:
+            event.pedigree = [self.checkpoint_dir]
+            
+        return event
+        
+    
     def construct_downstream(self, batch, pl_module, datatype):
 
         input_data = pl_module.get_input_data(batch)
-
         spatial = pl_module(input_data)
 
         # Make truth bidirectional
@@ -309,7 +331,8 @@ class EmbeddingBuilder(Callback):
 
         batch.edge_index = e_spatial
         batch.y = y_cluster
-
+        batch = self.attach_pedigree(batch)
+        
         self.save_downstream(batch, pl_module, datatype)
 
     def save_downstream(self, batch, pl_module, datatype):
@@ -320,3 +343,66 @@ class EmbeddingBuilder(Callback):
             torch.save(batch, pickle_file)
 
         logging.info("Saved event {}".format(batch.event_file[-4:]))
+
+        
+        
+class SingleFileEmbeddingBuilder(EmbeddingBuilder):
+    def __init__(self):
+        super().__init__()
+        
+    def setup(self, trainer, pl_module, stage=None):
+
+        print("Callback")
+
+        single_file_split = [1, 1, 1]
+        pl_module.trainset, pl_module.valset, pl_module.testset = [
+            load_dataset(input_dir, single_file_split[i])
+            for i, input_dir in enumerate(input_dirs)
+        ]
+
+        # Get [train, val, test] lists of files
+        self.dataset_list = []
+        for dataname, datanum in zip(
+            pl_module.hparams["datatype_names"], pl_module.hparams["datatype_split"]
+        ):
+            dataset = os.listdir(os.path.join(pl_module.hparams["input_dir"], dataname))
+            dataset = sorted(
+                [
+                    os.path.join(pl_module.hparams["input_dir"], dataname, event)
+                    for event in dataset
+                ]
+            )[:datanum]
+            self.dataset_list.append(dataset)
+            
+    
+    def on_test_end(self, trainer, pl_module):
+
+        print("Testing finished, running inference to build graphs...")
+
+        self.checkpoint_dir = self.get_checkpoint_dir(trainer)
+        datasets = self.prepare_datastructure(pl_module)
+
+        total_length = sum([len(dataset) for dataset in datasets.values()])
+
+        pl_module.eval()
+        with torch.no_grad():
+            batch_incr = 0
+            for set_idx, (datatype, dataset) in enumerate(datasets.items()):
+                for batch_idx, batch in enumerate(dataset):
+                    percent = (batch_incr / total_length) * 100
+                    sys.stdout.flush()
+                    sys.stdout.write(f"{percent:.01f}% inference complete \r")
+                    if (
+                        not os.path.exists(
+                            os.path.join(
+                                self.output_dir, datatype, batch.event_file[-4:]
+                            )
+                        )
+                    ) or self.overwrite:
+                        batch_to_save = copy.deepcopy(batch)
+                        batch_to_save = batch_to_save.to(
+                            pl_module.device
+                        )  # Is this step necessary??
+                        self.construct_downstream(batch_to_save, pl_module, datatype)
+
+                    batch_incr += 1

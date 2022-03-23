@@ -18,7 +18,7 @@ from sklearn.metrics import roc_auc_score
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Local imports
-from .utils import graph_intersection, load_dataset, filter_dataset
+from .utils import graph_intersection, load_dataset, filter_dataset, LargeDataset
 
 
 class FilterBase(LightningModule):
@@ -29,13 +29,6 @@ class FilterBase(LightningModule):
         """
         self.save_hyperparameters(hparams)
 
-        if (
-            "logger" in self.__dict__.keys()
-            and "_experiment" in self.logger.__dict__.keys()
-        ):
-            self.logger.experiment.define_metric("val_loss", summary="min")
-            self.logger.experiment.define_metric("auc", summary="max")
-
     def setup(self, stage):
         # Handle any subset of [train, val, test] data split, assuming that ordering
 
@@ -44,12 +37,19 @@ class FilterBase(LightningModule):
             os.path.join(self.hparams["input_dir"], datatype)
             for datatype in self.hparams["datatype_names"]
         ]
+        
         if "trainset" not in self.__dict__.keys():
-
             self.trainset, self.valset, self.testset = [
-                load_dataset(input_dir, self.hparams["datatype_split"][i])
+                load_dataset(input_dir, self.hparams["datatype_split"][i], **self.hparams)
                 for i, input_dir in enumerate(input_dirs)
             ]
+            
+        if (
+            "logger" in self.__dict__.keys()
+            and "_experiment" in self.logger.__dict__.keys()
+        ):
+            self.logger.experiment.define_metric("val_loss", summary="min")
+            self.logger.experiment.define_metric("auc", summary="max")
 
     def train_dataloader(self):
         self.trainset = filter_dataset(self.trainset, self.hparams)
@@ -169,7 +169,7 @@ class FilterBase(LightningModule):
         """
         This method is shared between validation steps and test steps
         """
-
+        
         emb = (
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
@@ -177,6 +177,7 @@ class FilterBase(LightningModule):
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
         for j in range(self.hparams["n_chunks"]):
+            
             subset_ind = torch.chunk(
                 torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
             )[j]
@@ -240,6 +241,7 @@ class FilterBase(LightningModule):
                     "current_lr": current_lr,
                 }
             )
+        
         return {"loss": val_loss, "preds": score_list, "truth": true_y}
 
     def validation_step(self, batch, batch_idx):
@@ -272,10 +274,10 @@ class FilterBase(LightningModule):
         """
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
-            self.trainer.global_step < self.hparams["warmup"]
+            self.trainer.current_epoch < self.hparams["warmup"]
         ):
             lr_scale = min(
-                1.0, float(self.trainer.global_step + 1) / self.hparams["warmup"]
+                1.0, float(self.trainer.current_epoch + 1) / self.hparams["warmup"]
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
@@ -300,6 +302,7 @@ class FilterBaseBalanced(FilterBase):
 
     def training_step(self, batch, batch_idx):
 
+        # print("Training on device", self.device)
         emb = None if (self.hparams["emb_channels"] == 0) else batch.embedding
 
         # Handle training towards a subset of the data
@@ -314,6 +317,7 @@ class FilterBaseBalanced(FilterBase):
         with torch.no_grad():
             cut_list = []
             for j in range(self.hparams["n_chunks"]):
+                # print("Loading chunk", j, "on device", self.device)
                 subset_ind = torch.chunk(
                     torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
                 )[j]
@@ -395,13 +399,18 @@ class FilterBaseBalanced(FilterBase):
             )
 
         self.log("train_loss", loss)
-
+        # print("Returning training loss on device", self.device)
         return loss
 
     def validation_step(self, batch, batch_idx):
 
         result = self.shared_evaluation(batch, batch_idx, log=True)
-
+        
+#         if str(self.device) == "cuda:0":
+#             result = self.shared_evaluation(batch, batch_idx, log=True)
+#         else:
+#             result = None
+            
         return result
 
     def test_step(self, batch, batch_idx):
@@ -416,6 +425,8 @@ class FilterBaseBalanced(FilterBase):
         This method is shared between validation steps and test steps
         """
 
+        # print("Validating on device", self.device)
+        
         emb = (
             None if (self.hparams["emb_channels"] == 0) else batch.embedding
         )  # Does this work??
@@ -423,6 +434,8 @@ class FilterBaseBalanced(FilterBase):
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
         for j in range(self.hparams["n_chunks"]):
+            # print("Loading chunk", j, "on device", self.device)
+            
             subset_ind = torch.chunk(
                 torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
             )[j]
@@ -482,9 +495,54 @@ class FilterBaseBalanced(FilterBase):
                     "val_loss": val_loss,
                     "current_lr": current_lr,
                     "auc": auc,
-                }
+                },
+                # sync_dist=True,
+                # on_epoch=True
             )
-
-        #         print("Eff:", eff, "Pur:", pur)
-
+            
+        # print("Returning validation loss on device", self.device, )
         return {"loss": val_loss, "preds": score_list, "truth": truth}
+
+class LargeFilterBaseBalanced(FilterBaseBalanced):
+    def __init__(self, hparams):
+        super().__init__(hparams)
+        
+    def setup(self, stage):
+        # Handle any subset of [train, val, test] data split, assuming that ordering
+
+        input_dirs = [None, None, None]
+        input_dirs[: len(self.hparams["datatype_names"])] = [
+            os.path.join(self.hparams["input_dir"], datatype)
+            for datatype in self.hparams["datatype_names"]
+        ]
+        
+        if "trainset" not in self.__dict__.keys():
+            self.trainset, self.valset, self.testset = [
+                LargeDataset(input_dir, self.hparams["datatype_split"][i], self.hparams)
+                for i, input_dir in enumerate(input_dirs)
+            ]
+            
+        # if (
+        #     "logger" in self.__dict__.keys()
+        #     and "_experiment" in self.logger.__dict__.keys()
+        # ):
+        #     self.logger.experiment.define_metric("val_loss", summary="min")
+        #     self.logger.experiment.define_metric("auc", summary="max")
+        
+    def train_dataloader(self):
+        if self.trainset is not None:
+            return GeoLoader(self.trainset, batch_size=1, num_workers=2)
+        else:
+            return None
+
+    def val_dataloader(self):
+        if self.valset is not None:
+            return GeoLoader(self.valset, batch_size=1, num_workers=0)
+        else:
+            return None
+
+    def test_dataloader(self):
+        if self.testset is not None:
+            return GeoLoader(self.testset, batch_size=1, num_workers=0)
+        else:
+            return None
