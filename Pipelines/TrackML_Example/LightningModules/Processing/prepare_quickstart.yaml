@@ -5,7 +5,7 @@ detector_path: ${EXATRKX_DATA}/detectors.csv
 n_files: 350
 n_workers: 32
 n_tasks: 1
-overwrite: False
+overwrite: True
 
 endcaps: True
 noise: True

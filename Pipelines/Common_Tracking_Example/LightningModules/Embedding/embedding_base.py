@@ -182,7 +182,7 @@ class EmbeddingBase(LightningModule):
         try:
             d = torch.sum((reference - neighbors) ** 2, dim=-1)
         except RuntimeError:
-            # Need to perform this step in chunks??
+            # Need to perform this step in chunks?
             d = []
             for ref, nei in zip(reference.chunk(10), neighbors.chunk(10)):
                 d.append(torch.sum((ref - nei) ** 2, dim=-1))

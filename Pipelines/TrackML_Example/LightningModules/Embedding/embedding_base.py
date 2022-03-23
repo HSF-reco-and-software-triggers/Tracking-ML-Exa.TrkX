@@ -248,14 +248,14 @@ class EmbeddingBase(LightningModule):
         negative_loss = torch.nn.functional.hinge_embedding_loss(
             d[hinge == -1],
             hinge[hinge == -1],
-            margin=self.hparams["margin"],
+            margin=self.hparams["margin"]**2,
             reduction="mean",
         )
 
         positive_loss = torch.nn.functional.hinge_embedding_loss(
             d[hinge == 1],
             hinge[hinge == 1],
-            margin=self.hparams["margin"],
+            margin=self.hparams["margin"]**2,
             reduction="mean",
         )
 
@@ -290,7 +290,7 @@ class EmbeddingBase(LightningModule):
         d = d  # * new_weights THIS IS BETTER TO NOT INCLUDE
 
         loss = torch.nn.functional.hinge_embedding_loss(
-            d, hinge, margin=self.hparams["margin"], reduction="mean"
+            d, hinge, margin=self.hparams["margin"]**2, reduction="mean"
         )
 
         cluster_true = e_bidir.shape[1]
@@ -355,10 +355,10 @@ class EmbeddingBase(LightningModule):
 
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
-            self.trainer.global_step < self.hparams["warmup"]
+            self.trainer.current_epoch < self.hparams["warmup"]
         ):
             lr_scale = min(
-                1.0, float(self.trainer.global_step + 1) / self.hparams["warmup"]
+                1.0, float(self.trainer.current_epoch + 1) / self.hparams["warmup"]
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
