@@ -1,0 +1,3 @@
+stage_list:
+#     - { set: Embedding, name: LayerlessEmbedding, config: lrt_single_test.yaml,  resume_id: um7sz5ip, batch_config: configs/batch_gpu_default.yaml, batch_setup: True , override: {callbacks: [EmbeddingBuilder], r_test: 1.5, overwrite: True } }
+    - {set: Filter, name: PyramidFilter, config: lrt_single_train.yaml,  resume_id: ydyoy5l8, batch_config: configs/batch_gpu_default.yaml, batch_setup: True, override: {callbacks: [FilterBuilder], edge_cut: 0.15, overwrite: True, datatype_split: [1000, 25, 25]} }

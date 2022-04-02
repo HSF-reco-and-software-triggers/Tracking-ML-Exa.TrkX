@@ -1,0 +1,17 @@
+channels:
+    - pytorch
+    - pyg
+    - defaults
+    - conda-forge
+    
+dependencies:
+    - pip
+    - numpy
+    - pandas
+    - scipy
+    - matplotlib
+    - cpuonly
+    - pytorch==1.10.2
+    - pytorch-lightning
+    - pyg
+    - faiss-cpu

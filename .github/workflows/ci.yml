@@ -8,12 +8,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: conda-incubator/setup-miniconda@v2
         with:
-          python-version: 3.8
-      - name: Update pip
-        run: pip install pip --upgrade
-      - name: Install script
-        run: python install.py
+          python-version: 3.9
+          mamba-version: "*"
+          channels: pytorch, pyg, conda-forge   
+          channel-priority: true
+          activate-environment: exatrkx-cpu
+          environment-file: cpu_environment.yml
+          auto-activate-base: false
+#       - name: Install libraries
+#         run: mamba env update -n exatrkx-cpu -f cpu_environment.yml
+#       - name: Activate environment
+#         run: $CONDA/bin/activate exatrkx-cpu
+#       - name: Setup libraries
+#         run: pip install -e .
+      - run: |
+          conda info
+          conda list
       - name: Test Import
-        run: python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'
+        run: |
+          $CONDA/bin/activate exatrkx-cpu
+          conda info
+          conda list
+          python -c 'from Pipelines.TrackML_Example.LightningModules.Embedding.embedding_base import EmbeddingBase'

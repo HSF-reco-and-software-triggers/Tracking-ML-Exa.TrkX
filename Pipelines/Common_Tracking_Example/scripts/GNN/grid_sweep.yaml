@@ -1,0 +1,17 @@
+# Dataset
+program: train.py
+method: grid
+project: ITk_0.5GeV_Barrel_GNN
+parameters:
+    # Model hyperparameters
+    n_graph_iters:
+        values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    hidden:
+        values: [64, 128, 256]
+    cell_channels:
+        values: [0, 8]
+    input_dir:
+        values: 
+            - /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/embedding_processed/0.5GeV_barrel
+            - /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/filter_processed/0.5GeV_barrel
+        

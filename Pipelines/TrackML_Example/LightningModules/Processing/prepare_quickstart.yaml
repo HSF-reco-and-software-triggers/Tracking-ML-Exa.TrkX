@@ -2,14 +2,13 @@
 input_dir: ${EXATRKX_DATA}/train_all
 output_dir: ${EXATRKX_DATA}/feature_store/quickstart_example
 detector_path: ${EXATRKX_DATA}/detectors.csv
-n_files: 100
+n_files: 350
 n_workers: 32
 n_tasks: 1
 overwrite: True
 
 endcaps: True
-noise: False
-adjacent: True
-layerless: True
-layerwise: False
+noise: True
+layerwise: True
+modulewise: True
 cell_information: True

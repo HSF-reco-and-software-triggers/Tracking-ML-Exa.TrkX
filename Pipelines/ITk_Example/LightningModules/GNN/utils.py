@@ -11,66 +11,43 @@ import trackml.dataset
 # ---------------------------- Dataset Processing -------------------------
 
 
-def load_dataset(input_dir, num, pt_cut, noise=True):
+def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, noise):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
         all_events = sorted([os.path.join(input_dir, event) for event in all_events])
-        loaded_events = []
-        for event in all_events[:num]:
-            try:
-                loaded_event = torch.load(event, map_location=torch.device("cpu"))
-                loaded_event = process_event(loaded_event, noise, pt_cut)
-                loaded_events.append(loaded_event)
-                logging.info("Loaded event: {}".format(loaded_event.event_file))
-            except:
-                logging.info("Corrupted event file: {}".format(event))
+        loaded_events = [
+            torch.load(event, map_location=torch.device("cpu"))
+            for event in all_events[:num]
+        ]
+        loaded_events = select_data(
+            loaded_events, pt_background_cut, pt_signal_cut, true_edges, noise
+        )
         return loaded_events
     else:
         return None
 
-def process_event(event, noise, pt_cut):
-    
-    event.pid = event.pid.float()
-    event.pid[event.pid == 0] = float('nan')
-    
-    if ~noise:
-        event = remove_noise(event)
-        
-    if pt_cut > 0:
-        event = remove_pt(event, pt_cut)
-        
-    return event
 
+def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
+    # Handle event in batched form
+    if type(events) is not list:
+        events = [events]
 
-def remove_noise(event):
-    
-    noise_mask = np.isin(event.edge_index, torch.where(event.pid > 0)[0]).all(0)
-    
-    event.edge_index = event.edge_index[:, noise_mask]
-    event.y = event.y[noise_mask]
-    
-    return event
-    
-def remove_pt(event, pt_cut):
-    
-    pt_mask = np.isin(event.edge_index, torch.where(event.pt > pt_cut)[0]).all(0)
-            
-    event.edge_index = event.edge_index[:, pt_mask]
-    event.y = event.y[pt_mask]
-    
-    return event
+    # NOTE: Cutting background by pT BY DEFINITION removes noise
+    if pt_background_cut > 0:
+        for event in events:
 
-    
-def fetch_pt(event):
-    truth = trackml.dataset.load_event(event.event_file, parts=["truth"])[0]
-    hid = event.hid
-    merged_truth = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(
-        truth, on="hit_id"
-    )
-    pt = np.sqrt(merged_truth.tpx ** 2 + merged_truth.tpy ** 2)
+            edge_mask = (event.pt[event.edge_index] > pt_background_cut).all(0)
+            event.edge_index = event.edge_index[:, edge_mask]
+            event.y = event.y[edge_mask]
 
-    return pt
+            if "weights" in event.__dict__.keys():
+                if event.weights.shape[0] == edge_mask.shape[0]:
+                    event.weights = event.weights[edge_mask]
 
+            signal_mask = (event.pt[event.signal_true_edges] > pt_signal_cut).all(0)
+            event.signal_true_edges = event.signal_true_edges[:, signal_mask]
+
+    return events
 
 
 def random_edge_slice_v2(delta_phi, batch):

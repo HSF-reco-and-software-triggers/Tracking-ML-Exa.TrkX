@@ -33,17 +33,18 @@ class FilterBase(LightningModule):
             os.path.join(self.hparams["input_dir"], datatype)
             for datatype in self.hparams["datatype_names"]
         ]
-        self.trainset, self.valset, self.testset = [
-            load_dataset(
-                input_dir, 
-                self.hparams["datatype_split"][i],
-                self.hparams["pt_background_min"],
-                self.hparams["pt_signal_min"],
-                self.hparams["true_edges"],
-                self.hparams["noise"]
-            )
-            for i, input_dir in enumerate(input_dirs)
-        ]
+        if "trainset" not in self.__dict__.keys():
+            self.trainset, self.valset, self.testset = [
+                load_dataset(
+                    input_dir,
+                    self.hparams["datatype_split"][i],
+                    self.hparams["pt_background_min"],
+                    self.hparams["pt_signal_min"],
+                    self.hparams["true_edges"],
+                    self.hparams["noise"],
+                )
+                for i, input_dir in enumerate(input_dirs)
+            ]
 
     def train_dataloader(self):
         if self.trainset is not None:
@@ -160,15 +161,15 @@ class FilterBase(LightningModule):
         cut_list = []
         val_loss = torch.tensor(0)
         for j in range(self.hparams["n_chunks"]):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
-                j
-            ]
-            if ("ci" in self.hparams["regime"]):
+            subset_ind = torch.chunk(
+                torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
+            )[j]
+            if "ci" in self.hparams["regime"]:
                 output = self(
-                        torch.cat([batch.cell_data, batch.x], axis=-1),
-                        batch.edge_index[:, subset_ind],
-                        emb,
-                    ).squeeze()
+                    torch.cat([batch.cell_data, batch.x], axis=-1),
+                    batch.edge_index[:, subset_ind],
+                    emb,
+                ).squeeze()
             else:
                 output = self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
                 
@@ -182,7 +183,7 @@ class FilterBase(LightningModule):
                 manual_weights = None
 
             if "pid" not in self.hparams["regime"]:
-                val_loss =+ F.binary_cross_entropy_with_logits(
+                val_loss = +F.binary_cross_entropy_with_logits(
                     output, batch.y[subset_ind].float(), weight=manual_weights
                 )
             else:
@@ -202,13 +203,12 @@ class FilterBase(LightningModule):
             true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
             true_y = batch.y
-            
+
         edge_true = true_y.sum()
         edge_true_positive = (true_y.bool() & cut_list).sum().float()
 
-        current_lr = self.optimizers().param_groups[0]["lr"]
-
         if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
                 {
                     "eff": torch.tensor(edge_true_positive / edge_true),
@@ -276,22 +276,24 @@ class FilterBaseBalanced(FilterBase):
         )  # Does this work??
 
         if "subset" in self.hparams["regime"]:
-            subset_mask = np.isin(batch.edge_index.cpu(), batch.layerless_true_edges.unique().cpu()).any(0)
+            subset_mask = np.isin(
+                batch.edge_index.cpu(), batch.layerless_true_edges.unique().cpu()
+            ).any(0)
             batch.edge_index = batch.edge_index[:, subset_mask]
             batch.y = batch.y[subset_mask]
-            
+
         with torch.no_grad():
             cut_list = []
             for j in range(self.hparams["n_chunks"]):
                 subset_ind = torch.chunk(
                     torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
                 )[j]
-                if ("ci" in self.hparams["regime"]):
+                if "ci" in self.hparams["regime"]:
                     output = self(
-                            torch.cat([batch.cell_data, batch.x], axis=-1),
-                            batch.edge_index[:, subset_ind],
-                            emb,
-                        ).squeeze()
+                        torch.cat([batch.cell_data, batch.x], axis=-1),
+                        batch.edge_index[:, subset_ind],
+                        emb,
+                    ).squeeze()
                 else:
                     output = self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
                     
@@ -319,12 +321,12 @@ class FilterBaseBalanced(FilterBase):
             combined_indices[torch.randperm(len(combined_indices))]
             weight = torch.tensor(self.hparams["weight"])
 
-        if ("ci" in self.hparams["regime"]):
+        if "ci" in self.hparams["regime"]:
             output = self(
-                    torch.cat([batch.cell_data, batch.x], axis=-1),
-                    batch.edge_index[:, combined_indices],
-                    emb,
-                ).squeeze()
+                torch.cat([batch.cell_data, batch.x], axis=-1),
+                batch.edge_index[:, combined_indices],
+                emb,
+            ).squeeze()
         else:
             output = self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
 
@@ -349,8 +351,8 @@ class FilterBaseBalanced(FilterBase):
                 weight=manual_weights,
                 pos_weight=weight,
             )
-            
-        self.log_dict({"train_loss": loss})
+
+        self.log_dict({"train_loss": loss}, on_step=True, on_epoch=True)
 
         return loss
 
@@ -379,9 +381,9 @@ class FilterBaseBalanced(FilterBase):
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
         for j in range(self.hparams["n_chunks"]):
-            subset_ind = torch.chunk(torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"])[
-                j
-            ]
+            subset_ind = torch.chunk(
+                torch.arange(batch.edge_index.shape[1]), self.hparams["n_chunks"]
+            )[j]
             output = (
                 self(
                     torch.cat([batch.cell_data, batch.x], axis=-1),
@@ -391,7 +393,7 @@ class FilterBaseBalanced(FilterBase):
                 if ("ci" in self.hparams["regime"])
                 else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
             )
-            scores = F.sigmoid(output)
+            scores = torch.sigmoid(output)
             score_list.append(scores)
 
             if "weighting" in self.hparams["regime"]:
@@ -422,13 +424,13 @@ class FilterBaseBalanced(FilterBase):
             true_y = batch.pid[batch.edge_index[0]] == batch.pid[batch.edge_index[1]]
         else:
             true_y = batch.y
-            
+
         edge_true = true_y.sum()
         edge_true_positive = (true_y.bool() & cut_list).sum().float()
 
-        current_lr = self.optimizers().param_groups[0]["lr"]
-
         if log:
+            current_lr = self.optimizers().param_groups[0]["lr"]
+
             self.log_dict(
                 {
                     "eff": torch.tensor(edge_true_positive / edge_true),

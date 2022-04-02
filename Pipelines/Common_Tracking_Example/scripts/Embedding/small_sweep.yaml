@@ -1,0 +1,14 @@
+# Dataset
+program: train_sweep.py
+method: random
+project: ITk_1GeVSignal_Embedding_Barrel
+parameters:
+    # Model hyperparameters
+    weight: 
+        min: 2
+        max: 6
+    nb_layer:
+        min: 2
+        max: 4
+    regime:
+        values: [[rp, ci, hnm, norm, query_noise_points], [rp, ci, hnm, norm]]

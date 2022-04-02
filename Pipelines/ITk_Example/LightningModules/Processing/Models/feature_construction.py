@@ -62,8 +62,7 @@ class FeatureStore(LightningDataModule):
             "eta_angle_1",
             "phi_angle_1",
             "eta_angle_2",
-            "phi_angle_2"
-            
+            "phi_angle_2",
         ]
 
         # Prepare output
@@ -73,8 +72,6 @@ class FeatureStore(LightningDataModule):
 
         # Process input files with a worker pool and progress bar
         process_func = partial(
-            prepare_event,
-            cell_features=cell_features,
-            **self.hparams
+            prepare_event, cell_features=cell_features, **self.hparams
         )
         process_map(process_func, all_events, max_workers=self.n_workers)

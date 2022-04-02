@@ -55,7 +55,7 @@ def fetch_pt(event):
     merged_truth = pd.DataFrame(hid.cpu().numpy(), columns=["hit_id"]).merge(
         truth, on="hit_id"
     )
-    pt = np.sqrt(merged_truth.tpx ** 2 + merged_truth.tpy ** 2)
+    pt = np.sqrt(merged_truth.tpx**2 + merged_truth.tpy**2)
 
     return pt.to_numpy()
 
@@ -205,7 +205,7 @@ def build_edges(spatial, r_max, k_max, return_indices=False):
     ind = torch.Tensor.repeat(
         torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
     ).T
-    edge_list = torch.stack([ind[D <= r_max ** 2], I[D <= r_max ** 2]])
+    edge_list = torch.stack([ind[D <= r_max**2], I[D <= r_max**2]])
 
     # Remove self-loops
     edge_list = edge_list[:, edge_list[0] != edge_list[1]]

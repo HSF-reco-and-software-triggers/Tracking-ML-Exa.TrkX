@@ -114,22 +114,22 @@ def select_hits(hits, truth, particles, pt_min=0, endcaps=False, noise=False):
     )
     if noise is False:
         # Calculate particle transverse momentum
-        pt = np.sqrt(particles.px ** 2 + particles.py ** 2)
+        pt = np.sqrt(particles.px**2 + particles.py**2)
         # Applies pt cut, removes noise hits
         particles = particles[pt > pt_min]
         truth = truth[["hit_id", "particle_id", "tpx", "tpy", "weight"]].merge(
             particles[["particle_id", "vx", "vy", "vz"]], on="particle_id"
         )
-        truth = truth.assign(pt=np.sqrt(truth.tpx ** 2 + truth.tpy ** 2))
+        truth = truth.assign(pt=np.sqrt(truth.tpx**2 + truth.tpy**2))
     else:
         # Calculate particle transverse momentum
-        pt = np.sqrt(truth.tpx ** 2 + truth.tpy ** 2)
+        pt = np.sqrt(truth.tpx**2 + truth.tpy**2)
         # Applies pt cut
         truth = truth[pt > pt_min]
         truth.loc[truth["particle_id"] == 0, "particle_id"] = float("NaN")
         truth = truth.assign(pt=pt)
     # Calculate derived hits variables
-    r = np.sqrt(hits.x ** 2 + hits.y ** 2)
+    r = np.sqrt(hits.x**2 + hits.y**2)
     phi = np.arctan2(hits.y, hits.x)
     # Select the data columns we need
     hits = (

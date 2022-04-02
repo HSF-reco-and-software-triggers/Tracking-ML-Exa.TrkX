@@ -18,7 +18,7 @@ from ..utils import graph_intersection
 from ..filter_base import FilterBase, FilterBaseBalanced
 
 
-class VanillaFilter(FilterBase):
+class VanillaFilter(FilterBaseBalanced):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
@@ -27,7 +27,9 @@ class VanillaFilter(FilterBase):
 
         # Construct the MLP architecture
         self.input_layer = Linear(
-            (hparams["spatial_channels"] + hparams["cell_channels"]) * 2 + hparams["emb_channels"] * 2, hparams["hidden"]
+            (hparams["spatial_channels"] + hparams["cell_channels"]) * 2
+            + hparams["emb_channels"] * 2,
+            hparams["hidden"],
         )
         layers = [
             Linear(hparams["hidden"], hparams["hidden"])

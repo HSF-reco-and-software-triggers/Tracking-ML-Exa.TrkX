@@ -1,0 +1,26 @@
+# Dataset
+program: train_sweep.py
+method: random
+project: ITk_1GeVSignal_Barrel_Filter
+parameters:
+    # Model hyperparameters
+    nb_layer:
+        min: 1
+        max: 6
+    weight: 
+        min: 2
+        max: 12
+    edge_cut:
+        min: 0.1
+        max: 0.5
+    lr:
+        min: 0.0001
+        max: 0.01
+    patience:
+        min: 2
+        max: 30
+    factor: 
+        min: 0.1
+        max: 0.9
+    regime:
+        values: [[ci], [ci, subset]]

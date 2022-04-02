@@ -1,0 +1,40 @@
+# Input/output configuration
+input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/feature_store_modulewise_v2
+project: ITk_1GeV
+
+# Dataset parameters
+pt_signal_min: 1000.
+pt_background_min: 1000.
+n_hits: 3.
+primary_only: True
+eta_cut: 1.
+train_split: [100, 10, 10] # Number of [training, validation, testing] examples
+true_edges: modulewise_true_edges
+noise: False
+
+# Model parameters
+spatial_channels: 3
+cell_channels: 8
+emb_hidden: 512
+nb_layer: 4
+emb_dim: 8
+weight: 5
+randomisation: 1
+points_per_batch: 100000
+r_train: 1.0
+r_val: 1.0
+r_test: 1.5
+knn: 50
+warmup: 200
+margin: 1.0
+lr: 0.001
+factor: 0.3
+patience: 15
+regime: [rp, ci, hnm]
+max_epochs: 40
+
+# Postprocessing
+callbacks: EmbeddingTelemetry #[EmbeddingInferenceCallback, 
+
+# Logging
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

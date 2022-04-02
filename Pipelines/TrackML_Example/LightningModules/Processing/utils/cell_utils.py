@@ -23,13 +23,13 @@ def select_max(test_val, current_val):
 def find_ch0_min(cells_in, nb_hits):
     cell_idx = cells_in.index.values.reshape(-1, 1)
     cells = cells_in[["hit_id", "ch0"]].values
-    where_min = find_ch0_property(cells, nb_hits, select_min, 10 ** 8)
+    where_min = find_ch0_property(cells, nb_hits, select_min, 10**8)
     return where_min
 
 
 def find_ch0_max(cells_in, nb_hits):
     cells = cells_in[["hit_id", "ch0"]].values
-    where_max = find_ch0_property(cells, nb_hits, select_max, -(10 ** 8))
+    where_max = find_ch0_property(cells, nb_hits, select_max, -(10**8))
     return where_max
 
 
@@ -98,7 +98,7 @@ def extract_rotation_matrix(module):
 
 
 def cartesion_to_spherical(x, y, z):
-    r3 = np.sqrt(x ** 2 + y ** 2 + z ** 2)
+    r3 = np.sqrt(x**2 + y**2 + z**2)
     phi = np.arctan2(y, x)
     theta = np.arccos(z / r3)
     return r3, theta, phi
