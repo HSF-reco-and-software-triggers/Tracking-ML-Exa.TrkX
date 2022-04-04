@@ -3,7 +3,7 @@
 #SBATCH -A m3443_g -q early_science
 #SBATCH -C gpu 
 #SBATCH -t 60:00
-#SBATCH -n 16
+#SBATCH -n 4
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-task=1
 #SBATCH -c 32

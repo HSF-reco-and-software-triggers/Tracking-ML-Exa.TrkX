@@ -6,14 +6,13 @@ import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
 
-from ..gnn_base import GNNBase, LargeGNNBase
+from ..hetero_gnn_base import LargeGNNBase
 from ..utils import make_mlp
 
-
-class InteractionGNN(LargeGNNBase):
+class HeteroGNN(LargeGNNBase):
 
     """
-    An interaction network class
+    A heterogeneous interaction network class
     """
 
     def __init__(self, hparams):
@@ -34,24 +33,33 @@ class InteractionGNN(LargeGNNBase):
         )
 
         # Setup input network
-        self.node_encoder = make_mlp(
-            hparams["spatial_channels"] + hparams["cell_channels"],
-            [hparams["hidden"]] * hparams["nb_node_layer"],
-            output_activation=hparams["output_activation"],
-            hidden_activation=hparams["hidden_activation"],
-            layer_norm=hparams["layernorm"],
-            batch_norm=hparams["batchnorm"],
-        )
+
+        # Make module list
+        self.node_encoders = nn.ModuleList([
+            make_mlp(
+                model["num_features"],
+                [hparams["hidden"]] * hparams["nb_node_layer"],
+                output_activation=hparams["output_activation"],
+                hidden_activation=hparams["hidden_activation"],
+                layer_norm=hparams["layernorm"],
+                batch_norm=hparams["batchnorm"],
+            ) for model in hparams["model_ids"]
+        ])
 
         # The edge network computes new edge features from connected nodes
-        self.edge_encoder = make_mlp(
-            2 * (hparams["hidden"]),
-            [hparams["hidden"]] * hparams["nb_edge_layer"],
-            layer_norm=hparams["layernorm"],
-            batch_norm=hparams["batchnorm"],
-            output_activation=hparams["output_activation"],
-            hidden_activation=hparams["hidden_activation"],
-        )
+
+        # Make edge encoder combos
+        self.all_combos = torch.combinations(torch.arange(len(self.hparams["model_ids"])), r=2, with_replacement=True)                
+        self.edge_encoders = nn.ModuleList([
+            make_mlp(
+                2 * (hparams["hidden"]),
+                [hparams["hidden"]] * hparams["nb_edge_layer"],
+                layer_norm=hparams["layernorm"],
+                batch_norm=hparams["batchnorm"],
+                output_activation=hparams["output_activation"],
+                hidden_activation=hparams["hidden_activation"],
+            ) for _ in self.all_combos
+        ])
 
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
@@ -141,21 +149,32 @@ class InteractionGNN(LargeGNNBase):
 
         return self.output_edge_classifier(classifier_inputs).squeeze(-1)
 
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, volume_id):
 
         start, end = edge_index
 
         # Encode the graph features into the hidden space
         x.requires_grad = True
-        x = checkpoint(self.node_encoder, x)
-        e = checkpoint(self.edge_encoder, torch.cat([x[start], x[end]], dim=1))
 
-        #         edge_outputs = []
+        encoded_nodes = torch.empty((x.shape[0], self.hparams["hidden"])).to(self.device)
+        for encoder, model in zip(self.node_encoders, self.hparams["model_ids"]):
+            node_id_mask = torch.isin(volume_id, torch.tensor(model["volume_ids"]).to(self.device))
+            encoded_nodes[node_id_mask] = checkpoint(encoder, x[node_id_mask, :model["num_features"]])
+
+        encoded_edges = torch.empty((edge_index.shape[1], self.hparams["hidden"])).to(self.device)
+        for encoder, combo in zip(self.edge_encoders, self.all_combos):
+            vol_ids_0, vol_ids_1 = self.hparams["model_ids"][combo[0]]["volume_ids"], self.hparams["model_ids"][combo[1]]["volume_ids"]
+            edge_id_mask = (
+                (torch.isin(volume_id[edge_index[0]], torch.tensor(vol_ids_0).to(self.device)) & torch.isin(volume_id[edge_index[1]], torch.tensor(vol_ids_1).to(self.device))) 
+                | (torch.isin(volume_id[edge_index[0]], torch.tensor(vol_ids_1).to(self.device)) & torch.isin(volume_id[edge_index[1]], torch.tensor(vol_ids_0).to(self.device)))
+            )
+            encoded_edges[edge_id_mask] = checkpoint(encoder, torch.cat([encoded_nodes[edge_index[0, edge_id_mask]], encoded_nodes[edge_index[1, edge_id_mask]]], dim=-1))
+
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
 
-            x, e = checkpoint(self.message_step, x, start, end, e)
+            encoded_nodes, encoded_edges = checkpoint(self.message_step, encoded_nodes, start, end, encoded_edges)
 
         # Compute final edge scores; use original edge directions only
         # return checkpoint(self.output_step, x, start, end, e)
-        return self.output_step(x, start, end, e)
+        return self.output_step(encoded_nodes, start, end, encoded_edges)

@@ -10,14 +10,14 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import auc
 import numpy as np
 import pandas as pd
-import seaborn as sns
+# import seaborn as sns
 from tqdm import tqdm
 
 # import seaborn as sns
 import torch
-from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-import wandb
+# from pytorch_lightning import Trainer
+# from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+# import wandb
 
 class GNNInferenceCallback():
     def __init__(self, model, overwrite=None):

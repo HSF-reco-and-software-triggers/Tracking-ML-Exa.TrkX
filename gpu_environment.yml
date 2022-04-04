@@ -1,4 +1,4 @@
-name: exatrkx-gpu
+name: exatrkx-cori
 
 channels:
     - rapidsai
