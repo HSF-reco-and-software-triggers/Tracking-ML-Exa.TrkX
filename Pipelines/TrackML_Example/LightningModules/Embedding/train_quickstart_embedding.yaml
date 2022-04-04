@@ -19,17 +19,17 @@ nb_layer: 4
 emb_dim: 12
 weight: 2
 activation: Tanh
-randomisation: 1
+randomisation: 2
 points_per_batch: 100000
 r_train: 0.1
 r_val: 0.1
 r_test: 0.1
 knn: 100
-warmup: 500
+warmup: 3
 margin: 0.1
-lr: 0.01
+lr: 0.0001
 factor: 0.3
-patience: 20
+patience: 10
 regime: [[rp, ci, hnm, norm]]
 max_epochs: 30
 

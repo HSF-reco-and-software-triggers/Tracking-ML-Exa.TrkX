@@ -30,6 +30,7 @@ else:
     device = "cpu"
     FRNN_AVAILABLE = False
 
+FRNN_AVAILABLE = False
 
 def load_dataset(
     input_dir,
@@ -119,7 +120,7 @@ def select_data(
     if pt_background_cut > 0 or not noise:
         for event in events:
 
-            pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid)
+            pt_mask = (event.pt > pt_background_cut) & (event.pid == event.pid) & (event.pid != 0)
             pt_where = torch.where(pt_mask)[0]
 
             inverse_mask = torch.zeros(pt_where.max() + 1).long()
@@ -131,25 +132,24 @@ def select_data(
 
             node_features = ["cell_data", "x", "hid", "pid", "pt", "nhits", "primary"]
             for feature in node_features:
-                if feature in event.__dict__.keys():
+                if feature in event.keys:
                     event[feature] = event[feature][pt_mask]
 
     for event in events:
 
         event.signal_true_edges = event[true_edges]
-
-        if (
-            ("pt" in event.__dict__.keys())
-            & ("primary" in event.__dict__.keys())
-            & ("nhits" in event.__dict__.keys())
-        ):
-            edge_subset = (
-                (event.pt[event[true_edges]] > pt_signal_cut).all(0)
-                & (event.nhits[event[true_edges]] >= nhits_min).all(0)
-                & (event.primary[event[true_edges]].bool().all(0) | (not primary_only))
-            )
-
-            event.signal_true_edges = event.signal_true_edges[:, edge_subset]
+        edge_subset = torch.ones(event.signal_true_edges.shape[1]).bool()
+        
+        if "pt" in event.keys:
+            edge_subset &= (event.pt[event[true_edges]] > pt_signal_cut).all(0)
+        
+        if "primary" in event.keys:
+            edge_subset &= (event.nhits[event[true_edges]] >= nhits_min).all(0)
+            
+        if "nhits" in event.keys:
+            edge_subset &= ((event.primary[event[true_edges]].bool().all(0) | (not primary_only)))
+        
+        event.signal_true_edges = event.signal_true_edges[:, edge_subset]
 
     return events
 
@@ -247,7 +247,7 @@ def build_edges(
 
         if device == "cuda":
             res = faiss.StandardGpuResources()
-            Dsq, I = faiss.knn_gpu(res, query, database, k_max)
+            Dsq, I = faiss.knn_gpu(res, database, query, k_max)
         elif device == "cpu":
             index = faiss.IndexFlatL2(database.shape[1])
             index.add(database)
@@ -255,7 +255,7 @@ def build_edges(
 
         ind = torch.Tensor.repeat(
             torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
-        ).T
+        ).T.int()
 
         edge_list = torch.stack([ind[Dsq <= r_max**2], I[Dsq <= r_max**2]])
 
