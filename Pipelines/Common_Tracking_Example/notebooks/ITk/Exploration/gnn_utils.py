@@ -170,78 +170,13 @@ def get_ratio(x, y):
     err[err != err] = 0
     return res, err
 
-def plot_eta_metrics(av_eta_pos, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, eta_width=0.5, eta_bounds=(-4, 4.4), common_axes=None):
+def plot_metrics(av_pos, av_signal_true, av_signal_true_pos, av_bkg_true_pos, num_bins=10, bounds=(-4., 4.), common_axes=None, x_label="$\eta$", y_labels=["Efficiency", "Signal purity", "Background purity"], log_x=False):
 
-    eta_bins = np.arange(eta_bounds[0], eta_bounds[1], eta_width)
-    signal_true_counts, _ = np.histogram(av_eta_signal_true, bins=eta_bins)
-    signal_true_pos_counts, _ = np.histogram(av_eta_signal_true_pos, bins=eta_bins)
-    pred_counts, _ = np.histogram(av_eta_pos, bins=eta_bins)
-    bkg_true_pos_counts, _ = np.histogram(av_eta_bkg_true_pos, bins=eta_bins)
-
-    eff, eff_err = get_ratio(signal_true_pos_counts, signal_true_counts)
-    signal_purity, signal_purity_err = get_ratio(signal_true_pos_counts, pred_counts)
-    bkg_purity, bkg_purity_err = get_ratio(bkg_true_pos_counts, pred_counts)
-
-    centers = (eta_bins[:-1] + eta_bins[1:]) / 2
-
-    # TODO: Abstract-out these plotting functions!
-    if common_axes is None:
-
-        # Plot and return figures    
-        _, eff_ax = plt.subplots(1, 1, figsize=(10, 5))
-        _, signal_pur_ax = plt.subplots(1, 1, figsize=(10, 5))
-        _, bkg_pur_ax = plt.subplots(1, 1, figsize=(10, 5))
-
+    if log_x:
+        bins = np.logspace(np.log10(bounds[0]), np.log10(bounds[1]), num_bins)
     else:
-        eff_ax = common_axes[0]
-        signal_pur_ax = common_axes[1]
-        bkg_pur_ax = common_axes[2]
+        bins = np.linspace(bounds[0], bounds[1], num_bins)
 
-    eff_ax.errorbar(centers, eff, yerr=eff_err, xerr=eta_width/2, fmt="o")
-    eff_ax.set_xlabel("$\eta$")
-    eff_ax.set_ylabel("Efficiency")
-
-    # Get color of the last plot
-    color = eff_ax.lines[-1].get_color()
-
-    # Add a cubic spline to the efficiency plot to smooth it
-    eff_spline = scipy.interpolate.UnivariateSpline(centers, eff, s=0)
-    eff_spline_x = np.linspace(centers[0], centers[-1], 1000)
-    eff_spline_y = eff_spline(eff_spline_x)
-    eff_ax.plot(eff_spline_x, eff_spline_y, linestyle=":", color=color)
-
-    signal_pur_ax.errorbar(centers, signal_purity, yerr=signal_purity_err, xerr=eta_width/2, fmt="o")
-    signal_pur_ax.set_xlabel("$\eta$")
-    signal_pur_ax.set_ylabel("Signal purity")
-
-    # Get color of the last plot
-    color = signal_pur_ax.lines[-1].get_color()
-
-    # Add a cubic spline to the efficiency plot to smooth it
-    signal_pur_spline = scipy.interpolate.UnivariateSpline(centers, signal_purity, s=0)
-    signal_pur_spline_x = np.linspace(centers[0], centers[-1], 1000)
-    signal_pur_spline_y = signal_pur_spline(signal_pur_spline_x)
-    signal_pur_ax.plot(signal_pur_spline_x, signal_pur_spline_y, linestyle=":", color=color)
-
-    
-    bkg_pur_ax.errorbar(centers, bkg_purity, yerr=bkg_purity_err, xerr=eta_width/2, fmt="o")
-    bkg_pur_ax.set_xlabel("$\eta$")
-    bkg_pur_ax.set_ylabel("Background purity")
-
-    # Get color of the last plot
-    color = bkg_pur_ax.lines[-1].get_color()
-
-    # Add a cubic spline to the efficiency plot to smooth it
-    bkg_pur_spline = scipy.interpolate.UnivariateSpline(centers, bkg_purity, s=0)
-    bkg_pur_spline_x = np.linspace(centers[0], centers[-1], 1000)
-    bkg_pur_spline_y = bkg_pur_spline(bkg_pur_spline_x)
-    bkg_pur_ax.plot(bkg_pur_spline_x, bkg_pur_spline_y, linestyle=":", color=color)
-
-    return eff_ax, signal_pur_ax, bkg_pur_ax
-
-def plot_metrics(av_pos, av_signal_true, av_signal_true_pos, av_bkg_true_pos, bin_width=0.5, bounds=(-4, 4.4), common_axes=None, x_label="$\eta$"):
-
-    bins = np.arange(bounds[0], bounds[1], bin_width)
     signal_true_counts, _ = np.histogram(av_signal_true, bins=bins)
     signal_true_pos_counts, _ = np.histogram(av_signal_true_pos, bins=bins)
     pred_counts, _ = np.histogram(av_pos, bins=bins)
@@ -253,21 +188,23 @@ def plot_metrics(av_pos, av_signal_true, av_signal_true_pos, av_bkg_true_pos, bi
 
     centers = (bins[:-1] + bins[1:]) / 2
 
-    if common_axes is None:
+    # eff_ax, signal_pur_ax, bkg_pur_ax = None, None, None
+    axes_list = [None, None, None]
 
+    if common_axes is None:
+        
         # Plot and return figures    
-        _, eff_ax = plt.subplots(1, 1, figsize=(10, 5))
-        _, signal_pur_ax = plt.subplots(1, 1, figsize=(10, 5))
-        _, bkg_pur_ax = plt.subplots(1, 1, figsize=(10, 5))
+        for i in range(len(y_labels)):
+            _, axes_list[i] = plt.subplots(1, 1, figsize=(10, 5))
 
     else:
-        eff_ax = common_axes[0]
-        signal_pur_ax = common_axes[1]
-        bkg_pur_ax = common_axes[2]
+        common_axes = common_axes if type(common_axes) is list else [common_axes]
+        axes_list = common_axes
 
-
-    for ax, counts, err, label in zip([eff_ax, signal_pur_ax, bkg_pur_ax], [eff, signal_purity, bkg_purity], [eff_err, signal_purity_err, bkg_purity_err], ["Efficiency", "Signal purity", "Background purity"]):
-        ax.errorbar(centers, counts, yerr=err, xerr=bin_width/2, fmt="o")
+    for ax, counts, err, label in zip(axes_list, [eff, signal_purity, bkg_purity], [eff_err, signal_purity_err, bkg_purity_err], y_labels):
+        ax.errorbar(centers, counts, yerr=err, xerr=(bins[:-1] - bins[1:]) / 2, fmt="o", elinewidth=2, capsize=5, capthick=2)
+        if log_x:
+            ax.set_xscale("log")
         ax.set_xlabel(x_label)
         ax.set_ylabel(label)
 
@@ -280,8 +217,7 @@ def plot_metrics(av_pos, av_signal_true, av_signal_true_pos, av_bkg_true_pos, bi
         spline_y = spline(spline_x)
         ax.plot(spline_x, spline_y, linestyle=":", color=color)
 
-    return eff_ax, signal_pur_ax, bkg_pur_ax
-
+    return axes_list
     
 
 def run_eta_performance(checkpoint_path, model_type, dataset_type, num_events, score_cut, common_axes = None, vmin=[None, None, None], vmax=[None, None, None]):
@@ -289,7 +225,7 @@ def run_eta_performance(checkpoint_path, model_type, dataset_type, num_events, s
     results = inference(model, dataset_type, num_events)
     get_topline_stats(results, score_cut)
     av_eta_pred, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, av_r_pred, av_r_signal_true, av_r_signal_true_pos, av_r_bkg_true_pos = build_edge_eta_list(results)
-    eff_ax, signal_pur_ax, bkg_pur_ax = plot_eta_metrics(av_eta_pred, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, common_axes = common_axes)
+    eff_ax, signal_pur_ax, bkg_pur_ax = plot_metrics(av_eta_pred, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, common_axes = common_axes)
     if common_axes is None:
         plot_eta_r_metrics(av_eta_pred, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, av_r_pred, av_r_signal_true, av_r_signal_true_pos, av_r_bkg_true_pos, vmin=vmin, vmax=vmax)
 
@@ -304,9 +240,9 @@ def run_pt_performance(checkpoint_path, model_type, dataset_type, num_events, sc
     results = inference(model, dataset_type, num_events)
     get_topline_stats(results, score_cut)
     av_pt_pred, av_pt_signal_true, av_pt_signal_true_pos, av_pt_bkg_true_pos = build_edge_pt_list(results)
-    eff_ax, signal_pur_ax, bkg_pur_ax = plot_metrics(av_pt_pred, av_pt_signal_true, av_pt_signal_true_pos, av_pt_bkg_true_pos, bin_width=1000, bounds=(900, 10000), common_axes = common_axes, x_label="$p_{T} (GeV)$")
+    eff_ax = plot_metrics(av_pt_pred, av_pt_signal_true, av_pt_signal_true_pos, av_pt_bkg_true_pos, num_bins=20, bounds=(1000, 100000), common_axes = common_axes, x_label="$p_{T} (MeV)$", y_labels=["Efficiency"], log_x=True)
 
-    return eff_ax, signal_pur_ax, bkg_pur_ax
+    return eff_ax
 
 
 

@@ -9,30 +9,15 @@ from torch.utils.checkpoint import checkpoint
 from ..hetero_gnn_base import LargeGNNBase
 from ..utils import make_mlp
 
-class HeteroGNN(LargeGNNBase):
-
+class HeteroEncoder(torch.nn.Module):
     """
-    A heterogeneous interaction network class
+    The node and edge encoder(s) that can handle heterogeneous models        
     """
 
     def __init__(self, hparams):
-        super().__init__(hparams)
-        """
-        Initialise the Lightning Module that can scan over different GNN training regimes
-        """
+        super(HeteroEncoder, self).__init__()
 
-        concatenation_factor = (
-            3 if (self.hparams["aggregation"] in ["sum_max", "mean_max", "mean_sum"]) else 2
-        )
-
-        hparams["batchnorm"] = (
-            False if "batchnorm" not in hparams else hparams["batchnorm"]
-        )
-        hparams["output_activation"] = (
-            None if "output_activation" not in hparams else hparams["output_activation"]
-        )
-
-        # Setup input network
+        self.hparams = hparams
 
         # Make module list
         self.node_encoders = nn.ModuleList([
@@ -46,9 +31,7 @@ class HeteroGNN(LargeGNNBase):
             ) for model in hparams["model_ids"]
         ])
 
-        # The edge network computes new edge features from connected nodes
-
-        # Make edge encoder combos
+        # Make edge encoder combos (this is an N-choose-2 with replacement situation)
         self.all_combos = torch.combinations(torch.arange(len(self.hparams["model_ids"])), r=2, with_replacement=True)                
         self.edge_encoders = nn.ModuleList([
             make_mlp(
@@ -61,6 +44,59 @@ class HeteroGNN(LargeGNNBase):
             ) for _ in self.all_combos
         ])
 
+    def forward(self, x, edge_index, volume_id):
+
+        start, end = edge_index
+
+        encoded_nodes = torch.empty((x.shape[0], self.hparams["hidden"])).to(x.device)
+        encoded_edges = self.fill_hetero_nodes(encoded_nodes, x, volume_id)
+
+        encoded_edges = torch.empty((edge_index.shape[1], self.hparams["hidden"])).to(edge_index.device)
+        encoded_edges = self.fill_hetero_edges(encoded_edges, encoded_nodes, start, end, volume_id)        
+
+        return encoded_nodes, encoded_edges
+
+    def fill_hetero_nodes(self, encoded_nodes, x, volume_id):
+        """
+        Fill the heterogeneous nodes with the corresponding encoders
+        """
+        for encoder, model in zip(self.node_encoders, self.hparams["model_ids"]):
+            node_id_mask = torch.isin(volume_id, torch.tensor(model["volume_ids"]).to(x.device))
+            encoded_nodes[node_id_mask] = checkpoint(encoder, x[node_id_mask, :model["num_features"]])
+        
+        return encoded_nodes
+
+    def fill_hetero_edges(self, encoded_edges, encoded_nodes, start, end, volume_id):
+        """
+        Fill the heterogeneous edges with the corresponding encoders
+        """
+
+        for encoder, combo in zip(self.edge_encoders, self.all_combos):
+            vol_ids_0, vol_ids_1 = torch.tensor(self.hparams["model_ids"][combo[0]]["volume_ids"], device=encoded_edges.device), torch.tensor(self.hparams["model_ids"][combo[1]]["volume_ids"], device=encoded_edges.device)
+            edge_id_mask = (
+                (torch.isin(volume_id[start], vol_ids_0) & torch.isin(volume_id[end], vol_ids_1)) 
+                | (torch.isin(volume_id[end], vol_ids_1) & torch.isin(volume_id[start], vol_ids_0))
+            )
+            encoded_edges[edge_id_mask] = checkpoint(encoder, torch.cat([encoded_nodes[start[edge_id_mask]], encoded_nodes[end[edge_id_mask]]], dim=-1))
+        
+        return encoded_edges
+
+
+class HomoConv(torch.nn.Module):
+
+    """
+    A simple message passing convolution (a la Interaction Network) that handles only homogeoneous models
+    """
+
+    def __init__(self, hparams):
+        super(HomoConv, self).__init__()
+
+        self.hparams = hparams
+
+        concatenation_factor = (
+            3 if (self.hparams["aggregation"] in ["sum_max", "mean_max", "mean_sum"]) else 2
+        )
+            
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
             3 * hparams["hidden"],
@@ -81,6 +117,84 @@ class HeteroGNN(LargeGNNBase):
             hidden_activation=hparams["hidden_activation"],
         )
 
+    def get_aggregation(self):
+        """
+        Factory dictionary for aggregation depending on the hparams["aggregation"]
+        """
+
+        aggregation_dict = {
+            "sum": lambda e, end, x: scatter_add(e, end, dim=0, dim_size=x.shape[0]),
+            "mean": lambda e, end, x: scatter_mean(e, end, dim=0, dim_size=x.shape[0]),
+            "max": lambda e, end, x: scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
+            "sum_max": lambda e, end, x: torch.cat(
+                [
+                    scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
+                    scatter_add(e, end, dim=0, dim_size=x.shape[0]),
+                ],
+                dim=-1,
+            ),
+            "mean_sum": lambda e, end, x: torch.cat(
+                [
+                    scatter_mean(e, end, dim=0, dim_size=x.shape[0]),
+                    scatter_add(e, end, dim=0, dim_size=x.shape[0]),
+                ],
+                dim=-1,
+            ),
+            "mean_max": lambda e, end, x: torch.cat(
+                [
+                    scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
+                    scatter_mean(e, end, dim=0, dim_size=x.shape[0]),
+                ],
+                dim=-1,
+            ),
+        }
+
+        return aggregation_dict[self.hparams["aggregation"]]
+
+
+    def forward(self, x, edge_index, e):
+
+        start, end = edge_index
+
+        # Perform message passing
+        edge_messages = self.get_aggregation()(e, end, x)
+        node_inputs = torch.cat([x, edge_messages], dim=-1)
+        x_out = self.node_network(node_inputs)
+        x_out += x
+
+        # Compute new edge features
+        edge_inputs = torch.cat([x_out[start], x_out[end], e], dim=-1)
+        e_out = self.edge_network(edge_inputs)
+        e_out += e
+
+        return x_out, e_out
+
+
+class HeteroGNNRefactor(LargeGNNBase):
+
+    """
+    A heterogeneous interaction network class
+    """
+
+    def __init__(self, hparams):
+        super().__init__(hparams)
+        """
+        Initialise the Lightning Module that can scan over different GNN training regimes
+        """
+
+        hparams["batchnorm"] = (
+            False if "batchnorm" not in hparams else hparams["batchnorm"]
+        )
+        hparams["output_activation"] = (
+            None if "output_activation" not in hparams else hparams["output_activation"]
+        )
+
+        # Make input network
+        self.encoder = HeteroEncoder(hparams)
+
+        # Make message passing network
+        self.conv = HomoConv(hparams)        
+
         # Final edge output classification network
         self.output_edge_classifier = make_mlp(
             3 * hparams["hidden"],
@@ -91,90 +205,22 @@ class HeteroGNN(LargeGNNBase):
             hidden_activation=hparams["hidden_activation"],
         )
 
-
-    def message_step(self, x, start, end, e):
-
-        # Compute new node features
-        if self.hparams["aggregation"] == "sum":
-            edge_messages = scatter_add(e, end, dim=0, dim_size=x.shape[0])
-
-        elif self.hparams["aggregation"] == "mean":
-            edge_messages = scatter_mean(e, end, dim=0, dim_size=x.shape[0])
-            
-        elif self.hparams["aggregation"] == "max":
-            edge_messages = scatter_max(e, end, dim=0, dim_size=x.shape[0])[0]
-
-        elif self.hparams["aggregation"] == "sum_max":
-            edge_messages = torch.cat(
-                [
-                    scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
-                    scatter_add(e, end, dim=0, dim_size=x.shape[0]),
-                ],
-                dim=-1,
-            )        
-        elif self.hparams["aggregation"] == "mean_sum":
-            edge_messages = torch.cat(
-                [
-                    scatter_mean(e, end, dim=0, dim_size=x.shape[0]),
-                    scatter_add(e, end, dim=0, dim_size=x.shape[0]),
-                ],
-                dim=-1,
-            )            
-        elif self.hparams["aggregation"] == "mean_max":
-            edge_messages = torch.cat(
-                [
-                    scatter_max(e, end, dim=0, dim_size=x.shape[0])[0],
-                    scatter_mean(e, end, dim=0, dim_size=x.shape[0]),
-                ],
-                dim=-1,
-            )
-            
-        node_inputs = torch.cat([x, edge_messages], dim=-1)
-
-        x_out = self.node_network(node_inputs)
-
-        x_out += x
-
-        # Compute new edge features
-        edge_inputs = torch.cat([x_out[start], x_out[end], e], dim=-1)
-        e_out = self.edge_network(edge_inputs)
-
-        e_out += e
-
-        return x_out, e_out
-
-    def output_step(self, x, start, end, e):
-
-        classifier_inputs = torch.cat([x[start], x[end], e], dim=1)
+    def output_step(self, x, edge_index, e):
+        
+        classifier_inputs = torch.cat([x[edge_index[0]], x[edge_index[1]], e], dim=1)
 
         return self.output_edge_classifier(classifier_inputs).squeeze(-1)
 
     def forward(self, x, edge_index, volume_id):
 
-        start, end = edge_index
-
         # Encode the graph features into the hidden space
         x.requires_grad = True
-
-        encoded_nodes = torch.empty((x.shape[0], self.hparams["hidden"])).to(self.device)
-        for encoder, model in zip(self.node_encoders, self.hparams["model_ids"]):
-            node_id_mask = torch.isin(volume_id, torch.tensor(model["volume_ids"]).to(self.device))
-            encoded_nodes[node_id_mask] = checkpoint(encoder, x[node_id_mask, :model["num_features"]])
-
-        encoded_edges = torch.empty((edge_index.shape[1], self.hparams["hidden"])).to(self.device)
-        for encoder, combo in zip(self.edge_encoders, self.all_combos):
-            vol_ids_0, vol_ids_1 = self.hparams["model_ids"][combo[0]]["volume_ids"], self.hparams["model_ids"][combo[1]]["volume_ids"]
-            edge_id_mask = (
-                (torch.isin(volume_id[edge_index[0]], torch.tensor(vol_ids_0).to(self.device)) & torch.isin(volume_id[edge_index[1]], torch.tensor(vol_ids_1).to(self.device))) 
-                | (torch.isin(volume_id[edge_index[0]], torch.tensor(vol_ids_1).to(self.device)) & torch.isin(volume_id[edge_index[1]], torch.tensor(vol_ids_0).to(self.device)))
-            )
-            encoded_edges[edge_id_mask] = checkpoint(encoder, torch.cat([encoded_nodes[edge_index[0, edge_id_mask]], encoded_nodes[edge_index[1, edge_id_mask]]], dim=-1))
-
+        encoded_nodes, encoded_edges = self.encoder(x, edge_index, volume_id)
+        
         # Loop over iterations of edge and node networks
-        for i in range(self.hparams["n_graph_iters"]):
+        for _ in range(self.hparams["n_graph_iters"]):
 
-            encoded_nodes, encoded_edges = checkpoint(self.message_step, encoded_nodes, start, end, encoded_edges)
+            encoded_nodes, encoded_edges = checkpoint(self.conv, encoded_nodes, edge_index, encoded_edges)
 
-        # Compute final edge scores; use original edge directions only
-        # return checkpoint(self.output_step, x, start, end, e)
-        return self.output_step(encoded_nodes, start, end, encoded_edges)
+        # Compute final edge scores
+        return self.output_step(encoded_nodes, edge_index, encoded_edges)
