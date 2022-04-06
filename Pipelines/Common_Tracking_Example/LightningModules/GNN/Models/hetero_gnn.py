@@ -45,6 +45,12 @@ class HeteroEncoder(torch.nn.Module):
         ])
 
     def forward(self, x, edge_index, volume_id):
+        """
+        Forward pass of the heterogeneous encoder
+
+        x is the input node features. It is expected to be of shape (num_nodes, max number of input features), where rows that have fewer features than the max are padded with zeros.
+        It creates an empty tensor of the same shape as x, and fills it with the encoded nodes, for each node encoder. The same is done for encoded edges.
+        """
 
         start, end = edge_index
 
