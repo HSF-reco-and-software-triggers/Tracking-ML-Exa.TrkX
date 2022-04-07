@@ -176,7 +176,7 @@ class HomoConv(torch.nn.Module):
         return x_out, e_out
 
 
-class HeteroGNNRefactor(LargeGNNBase):
+class HeteroGNN(LargeGNNBase):
 
     """
     A heterogeneous interaction network class
