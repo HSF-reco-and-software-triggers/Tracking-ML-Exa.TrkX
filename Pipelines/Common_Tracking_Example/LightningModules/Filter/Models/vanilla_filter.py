@@ -17,32 +17,74 @@ from torch_geometric.data import DataLoader
 from ..utils import graph_intersection, make_mlp
 from ..filter_base import FilterBase, FilterBaseBalanced, LargeFilterBaseBalanced
 
-
 class VanillaFilter(LargeFilterBaseBalanced):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
         Initialise the Lightning Module that can scan over different filter training regimes
         """
-        
+
         # Construct the MLP architecture
-        self.net = make_mlp(
-            (hparams["spatial_channels"] + hparams["cell_channels"] + hparams["emb_channels"]) * 2,
-            [hparams["hidden"]]*hparams["nb_layer"] + [1],
-            layer_norm=hparams["layernorm"],
-            batch_norm=hparams["batchnorm"],
-            output_activation=None,
-            hidden_activation=hparams["hidden_activation"],
+        self.input_layer = Linear(
+            (hparams["spatial_channels"] + hparams["cell_channels"]) * 2
+            + hparams["emb_channels"] * 2,
+            hparams["hidden"],
         )
+        layers = [
+            Linear(hparams["hidden"], hparams["hidden"])
+            for _ in range(hparams["nb_layer"] - 1)
+        ]
+        self.layers = nn.ModuleList(layers)
+        self.output_layer = nn.Linear(hparams["hidden"], 1)
+        self.layernorm = nn.LayerNorm(hparams["hidden"])
+        self.batchnorm = nn.BatchNorm1d(
+            num_features=hparams["hidden"], track_running_stats=False
+        )
+        self.act = nn.Tanh()
 
     def forward(self, x, e, emb=None):
         if emb is not None:
-            x = self.net(
+            x = self.input_layer(
                 torch.cat([x[e[0]], emb[e[0]], x[e[1]], emb[e[1]]], dim=-1)
             )
         else:
-            x = self.net(torch.cat([x[e[0]], x[e[1]]], dim=-1))
+            x = self.input_layer(torch.cat([x[e[0]], x[e[1]]], dim=-1))
+        for l in self.layers:
+            x = l(x)
+            x = self.act(x)
+            if self.hparams["layernorm"]:
+                x = self.layernorm(x)  # Option of LayerNorm
+            if self.hparams["batchnorm"]:
+                x = self.batchnorm(x)  # Option of Batch
+        x = self.output_layer(x)
         return x
+
+# TODO: Refactor the class for the vanilla filter with the same interface as the other modules
+# class VanillaFilter(LargeFilterBaseBalanced):
+#     def __init__(self, hparams):
+#         super().__init__(hparams)
+#         """
+#         Initialise the Lightning Module that can scan over different filter training regimes
+#         """
+        
+#         # Construct the MLP architecture
+#         self.net = make_mlp(
+#             (hparams["spatial_channels"] + hparams["cell_channels"] + hparams["emb_channels"]) * 2,
+#             [hparams["hidden"]]*hparams["nb_layer"] + [1],
+#             layer_norm=hparams["layernorm"],
+#             batch_norm=hparams["batchnorm"],
+#             output_activation=None,
+#             hidden_activation=hparams["hidden_activation"],
+#         )
+
+#     def forward(self, x, e, emb=None):
+#         if emb is not None:
+#             x = self.net(
+#                 torch.cat([x[e[0]], emb[e[0]], x[e[1]], emb[e[1]]], dim=-1)
+#             )
+#         else:
+#             x = self.net(torch.cat([x[e[0]], x[e[1]]], dim=-1))
+#         return x
 
 
 class FilterInferenceCallback(Callback):

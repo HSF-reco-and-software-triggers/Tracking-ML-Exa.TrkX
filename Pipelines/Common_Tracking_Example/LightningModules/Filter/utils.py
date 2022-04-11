@@ -75,10 +75,8 @@ class LargeDataset(Dataset):
         return len(self.input_paths)
 
     def get(self, idx):
-        # print("Loading:", self.input_paths[idx])
-        # data = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
         data = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
-        # print("Loaded:", self.input_paths[idx])
+        data.y_pid = (data.pid[data.edge_index[0]] == data.pid[data.edge_index[1]]) & data.pid[data.edge_index[0]].bool()
         return data
         
 

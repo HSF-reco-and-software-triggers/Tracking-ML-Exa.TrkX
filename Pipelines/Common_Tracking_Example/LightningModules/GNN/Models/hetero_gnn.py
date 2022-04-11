@@ -55,7 +55,7 @@ class HeteroEncoder(torch.nn.Module):
         start, end = edge_index
 
         encoded_nodes = torch.empty((x.shape[0], self.hparams["hidden"])).to(x.device)
-        encoded_edges = self.fill_hetero_nodes(encoded_nodes, x, volume_id)
+        encoded_nodes = self.fill_hetero_nodes(encoded_nodes, x, volume_id)
 
         encoded_edges = torch.empty((edge_index.shape[1], self.hparams["hidden"])).to(edge_index.device)
         encoded_edges = self.fill_hetero_edges(encoded_edges, encoded_nodes, start, end, volume_id)        
@@ -81,7 +81,7 @@ class HeteroEncoder(torch.nn.Module):
             vol_ids_0, vol_ids_1 = torch.tensor(self.hparams["model_ids"][combo[0]]["volume_ids"], device=encoded_edges.device), torch.tensor(self.hparams["model_ids"][combo[1]]["volume_ids"], device=encoded_edges.device)
             edge_id_mask = (
                 (torch.isin(volume_id[start], vol_ids_0) & torch.isin(volume_id[end], vol_ids_1)) 
-                | (torch.isin(volume_id[end], vol_ids_1) & torch.isin(volume_id[start], vol_ids_0))
+                | (torch.isin(volume_id[start], vol_ids_1) & torch.isin(volume_id[end], vol_ids_0))
             )
             encoded_edges[edge_id_mask] = checkpoint(encoder, torch.cat([encoded_nodes[start[edge_id_mask]], encoded_nodes[end[edge_id_mask]]], dim=-1))
         

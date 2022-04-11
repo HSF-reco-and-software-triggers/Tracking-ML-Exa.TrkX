@@ -62,7 +62,10 @@ def infer_event(model, batch):
     """
     with torch.no_grad():
         results = model.shared_evaluation(batch, 0 , log=False)
-        scores = results["score"][: int(len(results["score"]) / 2)]
+        if "score" in results.keys(): # Using GNN
+            scores = results["score"][: int(len(results["score"]) / 2)]
+        elif "preds" in results.keys(): # Using Filter
+            scores = results["preds"]
         batch.scores = scores.cpu()
     
     return batch.cpu()
@@ -72,7 +75,6 @@ def get_topline_stats(results, edge_cut, signal_true_label="pid_signal", bkg_tru
     Apply edge cut to results.scores and get overall AUC, efficiency and purity
     """
 
-    pos, signal_true, bkg_true, signal_true_pos, bkg_true_pos = [0] * 5
     total_pos, total_signal_true, total_bkg_true, total_signal_true_pos, total_bkg_true_pos = [0] * 5
 
     for result in tqdm(results):
@@ -220,10 +222,10 @@ def plot_metrics(av_pos, av_signal_true, av_signal_true_pos, av_bkg_true_pos, nu
     return axes_list
     
 
-def run_eta_performance(checkpoint_path, model_type, dataset_type, num_events, score_cut, common_axes = None, vmin=[None, None, None], vmax=[None, None, None]):
+def run_eta_performance(checkpoint_path, model_type, dataset_type, num_events, score_cut, common_axes = None, vmin=[None, None, None], vmax=[None, None, None], signal_true_label="pid_signal", bkg_true_label="y_pid"):
     model, _ = load_model(checkpoint_path, model_type)
     results = inference(model, dataset_type, num_events)
-    get_topline_stats(results, score_cut)
+    get_topline_stats(results, score_cut, signal_true_label, bkg_true_label)
     av_eta_pred, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, av_r_pred, av_r_signal_true, av_r_signal_true_pos, av_r_bkg_true_pos = build_edge_eta_list(results)
     eff_ax, signal_pur_ax, bkg_pur_ax = plot_metrics(av_eta_pred, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, common_axes = common_axes)
     if common_axes is None:

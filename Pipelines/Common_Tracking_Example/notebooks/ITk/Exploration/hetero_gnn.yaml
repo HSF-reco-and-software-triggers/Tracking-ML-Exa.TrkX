@@ -5,7 +5,7 @@ project: ITk_Toy_HeteroGNN
 model: HeteroGNN
 
 # Dataset parameters
-pt_background_cut: 500.
+pt_background_cut: 0.
 pt_signal_cut: 1000.
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
 datatype_split: [200, 20, 10] # Number of [training, validation, testing] examples
