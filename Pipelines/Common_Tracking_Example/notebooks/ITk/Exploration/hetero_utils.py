@@ -39,7 +39,6 @@ def merge_truth(event, truth):
 def assign_volume(merged_coords):
 
     volume_dict = {"PIXEL": {0: 0, -2: 1, 2: 1}, "STRIP": {0: 2, -2: 3, 2: 3}}
-    merged_coords["volume_id"] = merged_coords["barrel_endcap"] * merged_coords["hardware"]
 
     # Apply volume dict to get volume_id in merged_coords
     merged_coords["volume_id"] = merged_coords.apply(lambda row: volume_dict[row["hardware"]][row["barrel_endcap"]], axis=1)

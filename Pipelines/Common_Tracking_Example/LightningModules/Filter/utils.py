@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import random
+from time import time as tt
 
 import torch
 import torch.nn as nn
@@ -59,9 +60,20 @@ def graph_intersection(pred_graph, truth_graph):
 
     return new_pred_graph, y
 
+def sample_fake_ratio(data, fake_ratio):
+    # Sample random subset of fake edges in the graph
+    num_fake = (~data.y.bool()).sum()
+    true_indices, fake_indices = torch.where(data.y.bool())[0], torch.where(~data.y.bool())[0]
+    fake_indices = fake_indices[torch.randperm(len(fake_indices))[:int(num_fake * fake_ratio)]]
+    all_indices = torch.cat([true_indices, fake_indices])
+    
+    return all_indices
+
 class LargeDataset(Dataset):
-    def __init__(self, root, num_events, hparams, transform=None, pre_transform=None, pre_filter=None):
+    def __init__(self, root, num_events, data_name, hparams, transform=None, pre_transform=None, pre_filter=None):
         super().__init__(root, transform, pre_transform, pre_filter)
+        self.hparams = hparams
+        self.data_name = data_name
         
         self.input_paths = os.listdir(root)
         if "sorted_events" in hparams.keys() and hparams["sorted_events"]:
@@ -76,9 +88,21 @@ class LargeDataset(Dataset):
 
     def get(self, idx):
         data = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
+        
+        # Order edges by increasing module ID
+        edges_to_be_flipped = data.volume_id[data.edge_index[0]] > data.volume_id[data.edge_index[1]]
+        data.edge_index[:, edges_to_be_flipped] =  data.edge_index[:, edges_to_be_flipped].flip(0)
+        assert (data.volume_id[data.edge_index[0]] <= data.volume_id[data.edge_index[1]]).all(), "Flip didn't work!"
+        
+
+        if "train_fake_sample" in self.hparams.keys() and self.hparams["train_fake_sample"] and (self.data_name=="train"):
+            sampled_indices = sample_fake_ratio(data, self.hparams["train_fake_sample"])
+            data.edge_index = data.edge_index[:, sampled_indices]
+            data.y = data.y[sampled_indices]
+
         data.y_pid = (data.pid[data.edge_index[0]] == data.pid[data.edge_index[1]]) & data.pid[data.edge_index[0]].bool()
         return data
-        
+    
 
 class filter_dataset(Dataset):
     def __init__(self, dataset, hparams):

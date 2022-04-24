@@ -149,9 +149,9 @@ class FilterBase(LightningModule):
 
         return loss
 
-    def get_metrics(self, truth, output):
+    def get_metrics(self, truth, scores):
 
-        predictions = output > self.hparams["edge_cut"]
+        predictions = scores > self.hparams["edge_cut"]
 
         edge_positive = predictions.sum().float()
         edge_true = truth.sum().float()
@@ -160,7 +160,7 @@ class FilterBase(LightningModule):
         eff = edge_true_positive / edge_true
         pur = edge_true_positive / edge_positive
 
-        auc = roc_auc_score(truth.bool().cpu().detach(), output.cpu().detach())
+        auc = roc_auc_score(truth.bool().cpu().detach(), scores.cpu().detach())
 
         return eff, pur, auc
 
@@ -518,26 +518,27 @@ class LargeFilterBaseBalanced(FilterBaseBalanced):
         
         if "trainset" not in self.__dict__.keys():
             self.trainset, self.valset, self.testset = [
-                LargeDataset(input_dir, self.hparams["datatype_split"][i], self.hparams)
-                for i, input_dir in enumerate(input_dirs)
+                LargeDataset(input_dir, split, name, self.hparams)
+                for split, name, input_dir in zip(self.hparams["datatype_split"], self.hparams["datatype_names"], input_dirs)
             ]
             
-        # if (
-        #     "logger" in self.__dict__.keys()
-        #     and "_experiment" in self.logger.__dict__.keys()
-        # ):
-        #     self.logger.experiment.define_metric("val_loss", summary="min")
-        #     self.logger.experiment.define_metric("auc", summary="max")
+        if (
+            "logger" in self.__dict__.keys()
+            and "_experiment" in self.logger.__dict__.keys()
+        ):
+            self.logger.experiment.define_metric("val_loss", summary="min")
+            self.logger.experiment.define_metric("auc", summary="max")
         
     def train_dataloader(self):
         if self.trainset is not None:
-            return GeoLoader(self.trainset, batch_size=1, num_workers=2)
+            return GeoLoader(self.trainset, batch_size=1, num_workers=8)
         else:
             return None
 
     def val_dataloader(self):
         if self.valset is not None:
-            return GeoLoader(self.valset, batch_size=1, num_workers=0)
+            num_val_workers = 0 if ("gpus" in self.hparams.keys() and self.hparams["gpus"] > 0) else 8
+            return GeoLoader(self.valset, batch_size=1, num_workers=num_val_workers)
         else:
             return None
 

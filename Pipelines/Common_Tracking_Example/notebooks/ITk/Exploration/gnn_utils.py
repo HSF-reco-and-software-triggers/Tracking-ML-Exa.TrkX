@@ -200,7 +200,7 @@ def plot_metrics(av_pos, av_signal_true, av_signal_true_pos, av_bkg_true_pos, nu
             _, axes_list[i] = plt.subplots(1, 1, figsize=(10, 5))
 
     else:
-        common_axes = common_axes if type(common_axes) is list else [common_axes]
+        common_axes = common_axes if type(common_axes) in [list, np.ndarray] else [common_axes]
         axes_list = common_axes
 
     for ax, counts, err, label in zip(axes_list, [eff, signal_purity, bkg_purity], [eff_err, signal_purity_err, bkg_purity_err], y_labels):

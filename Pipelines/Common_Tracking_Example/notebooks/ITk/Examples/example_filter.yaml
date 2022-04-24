@@ -7,7 +7,7 @@ edge_cut: 0.5
 
 # Dataset parameters
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [200, 20, 5] # Number of [training, validation, testing] examples
+datatype_split: [100, 20, 5] # Number of [training, validation, testing] examples
 true_edges: modulewise_true_edges
 
 
@@ -25,6 +25,7 @@ hidden_activation: ReLU
 ratio: 8
 weight: 32
 # val_subset: 0.1
+train_fake_sample: False
 warmup: 5
 lr: 0.002
 factor: 0.3

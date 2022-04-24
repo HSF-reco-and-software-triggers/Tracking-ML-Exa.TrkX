@@ -7,7 +7,7 @@ overwrite: True
 # Dataset parameters
 pt_signal_cut: 1.0
 pt_background_cut: 1.0
-train_split: [[300, 20, 20]] # Number of [training, validation, testing] examples
+train_split: [[90, 5, 5]] # Number of [training, validation, testing] examples
 true_edges: modulewise_true_edges
 noise: False
 

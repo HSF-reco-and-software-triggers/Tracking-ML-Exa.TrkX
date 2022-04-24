@@ -1,6 +1,6 @@
 # Input/output configuration
-input_dir: ${ITK_DATA}/feature_store/feature_store_modulewise_barrel_v2
-output_dir: ${ITK_DATA}/embedding_processed/0GeV_barrel
+input_dir: ${ITK_DATA}/feature_store/feature_store_uncorrelated
+output_dir: ${ITK_DATA}/embedding_processed/0GeV_uncorrelated
 project: ITk_1GeVSignal_Embedding_Barrel
 overwrite: True
 sanity_steps: 0
