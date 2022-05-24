@@ -93,6 +93,7 @@ class CheckpointedPyramid(GNNBase):
 
         x.requires_grad = True
         x = checkpoint(self.node_encoder, x)
+        # x = self.node_encoder(x)
 
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):

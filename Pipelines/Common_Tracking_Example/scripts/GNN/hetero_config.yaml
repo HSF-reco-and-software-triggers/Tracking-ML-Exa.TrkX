@@ -10,7 +10,7 @@ nodes: 1
 pt_background_cut: 100.
 pt_signal_cut: 1000.
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [500, 20, 10] # Number of [training, validation, testing] examples
+datatype_split: [50, 20, 10] # Number of [training, validation, testing] examples
 sorted_events: False
 endcaps: True
 true_edges: modulewise_true_edges
@@ -19,6 +19,7 @@ noise: True
 # Model parameters
 edge_cut: 0.5
 hidden: 128
+spatial_channels: 3
 n_graph_iters: 8
 nb_node_layer: 3
 nb_edge_layer: 3
@@ -29,8 +30,10 @@ aggregation: sum_max
 hidden_activation: SiLU
 # output_activation: Tanh
 model_ids: 
-  - {"volume_ids": [0, 1, 3], "num_features": 3}
+  - {"volume_ids": [0, 1], "num_features": 3}
   - {"volume_ids": [2], "num_features": 9}
+  - {"volume_ids": [3], "num_features": 9}
+hetero_level: 2
 weight: 1
 warmup: 3
 lr: 0.002

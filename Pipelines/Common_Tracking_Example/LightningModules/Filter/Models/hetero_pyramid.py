@@ -9,7 +9,7 @@ from ..utils import make_mlp
 from ..hetero_filter_base import HeteroFilterBase
 
 def get_vol_matrix(combos, vol_list):
-    all_vol_ids = torch.empty(4, 4)
+    all_vol_ids = torch.empty(4, 4) #Abstract out number of regions
     for i, combo in enumerate(combos):
         stacked_combo = torch.stack(torch.meshgrid(torch.tensor(vol_list[combo[0]]), torch.tensor(vol_list[combo[1]])), dim=-1).flatten(0,1).T
         stacked_combo = torch.cat([stacked_combo, stacked_combo.flip(0)], dim=-1)
@@ -26,8 +26,8 @@ class HeteroPyramidFilter(HeteroFilterBase):
 
         self.all_combos = torch.combinations(torch.arange(len(self.hparams["model_ids"])), r=2, with_replacement=True)      
         
+        # Still need this??
         self.vol_matrix = get_vol_matrix(self.all_combos, [model_id["volume_ids"] for model_id in self.hparams["model_ids"]])
-        
         
         self.edge_encoders = nn.ModuleList([
             make_mlp(
@@ -40,7 +40,6 @@ class HeteroPyramidFilter(HeteroFilterBase):
             ) for combo in self.all_combos
         ])
             
-        
     def forward(self, x, cell_x, edge_index, volume_id):
         
         start, end = edge_index

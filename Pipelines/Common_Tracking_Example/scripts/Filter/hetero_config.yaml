@@ -10,7 +10,7 @@ nodes: 1
 
 # Dataset parameters
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [400, 40, 1] # Number of [training, validation, testing] examples
+datatype_split: [1600, 40, 1] # Number of [training, validation, testing] examples
 true_edges: modulewise_true_edges
 
 # Model parameters
@@ -23,8 +23,7 @@ n_chunks: 4
 edges_per_batch: 1000000
 hidden_activation: Tanh
 model_ids: 
-  - {"volume_ids": [0], "num_features": 3}
-  - {"volume_ids": [1], "num_features": 3}
+  - {"volume_ids": [0, 1], "num_features": 3}
   - {"volume_ids": [2], "num_features": 9}
   - {"volume_ids": [3], "num_features": 9}
 ratio: 10

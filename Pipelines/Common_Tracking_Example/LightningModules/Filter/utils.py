@@ -90,9 +90,10 @@ class LargeDataset(Dataset):
         data = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
         
         # Order edges by increasing module ID
-        edges_to_be_flipped = data.volume_id[data.edge_index[0]] > data.volume_id[data.edge_index[1]]
-        data.edge_index[:, edges_to_be_flipped] =  data.edge_index[:, edges_to_be_flipped].flip(0)
-        assert (data.volume_id[data.edge_index[0]] <= data.volume_id[data.edge_index[1]]).all(), "Flip didn't work!"
+        if "volume_id" in data.keys:
+            edges_to_be_flipped = data.volume_id[data.edge_index[0]] > data.volume_id[data.edge_index[1]]
+            data.edge_index[:, edges_to_be_flipped] =  data.edge_index[:, edges_to_be_flipped].flip(0)
+            assert (data.volume_id[data.edge_index[0]] <= data.volume_id[data.edge_index[1]]).all(), "Flip didn't work!"
         
 
         if "train_fake_sample" in self.hparams.keys() and self.hparams["train_fake_sample"] and (self.data_name=="train"):

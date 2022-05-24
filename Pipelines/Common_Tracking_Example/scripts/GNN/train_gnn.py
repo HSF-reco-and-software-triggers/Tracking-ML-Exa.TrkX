@@ -14,11 +14,8 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
 
 sys.path.append("../../")
-from LightningModules.GNN.Models.checkpoint_pyramid import CheckpointedPyramid
 from LightningModules.GNN.Models.interaction_gnn import InteractionGNN
 from LightningModules.GNN.Models.hetero_gnn import HeteroGNN
-from LightningModules.GNN.Models.multi_interaction_gnn import MultiInteractionGNN
-from LightningModules.GNN.Models.vanilla_checkagnn import VanillaCheckResAGNN
 
 import wandb
 
@@ -89,8 +86,11 @@ def main():
     )
     logger.watch(model, log="all")
 
-    if args.root_dir is None:
-        default_root_dir = os.path.join(".", os.environ["SLURM_JOB_ID"])
+    if args.root_dir is None: 
+        if "SLURM_JOB_ID" in os.environ:
+            default_root_dir = os.path.join(".", os.environ["SLURM_JOB_ID"])
+        else:
+            default_root_dir = None
     else:
         default_root_dir = os.path.join(".", args.root_dir)
         
