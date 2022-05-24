@@ -33,7 +33,7 @@ model_ids:
   - {"volume_ids": [0, 1], "num_features": 3}
   - {"volume_ids": [2], "num_features": 9}
   - {"volume_ids": [3], "num_features": 9}
-hetero_level: 0
+hetero_level: 1
 weight: 1
 warmup: 3
 lr: 0.002
