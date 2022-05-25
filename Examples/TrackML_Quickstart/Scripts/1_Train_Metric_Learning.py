@@ -1,5 +1,5 @@
 """
-This script runs step 1 of the TrackML Quickstart example.
+This script runs step 1 of the TrackML Quickstart example: Training the metric learning model.
 """
 
 import sys
@@ -16,7 +16,7 @@ from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embed
 
 def parse_args():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser("train.py")
+    parser = argparse.ArgumentParser("1_Train_Metric_Learning.py")
     add_arg = parser.add_argument
     add_arg("config", nargs="?", default="pipeline_config.yaml")
     return parser.parse_args()
@@ -49,7 +49,7 @@ def train(config_file="pipeline_config.yaml"):
 
     save_directory = os.path.join(common_configs["artifact_directory"], "metric_learning")
     os.makedirs(save_directory, exist_ok=True)
-    model.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]))
+    model.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
 
 
 if __name__ == "__main__":
