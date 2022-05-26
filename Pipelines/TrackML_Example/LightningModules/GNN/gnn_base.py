@@ -234,10 +234,10 @@ class GNNBase(LightningModule):
     ):
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
-            self.trainer.global_step < self.hparams["warmup"]
+            self.current_epoch < self.hparams["warmup"]
         ):
             lr_scale = min(
-                1.0, float(self.trainer.global_step + 1) / self.hparams["warmup"]
+                1.0, float(self.current_epoch + 1) / self.hparams["warmup"]
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]

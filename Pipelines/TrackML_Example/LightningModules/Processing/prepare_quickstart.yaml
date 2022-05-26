@@ -1,14 +1,15 @@
 # Input/output configuration
 input_dir: ${EXATRKX_DATA}/train_all
-output_dir: ${EXATRKX_DATA}/feature_store/quickstart_example
+output_dir: ${EXATRKX_DATA}/feature_store/quickstart_example_1GeV
 detector_path: ${EXATRKX_DATA}/detectors.csv
-n_files: 350
+n_files: 100
 n_workers: 32
 n_tasks: 1
 overwrite: True
+min_pt: 1
 
 endcaps: True
-noise: True
+noise: False
 layerwise: True
 modulewise: True
 cell_information: True

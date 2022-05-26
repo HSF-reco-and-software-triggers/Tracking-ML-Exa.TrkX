@@ -113,7 +113,7 @@ def get_modulewise_edges(hits):
     return true_edges
 
 
-def select_hits(hits, truth, particles, endcaps=False, noise=False):
+def select_hits(hits, truth, particles, endcaps=False, noise=False, min_pt=None):
     # Barrel volume and layer ids
     if endcaps:
         vlids = [
@@ -197,6 +197,9 @@ def select_hits(hits, truth, particles, endcaps=False, noise=False):
 
     truth = truth.assign(pt=np.sqrt(truth.tpx**2 + truth.tpy**2))
 
+    if min_pt:
+        truth = truth[truth.pt > min_pt]
+
     # Calculate derived hits variables
     r = np.sqrt(hits.x**2 + hits.y**2)
     phi = np.arctan2(hits.y, hits.x)
@@ -213,13 +216,14 @@ def build_event(
     modulewise=True,
     layerwise=True,
     noise=False,
+    min_pt=None,
     detector=None,
 ):
     # Get true edge list using the ordering by R' = distance from production vertex of each particle
     hits, particles, truth = trackml.dataset.load_event(
         event_file, parts=["hits", "particles", "truth"]
     )
-    hits = select_hits(hits, truth, particles, endcaps=endcaps, noise=noise).assign(
+    hits = select_hits(hits, truth, particles, endcaps=endcaps, noise=noise, min_pt=min_pt).assign(
         evtid=int(event_file[-9:])
     )
     
@@ -286,6 +290,7 @@ def prepare_event(
     modulewise=True,
     layerwise=True,
     noise=False,
+    min_pt=None,
     cell_information=True,
     overwrite=False,
     **kwargs
@@ -316,6 +321,7 @@ def prepare_event(
                 modulewise=modulewise,
                 layerwise=layerwise,
                 noise=noise,
+                min_pt=min_pt,
                 detector=detector_orig
             )
 

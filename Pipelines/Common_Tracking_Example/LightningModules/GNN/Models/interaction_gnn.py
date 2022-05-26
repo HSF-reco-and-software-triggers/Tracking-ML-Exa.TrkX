@@ -150,12 +150,9 @@ class InteractionGNN(LargeGNNBase):
         x = checkpoint(self.node_encoder, x)
         e = checkpoint(self.edge_encoder, torch.cat([x[start], x[end]], dim=1))
 
-        #         edge_outputs = []
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
 
             x, e = checkpoint(self.message_step, x, start, end, e)
 
-        # Compute final edge scores; use original edge directions only
-        # return checkpoint(self.output_step, x, start, end, e)
         return self.output_step(x, start, end, e)

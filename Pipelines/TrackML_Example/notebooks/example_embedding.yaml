@@ -1,31 +1,33 @@
 # Input/output configuration
-input_dir: /project/projectdirs/m3443/data/trackml-codalab/feature_store/testing_1
+input_dir: /global/cfs/cdirs/m3443/data/trackml-codalab/feature_store/quickstart_example_1GeV
 
 # Dataset parameters
-pt_signal_min: 1.
-pt_background_min: 1.
+pt_signal_cut: 1.
+pt_background_cut: 1.
 train_split: [80, 10, 10] # Number of [training, validation, testing] examples
 true_edges: modulewise_true_edges
 noise: False
 
 # Model parameters
-in_channels: 12
-emb_hidden: 512
+spatial_channels: 3
+cell_channels: 9
+emb_hidden: 1024
 nb_layer: 4
-emb_dim: 8
-weight: 10
-randomisation: 2
+emb_dim: 12
+activation: Tanh
+weight: 1
+randomisation: 1
 points_per_batch: 100000
-r_train: 1.0
-r_val: 1.0
-r_test: 1.0
-knn: 50
-warmup: 30
-margin: 1
-lr: 0.0001
-factor: 0.3
-patience: 15
-regime: [rp, hnm, ci]
+r_train: 0.1
+r_val: 0.1
+r_test: 0.1
+knn: 100
+warmup: 5
+margin: 0.1
+lr: 0.001
+factor: 0.5
+patience: 30
+regime: [rp, hnm, ci, norm]
 max_epochs: 50
 
 # Postprocessing
