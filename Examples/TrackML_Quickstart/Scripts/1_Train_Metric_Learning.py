@@ -9,6 +9,7 @@ import argparse
 import logging
 
 from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import CSVLogger
 
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
@@ -38,16 +39,19 @@ def train(config_file="pipeline_config.yaml"):
 
     logging.info(["-"]*20 + "b) Running training" + ["-"]*20)
 
+    save_directory = os.path.join(common_configs["artifact_directory"], "metric_learning")
+    logger = CSVLogger(save_directory, name=common_configs["experiment_name"])
+
     trainer = Trainer(
         gpus=common_configs["gpus"],
         max_epochs=common_configs["max_epochs"],
+        logger=logger
     )
 
     trainer.fit(model)
 
     logging.info(["-"]*20 + "c) Saving model" + ["-"]*20)
 
-    save_directory = os.path.join(common_configs["artifact_directory"], "metric_learning")
     os.makedirs(save_directory, exist_ok=True)
     model.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
 
