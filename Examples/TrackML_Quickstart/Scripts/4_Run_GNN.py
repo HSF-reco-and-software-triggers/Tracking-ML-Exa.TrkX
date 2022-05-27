@@ -36,6 +36,7 @@ def train(config_file="pipeline_config.yaml"):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = InteractionGNN.load_from_checkpoint(os.path.join(common_configs["artifact_directory"], "gnn", common_configs["experiment_name"]+".ckpt")).to(device)
+    model.setup()
 
     logging.info(["-"]*20 + "b) Running inferencing" + ["-"]*20)
     graph_scorer = GNNInferenceBuilder(model)
