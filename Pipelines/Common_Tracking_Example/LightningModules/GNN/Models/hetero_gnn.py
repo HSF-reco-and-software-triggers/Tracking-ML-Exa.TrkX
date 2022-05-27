@@ -38,11 +38,19 @@ class HeteroGNN(LargeGNNBase):
         else:
             self.encoder = HomoEncoder(hparams)
 
-        # Make message passing network
-        if self.hparams["hetero_level"] >= 2:
-            self.conv = HeteroConv(hparams)
+        # Make message passing network with the following configuration:
+        # Check whether the MP network should be homogeneous or heterogeneous (i.e. hetero_level >= 2)
+        # Check whether the MP network should share weights between iterations (i.e. is recurrent)
+        if "hetero_level" in self.hparams and self.hparams["hetero_level"] >= 2:
+            if "recurrent" in self.hparams and not self.hparams["recurrent"]:
+                self.conv = nn.ModuleList([HeteroConv(hparams) for _ in range(self.hparams["n_graph_iters"])])
+            else:
+                self.conv = nn.ModuleList([HeteroConv(hparams)]*self.hparams["n_graph_iters"])
         else:
-            self.conv = HomoConv(hparams)        
+            if "recurrent" in self.hparams and not self.hparams["recurrent"]:
+                self.conv = nn.ModuleList([HomoConv(hparams) for _ in range(self.hparams["n_graph_iters"])])
+            else:
+                self.conv = nn.ModuleList([HomoConv(hparams)]*self.hparams["n_graph_iters"])        
 
         # Make output network
         if self.hparams["hetero_level"] >= 3:
@@ -57,9 +65,9 @@ class HeteroGNN(LargeGNNBase):
         encoded_nodes, encoded_edges = self.encoder(x, edge_index, volume_id)
         
         # Loop over iterations of edge and node networks
-        for _ in range(self.hparams["n_graph_iters"]):
+        for step in range(self.hparams["n_graph_iters"]):
 
-            encoded_nodes, encoded_edges = checkpoint(self.conv, encoded_nodes, edge_index, encoded_edges, volume_id)
+            encoded_nodes, encoded_edges = checkpoint(self.conv[step], encoded_nodes, edge_index, encoded_edges, volume_id)
 
         # Compute final edge scores
         # TODO: Apply output to SUM of directional edge features (across both directions!)

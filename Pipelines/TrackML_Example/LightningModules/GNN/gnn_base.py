@@ -140,18 +140,18 @@ class GNNBase(LightningModule):
 
         return loss
 
-    def log_metrics(self, preds, truth, batch, loss):
+    def log_metrics(self, score, preds, truth, batch, loss):
 
-        edge_positive = (preds > self.hparams["edge_cut"]).sum().float()
+        edge_positive = preds.sum().float()
         edge_true = truth.sum().float()
         edge_true_positive = (
-            (truth.bool() & (preds > self.hparams["edge_cut"])).sum().float()
+            (truth.bool() & preds).sum().float()
         )
 
         eff = torch.tensor(edge_true_positive / max(1, edge_true))
         pur = torch.tensor(edge_true_positive / max(1, edge_positive))
 
-        auc = roc_auc_score(truth.bool().cpu().detach(), preds.cpu().detach())
+        auc = roc_auc_score(truth.bool().cpu().detach(), score.cpu().detach())
 
         current_lr = self.optimizers().param_groups[0]["lr"]
         self.log_dict(
@@ -190,13 +190,15 @@ class GNNBase(LightningModule):
         )
 
         # Edge filter performance
-        preds = F.sigmoid(output)
+        score = F.sigmoid(output)
+        preds = score > self.hparams["edge_cut"]
 
         if log:
-            self.log_metrics(preds, truth_sample, batch, loss)
+            self.log_metrics(score, preds, truth_sample, batch, loss)
 
         return {
             "loss": loss,
+            "score": score,
             "preds": preds,
             "truth": truth_sample,
         }

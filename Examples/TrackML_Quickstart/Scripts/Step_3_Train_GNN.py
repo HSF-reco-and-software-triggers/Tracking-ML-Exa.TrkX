@@ -31,11 +31,11 @@ def train(config_file="pipeline_config.yaml"):
         all_configs = yaml.load(file, Loader=yaml.FullLoader)
     
     common_configs = all_configs["common_configs"]
-    metric_learning_configs = all_configs["metric_learning_configs"]
+    gnn_configs = all_configs["gnn_configs"]
 
     logging.info(headline("a) Initialising model" ))
 
-    model = LayerlessEmbedding(metric_learning_configs)
+    model = InteractionGNN(gnn_configs)
 
     logging.info(headline( "b) Running training" ))
 
@@ -48,7 +48,7 @@ def train(config_file="pipeline_config.yaml"):
 
     logging.info(headline( "c) Saving model" ))
 
-    save_directory = os.path.join(common_configs["artifact_directory"], "metric_learning")
+    save_directory = os.path.join(common_configs["artifact_directory"], "gnn")
     os.makedirs(save_directory, exist_ok=True)
     trainer.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
 

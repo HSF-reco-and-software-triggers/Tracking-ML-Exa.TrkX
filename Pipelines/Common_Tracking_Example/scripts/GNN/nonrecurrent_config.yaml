@@ -3,12 +3,14 @@ output_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/hetero_gnn_proces
 artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
 project: ITk_Toy_HeteroGNN
 model: HeteroGNN
+gpus: 1
+nodes: 1
 
 # Dataset parameters
 pt_background_cut: 100.
 pt_signal_cut: 1000.
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-datatype_split: [500, 20, 10] # Number of [training, validation, testing] examples
+datatype_split: [200, 20, 10] # Number of [training, validation, testing] examples
 sorted_events: False
 endcaps: True
 true_edges: modulewise_true_edges
@@ -31,13 +33,14 @@ model_ids:
   - {"volume_ids": [0, 1], "num_features": 3}
   - {"volume_ids": [2], "num_features": 9}
   - {"volume_ids": [3], "num_features": 9}
-hetero_level: 1
+hetero_level: 0
+recurrent: False
 weight: 1
 warmup: 3
 lr: 0.002
 factor: 0.9
 train_purity: 0
-patience: 5
+patience: 10
 truth_key: pid_signal
 mask_background: True
-max_epochs: 50
+max_epochs: 100
