@@ -88,3 +88,7 @@ venv.bak/
 src/Pipelines/Examples/notebooks/*.png
 *.root
 **/*.root
+
+# dataset and outputs
+*datasets*
+*artifacts*
