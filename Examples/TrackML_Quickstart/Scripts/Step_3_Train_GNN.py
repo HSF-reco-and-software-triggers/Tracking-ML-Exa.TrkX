@@ -10,6 +10,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 
 from pytorch_lightning import Trainer
+from pytorch_lightning.loggers import CSVLogger
 
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.GNN.Models.interaction_gnn import InteractionGNN
@@ -40,16 +41,19 @@ def train(config_file="pipeline_config.yaml"):
 
     logging.info(headline( "b) Running training" ))
 
+    save_directory = os.path.join(common_configs["artifact_directory"], "gnn")
+    logger = CSVLogger(save_directory, name=common_configs["experiment_name"])
+
     trainer = Trainer(
         gpus=common_configs["gpus"],
         max_epochs=common_configs["max_epochs"],
+        logger=logger
     )
 
     trainer.fit(model)
 
     logging.info(headline( "c) Saving model" ))
-
-    save_directory = os.path.join(common_configs["artifact_directory"], "gnn")
+    
     os.makedirs(save_directory, exist_ok=True)
     trainer.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
 

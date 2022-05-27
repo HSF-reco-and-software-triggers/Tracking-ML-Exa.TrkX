@@ -173,11 +173,13 @@ class HomoConv(torch.nn.Module):
         edge_messages = get_aggregation(self.hparams["aggregation"])(e, end, x)
         node_inputs = torch.cat([x, edge_messages], dim=-1)
         x_out = self.node_network(node_inputs)
-        x_out += x
+        if "concat_output" not in self.hparams or not self.hparams["concat_output"]:
+            x_out += x
 
         # Compute new edge features
         edge_inputs = torch.cat([x_out[start], x_out[end], e], dim=-1)
         e_out = self.edge_network(edge_inputs)
-        e_out += e
+        if "concat_output" not in self.hparams or not self.hparams["concat_output"]:
+            e_out += e
 
         return x_out, e_out

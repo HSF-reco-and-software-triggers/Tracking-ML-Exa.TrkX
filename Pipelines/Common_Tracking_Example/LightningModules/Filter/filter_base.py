@@ -11,7 +11,6 @@ from torch.utils.data import random_split
 from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import DataLoader as GeoLoader
 import numpy as np
-import wandb
 
 from sklearn.metrics import roc_auc_score
 
@@ -405,12 +404,7 @@ class FilterBaseBalanced(FilterBase):
     def validation_step(self, batch, batch_idx):
 
         result = self.shared_evaluation(batch, batch_idx, log=True)
-        
-#         if str(self.device) == "cuda:0":
-#             result = self.shared_evaluation(batch, batch_idx, log=True)
-#         else:
-#             result = None
-            
+   
         return result
 
     def test_step(self, batch, batch_idx):
