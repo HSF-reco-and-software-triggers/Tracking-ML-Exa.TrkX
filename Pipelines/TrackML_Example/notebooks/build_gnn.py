@@ -26,7 +26,7 @@ class GNNInferenceBuilder:
             for datatype in self.datatypes
         ]
 
-    def infer(self):
+    def build(self):
         print("Training finished, running inference to filter graphs...")
 
         # By default, the set of examples propagated through the pipeline will be train+val+test set
