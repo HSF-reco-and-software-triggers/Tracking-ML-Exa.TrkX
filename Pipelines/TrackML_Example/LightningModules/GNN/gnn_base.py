@@ -148,8 +148,8 @@ class GNNBase(LightningModule):
             (truth.bool() & preds).sum().float()
         )
 
-        eff = torch.tensor(edge_true_positive / max(1, edge_true))
-        pur = torch.tensor(edge_true_positive / max(1, edge_positive))
+        eff = edge_true_positive / max(1, edge_true)
+        pur = edge_true_positive / max(1, edge_positive)
 
         auc = roc_auc_score(truth.bool().cpu().detach(), score.cpu().detach())
 

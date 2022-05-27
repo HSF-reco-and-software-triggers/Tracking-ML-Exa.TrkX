@@ -231,9 +231,16 @@ class HeteroGNNBase(LightningModule):
         
         output = self(batch.x.float(), edge_sample, batch.volume_id).squeeze()
 
-        loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float().squeeze(), pos_weight=weight
-        )
+        if self.hparams["mask_background"]:
+            y_subset = truth_sample | ~batch.y_pid[sample_indices].bool()
+            subset_output, subset_truth_sample = output[y_subset], truth_sample[y_subset]
+            loss = F.binary_cross_entropy_with_logits(
+                subset_output, subset_truth_sample.float().squeeze(), pos_weight=weight
+            )            
+        else:
+            loss = F.binary_cross_entropy_with_logits(
+                output, truth_sample.float().squeeze(), pos_weight=weight
+            )
 
         preds = self.log_metrics(output, sample_indices, batch, loss, log)
 

@@ -1,14 +1,17 @@
 # Input/output configuration
 input_dir: /global/cfs/cdirs/m3443/data/LRT/v3/pileup40_train/embedding_processed_Pyg2
 output_dir: /global/cfs/cdirs/m3443/data/LRT/v3/pileup40_train/filter_processed_Pyg2
+artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
 project: LRT_mu40_1GeV_Filter
-edge_cut: 0.15
+model: PyramidFilter
+edge_cut: 0.2
+gpus: 1
+nodes: 1
 
 # Dataset parameters
 datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
 datatype_split: [100, 10, 1] # Number of [training, validation, testing] examples
 true_edges: layerless_true_edges
-
 
 # Model parameters
 spatial_channels: 3
@@ -28,9 +31,3 @@ factor: 0.9
 patience: 12
 regime: []
 max_epochs: 100
-
-# Post-processing
-callbacks: [] #[FilterInferenceCallback]
-
-# Logging
-wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

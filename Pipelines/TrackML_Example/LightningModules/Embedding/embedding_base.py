@@ -297,8 +297,8 @@ class EmbeddingBase(LightningModule):
         cluster_true_positive = y_cluster.sum()
         cluster_positive = len(e_spatial[0])
 
-        eff = torch.tensor(cluster_true_positive / cluster_true)
-        pur = torch.tensor(cluster_true_positive / cluster_positive)
+        eff = cluster_true_positive / cluster_true
+        pur = cluster_true_positive / cluster_positive
 
         if log:
             current_lr = self.optimizers().param_groups[0]["lr"]

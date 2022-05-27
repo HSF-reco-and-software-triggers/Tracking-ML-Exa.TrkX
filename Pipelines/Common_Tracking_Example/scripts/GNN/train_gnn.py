@@ -99,7 +99,7 @@ def main():
         num_nodes=default_configs["nodes"],
         max_epochs=default_configs["max_epochs"],
         logger=logger,
-        strategy=CustomDDPPlugin(find_unused_parameters=False),
+        # strategy=CustomDDPPlugin(find_unused_parameters=False),
         callbacks=[checkpoint_callback],
         default_root_dir=default_root_dir
     )

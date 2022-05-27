@@ -59,8 +59,11 @@ def main():
         save_dir=default_configs["artifacts"],
     )
 
-    if args.root_dir is None:
-        default_root_dir = os.path.join(".", os.environ["SLURM_JOB_ID"])
+    if args.root_dir is None: 
+        if "SLURM_JOB_ID" in os.environ:
+            default_root_dir = os.path.join(".", os.environ["SLURM_JOB_ID"])
+        else:
+            default_root_dir = None
     else:
         default_root_dir = os.path.join(".", args.root_dir)
     

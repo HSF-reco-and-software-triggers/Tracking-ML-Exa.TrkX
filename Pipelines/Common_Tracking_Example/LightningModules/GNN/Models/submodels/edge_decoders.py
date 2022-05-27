@@ -18,9 +18,14 @@ class HomoDecoder(torch.nn.Module):
             super(HomoDecoder, self).__init__()
 
             self.hparams = hparams
-
+            
+            if "concat_output" in self.hparams and self.hparams["concat_output"]:
+                self.input_channels = 3 * hparams["hidden"] * hparams["n_graph_iters"]
+            else:
+                self.input_channels = 3 * hparams["hidden"]
+            
             self.output_edge_classifier = make_mlp(
-                3 * hparams["hidden"],
+                self.input_channels,
                 [hparams["hidden"]] * hparams["nb_edge_layer"] + [1],
                 layer_norm=hparams["layernorm"],
                 batch_norm=hparams["batchnorm"],
