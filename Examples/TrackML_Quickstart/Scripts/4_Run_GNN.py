@@ -39,7 +39,7 @@ def train(config_file="pipeline_config.yaml"):
 
     logging.info(["-"]*20 + "b) Running inferencing" + ["-"]*20)
     graph_scorer = GNNInferenceBuilder(model)
-    graph_scorer.build()
+    graph_scorer.infer()
 
 
 
