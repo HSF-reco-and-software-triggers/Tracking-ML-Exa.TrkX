@@ -7,13 +7,13 @@ import os
 import yaml
 import argparse
 import logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 import torch
 
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 from utils import headline
 from Pipelines.TrackML_Example.notebooks.build_embedding import EmbeddingInferenceBuilder
-
 
 def parse_args():
     """Parse command line arguments."""
@@ -25,7 +25,7 @@ def parse_args():
 
 def train(config_file="pipeline_config.yaml"):
 
-    logging.info(headline(" Step 2: Constructing graphs from metric learning model "))
+    logging.info(headline("Step 2: Constructing graphs from metric learning model "))
 
     with open(config_file) as file:
         all_configs = yaml.load(file, Loader=yaml.FullLoader)

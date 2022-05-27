@@ -43,6 +43,7 @@ gnn_configs:
   pt_background_min: 1.
   datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
   datatype_split: [80, 10, 10] # Number of [training, validation, testing] examples
+  noise: False
 
   # Model parameters
   spatial_channels: 3
@@ -60,6 +61,7 @@ gnn_configs:
   factor: 0.3
   patience: 10
   truth_key: pid_signal
+  regime: [[pid]]
   mask_background: True
 
 

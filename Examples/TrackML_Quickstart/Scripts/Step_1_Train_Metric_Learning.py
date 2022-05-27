@@ -7,6 +7,7 @@ import os
 import yaml
 import argparse
 import logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 
 from pytorch_lightning import Trainer
 

@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 from datetime import timedelta
 import torch.nn.functional as F
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from torch.nn import Linear
 import torch
 
@@ -148,8 +148,8 @@ class GNNBase(LightningModule):
             (truth.bool() & preds).sum().float()
         )
 
-        eff = torch.tensor(edge_true_positive / max(1, edge_true))
-        pur = torch.tensor(edge_true_positive / max(1, edge_positive))
+        eff = edge_true_positive.clone().detach() / max(1, edge_true)
+        pur = edge_true_positive.clone().detach() / max(1, edge_positive)
 
         auc = roc_auc_score(truth.bool().cpu().detach(), score.cpu().detach())
 
