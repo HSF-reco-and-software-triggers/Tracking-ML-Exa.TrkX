@@ -11,6 +11,7 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import CSVLogger
+import torch
 
 sys.path.append("../../")
 # sys.path.append('./')
@@ -45,6 +46,7 @@ def train(config_file="pipeline_config.yaml"):
     logger = CSVLogger(save_directory, name=common_configs["experiment_name"])
 
     trainer = Trainer(
+        accelerator='gpu' if torch.cuda.is_available() else None,
         gpus=common_configs["gpus"],
         max_epochs=common_configs["max_epochs"],
         logger=logger
@@ -57,11 +59,13 @@ def train(config_file="pipeline_config.yaml"):
     os.makedirs(save_directory, exist_ok=True)
     trainer.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
 
+    return trainer, model
+
 
 if __name__ == "__main__":
 
     args = parse_args()
     config_file = args.config
 
-    train(config_file)    
+    trainer, model = train(config_file)    
 

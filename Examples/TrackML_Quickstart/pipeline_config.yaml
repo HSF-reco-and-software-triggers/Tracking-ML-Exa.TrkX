@@ -2,7 +2,7 @@ common_configs:
   experiment_name: trackml_quickstart_1
   artifact_directory: artifacts
   gpus: 1
-  max_epochs: 10
+  max_epochs: 20
 
 metric_learning_configs:
   # Dataset parameters

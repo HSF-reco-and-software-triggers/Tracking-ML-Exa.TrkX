@@ -42,6 +42,8 @@ def train(config_file="pipeline_config.yaml"):
     graph_builder = EmbeddingInferenceBuilder(model, metric_learning_configs["train_split"], overwrite=True, knn_max=1000, radius=metric_learning_configs["r_test"])
     graph_builder.build()
 
+    return graph_builder
+
 
 
 if __name__ == "__main__":
@@ -49,4 +51,4 @@ if __name__ == "__main__":
     args = parse_args()
     config_file = args.config
 
-    train(config_file) 
+    gb = train(config_file) 
