@@ -66,3 +66,5 @@ gnn_configs:
 
 
 track_building_configs:
+  score_cut: 0.8
+  output_dir: datasets/quickstart_track_building_processed

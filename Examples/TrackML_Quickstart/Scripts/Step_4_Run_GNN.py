@@ -23,7 +23,6 @@ def parse_args():
     add_arg("config", nargs="?", default="pipeline_config.yaml")
     return parser.parse_args()
 
-
 def train(config_file="pipeline_config.yaml"):
 
     logging.info(headline( "Step 4: Scoring graph edges using GNN " ))
@@ -43,8 +42,6 @@ def train(config_file="pipeline_config.yaml"):
     logging.info(headline( "b) Running inferencing" ))
     graph_scorer = GNNInferenceBuilder(model)
     graph_scorer.infer()
-
-
 
 if __name__ == "__main__":
 
