@@ -115,6 +115,8 @@ class InteractionGNN(GNNBase):
 
         e_out += e
 
+        # print(torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated() * 100)
+
         return x_out, e_out
 
     def output_step(self, x, start, end, e):

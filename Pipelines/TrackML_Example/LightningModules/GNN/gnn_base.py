@@ -136,7 +136,7 @@ class GNNBase(LightningModule):
             output, truth_sample.float(), weight=manual_weights, pos_weight=weight
         )
 
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_epoch=True, on_step=False, batch_size=10000)
 
         return loss
 
@@ -161,7 +161,7 @@ class GNNBase(LightningModule):
                 "eff": eff,
                 "pur": pur,
                 "current_lr": current_lr,
-            }
+            }, on_epoch=True, on_step=False, batch_size=10000
         )
 
     def shared_evaluation(self, batch, batch_idx, log=False):
@@ -190,7 +190,7 @@ class GNNBase(LightningModule):
         )
 
         # Edge filter performance
-        score = F.sigmoid(output)
+        score = torch.sigmoid(output)
         preds = score > self.hparams["edge_cut"]
 
         if log:

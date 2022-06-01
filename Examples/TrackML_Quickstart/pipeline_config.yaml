@@ -25,7 +25,7 @@ metric_learning_configs:
   points_per_batch: 100000
   r_train: 0.1
   r_val: 0.1
-  r_test: 0.1
+  r_test: 0.15
   knn: 100
   warmup: 5
   margin: 0.1

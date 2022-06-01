@@ -57,6 +57,8 @@ def train(config_file="pipeline_config.yaml"):
     os.makedirs(save_directory, exist_ok=True)
     trainer.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
 
+    return trainer, model
+
 
 if __name__ == "__main__":
 
