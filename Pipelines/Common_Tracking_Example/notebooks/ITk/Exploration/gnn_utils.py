@@ -268,6 +268,8 @@ def make_2d_ratio(counts_numerator, counts_denominator, eta_bins, r_bins, label=
     cbar = fig.colorbar(im, ax=ax)
     cbar.set_label(label)
     ax.grid(True)
+    
+    return ratio
 
 def plot_eta_r_metrics(av_eta_pred, av_eta_signal_true, av_eta_signal_true_pos, av_eta_bkg_true_pos, av_r_pred, av_r_signal_true, av_r_signal_true_pos, av_r_bkg_true_pos, vmin=[None, None, None], vmax=[None, None, None]):
 

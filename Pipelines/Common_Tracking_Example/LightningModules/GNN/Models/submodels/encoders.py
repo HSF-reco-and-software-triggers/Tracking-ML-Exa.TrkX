@@ -35,13 +35,13 @@ class HeteroEncoder(torch.nn.Module):
     
         self.edge_encoders = nn.ModuleList([
             make_mlp(
-                hparams["model_ids"][combo[0]]["num_features"] + hparams["model_ids"][combo[1]]["num_features"],
+                2 * hparams["hidden"],
                 [hparams["hidden"]] * hparams["nb_edge_layer"],
                 layer_norm=hparams["layernorm"],
                 batch_norm=hparams["batchnorm"],
                 output_activation=hparams["output_activation"],
                 hidden_activation=hparams["hidden_activation"],
-            ) for combo in self.all_combos
+            ) for _ in self.all_combos
         ])
 
     def fill_hetero_nodes(self, input_node_features, volume_id):
@@ -69,8 +69,8 @@ class HeteroEncoder(torch.nn.Module):
             vol_edge_mask = torch.isin(volume_id[start], vol_ids_0) & torch.isin(volume_id[end], vol_ids_1)
             
             features_to_encode = torch.cat([
-                    input_node_features[start[vol_edge_mask], :self.hparams["model_ids"][combo[0]]["num_features"]],
-                    input_node_features[end[vol_edge_mask], :self.hparams["model_ids"][combo[1]]["num_features"]]         
+                    input_node_features[start[vol_edge_mask]],
+                    input_node_features[end[vol_edge_mask]]         
                 ], dim=-1)
 
             features_to_fill[vol_edge_mask] = encoder(features_to_encode)

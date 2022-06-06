@@ -71,7 +71,7 @@ def process_event(event_file, save_dir):
 
 
 # Function to read all graphs from a directory, apply hetero functions, and save back to disc
-def build_hetero_graphs(base_dir, new_save_path, max_events=1000, use_process_map=False):
+def build_hetero_graphs(base_dir, new_save_path, max_events=None, use_process_map=False):
     
     # Read all graphs from the base_dir
     subdirs = ["train", "val", "test"]
@@ -81,7 +81,10 @@ def build_hetero_graphs(base_dir, new_save_path, max_events=1000, use_process_ma
         save_dir = os.path.join(new_save_path, subdir)
         partial_process_event = partial(process_event, save_dir=save_dir)
         os.makedirs(save_dir, exist_ok=True)      
-        event_dirs = os.listdir(os.path.join(base_dir, subdir))[:max_events]
+        if max_events is not None:
+            event_dirs = os.listdir(os.path.join(base_dir, subdir))[:max_events]
+        else:
+            event_dirs = os.listdir(os.path.join(base_dir, subdir))
         event_files = [os.path.join(base_dir, subdir, event_dir) for event_dir in event_dirs]
         random.shuffle(event_files)
 
