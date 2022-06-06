@@ -2,7 +2,7 @@ common_configs:
   experiment_name: trackml_quickstart_1
   artifact_directory: artifacts
   gpus: 1
-  max_epochs: 10
+  max_epochs: 20
 
 metric_learning_configs:
   # Dataset parameters
@@ -25,7 +25,7 @@ metric_learning_configs:
   points_per_batch: 100000
   r_train: 0.1
   r_val: 0.1
-  r_test: 0.1
+  r_test: 0.15
   knn: 100
   warmup: 5
   margin: 0.1
@@ -43,6 +43,7 @@ gnn_configs:
   pt_background_min: 1.
   datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
   datatype_split: [80, 10, 10] # Number of [training, validation, testing] examples
+  noise: False
 
   # Model parameters
   spatial_channels: 3
@@ -60,6 +61,7 @@ gnn_configs:
   factor: 0.3
   patience: 10
   truth_key: pid_signal
+  regime: [[pid]]
   mask_background: True
 
 

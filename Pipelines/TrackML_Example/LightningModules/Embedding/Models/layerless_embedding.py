@@ -11,7 +11,7 @@ import torch.nn as nn
 from torch_cluster import radius_graph
 import torch.nn.functional as F
 import torch
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 
 # Local imports
 from ..utils import graph_intersection, make_mlp

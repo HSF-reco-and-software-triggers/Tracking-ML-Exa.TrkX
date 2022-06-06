@@ -76,7 +76,7 @@ class EmbeddingInferenceBuilder:
         batch = self.select_data(batch)
         
         y_cluster, e_spatial, e_bidir = self.get_performance(
-            self.model, batch, r_max= self.radius, k_max=self.knn_max
+            batch=batch, r_max=self.radius, k_max=self.knn_max
         )
         
         module_mask = batch.modules[e_spatial[0]] != batch.modules[e_spatial[1]]

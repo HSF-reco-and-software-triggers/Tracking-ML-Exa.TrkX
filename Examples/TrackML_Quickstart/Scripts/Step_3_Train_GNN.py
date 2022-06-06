@@ -7,13 +7,15 @@ import os
 import yaml
 import argparse
 import logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import CSVLogger
 
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.GNN.Models.interaction_gnn import InteractionGNN
-
+from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
+from utils import headline
 
 def parse_args():
     """Parse command line arguments."""
@@ -25,7 +27,7 @@ def parse_args():
 
 def train(config_file="pipeline_config.yaml"):
 
-    logging.info(["-"]*20 + " Step 3: Running GNN training " + ["-"]*20)
+    logging.info(headline(" Step 3: Running GNN training "))
 
     with open(config_file) as file:
         all_configs = yaml.load(file, Loader=yaml.FullLoader)
@@ -33,11 +35,11 @@ def train(config_file="pipeline_config.yaml"):
     common_configs = all_configs["common_configs"]
     gnn_configs = all_configs["gnn_configs"]
 
-    logging.info(["-"]*20 + "a) Initialising model" + ["-"]*20)
+    logging.info(headline("a) Initialising model" ))
 
     model = InteractionGNN(gnn_configs)
 
-    logging.info(["-"]*20 + "b) Running training" + ["-"]*20)
+    logging.info(headline( "b) Running training" ))
 
     save_directory = os.path.join(common_configs["artifact_directory"], "gnn")
     logger = CSVLogger(save_directory, name=common_configs["experiment_name"])
@@ -50,10 +52,12 @@ def train(config_file="pipeline_config.yaml"):
 
     trainer.fit(model)
 
-    logging.info(["-"]*20 + "c) Saving model" + ["-"]*20)
+    logging.info(headline( "c) Saving model" ))
     
     os.makedirs(save_directory, exist_ok=True)
-    model.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
+    trainer.save_checkpoint(os.path.join(save_directory, common_configs["experiment_name"]+".ckpt"))
+
+    return trainer, model
 
 
 if __name__ == "__main__":

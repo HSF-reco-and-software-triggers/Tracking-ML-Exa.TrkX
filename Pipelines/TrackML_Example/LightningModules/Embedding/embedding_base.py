@@ -19,7 +19,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 import torch
 from torch.nn import Linear
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from torch_cluster import radius_graph
 import numpy as np
 
@@ -42,19 +42,19 @@ class EmbeddingBase(LightningModule):
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
-            return DataLoader(self.trainset, batch_size=1, num_workers=1)
+            return DataLoader(self.trainset, batch_size=1, num_workers=16)
         else:
             return None
 
     def val_dataloader(self):
         if len(self.valset) > 0:
-            return DataLoader(self.valset, batch_size=1, num_workers=1)
+            return DataLoader(self.valset, batch_size=1, num_workers=16)
         else:
             return None
 
     def test_dataloader(self):
         if len(self.testset):
-            return DataLoader(self.testset, batch_size=1, num_workers=1)
+            return DataLoader(self.testset, batch_size=1, num_workers=16)
         else:
             return None
 
@@ -261,11 +261,11 @@ class EmbeddingBase(LightningModule):
 
         loss = negative_loss + self.hparams["weight"] * positive_loss
 
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_epoch=True, on_step=False, batch_size=10000)
 
         return loss
 
-    def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False):
+    def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False, verbose=False):
 
         input_data = self.get_input_data(batch)
         spatial = self(input_data)
@@ -303,11 +303,16 @@ class EmbeddingBase(LightningModule):
         if log:
             current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
-                {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
+                {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr},
+                on_epoch=True,
+                on_step=False,
+                batch_size=10000
             )
-        logging.info("Efficiency: {}".format(eff))
-        logging.info("Purity: {}".format(pur))
-        logging.info(batch.event_file)
+
+        if verbose:
+            logging.info("Efficiency: {}".format(eff))
+            logging.info("Purity: {}".format(pur))
+            logging.info(batch.event_file)
 
         return {
             "loss": loss,
@@ -315,6 +320,8 @@ class EmbeddingBase(LightningModule):
             "preds": e_spatial,
             "truth": y_cluster,
             "truth_graph": e_bidir,
+            'eff': eff,
+            'pur': pur
         }
 
     def validation_step(self, batch, batch_idx):

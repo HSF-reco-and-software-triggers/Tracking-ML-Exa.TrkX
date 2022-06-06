@@ -7,12 +7,15 @@ import os
 import yaml
 import argparse
 import logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 import torch
 import numpy as np
 import scipy.sparse as sps
 
 from tqdm.contrib.concurrent import process_map
 from functools import partial
+
+from utils import headline
 
 sys.path.append("../../")
 
@@ -25,6 +28,8 @@ def parse_args():
 
 
 def label_graph(graph, score_cut=0.8, save_dir="datasets/quickstart_track_building_processed"):
+
+    os.makedirs(save_dir, exist_ok=True)
 
     edge_mask = graph.scores > score_cut
 
@@ -42,7 +47,7 @@ def label_graph(graph, score_cut=0.8, save_dir="datasets/quickstart_track_buildi
 
 def train(config_file="pipeline_config.yaml"):
 
-    logging.info(["-"]*20 + " Step 5: Building track candidates from the scored graph " + ["-"]*20)
+    logging.info(headline( " Step 5: Building track candidates from the scored graph " ))
 
     with open(config_file) as file:
         all_configs = yaml.load(file, Loader=yaml.FullLoader)
@@ -51,14 +56,14 @@ def train(config_file="pipeline_config.yaml"):
     gnn_configs = all_configs["gnn_configs"]
     track_building_configs = all_configs["track_building_configs"]
 
-    logging.info(["-"]*20 + "a) Loading scored graphs" + ["-"]*20)
+    logging.info(headline("a) Loading scored graphs" ))
 
     all_graphs = []
     for subdir in ["train", "val", "test"]:
         subdir_graphs = os.listdir(os.path.join(gnn_configs["output_dir"], subdir))
         all_graphs += [torch.load(os.path.join(gnn_configs["output_dir"], subdir, graph), map_location="cpu") for graph in subdir_graphs]
 
-    logging.info(["-"]*20 + "b) Labelling graph nodes" + ["-"]*20)
+    logging.info(headline( "b) Labelling graph nodes" ) )
 
     score_cut = track_building_configs["score_cut"]
     save_dir = track_building_configs["output_dir"]

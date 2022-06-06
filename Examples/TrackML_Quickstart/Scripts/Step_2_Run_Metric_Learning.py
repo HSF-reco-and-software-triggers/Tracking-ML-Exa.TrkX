@@ -7,12 +7,13 @@ import os
 import yaml
 import argparse
 import logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 import torch
 
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
+from utils import headline
 from Pipelines.TrackML_Example.notebooks.build_embedding import EmbeddingInferenceBuilder
-
 
 def parse_args():
     """Parse command line arguments."""
@@ -24,7 +25,7 @@ def parse_args():
 
 def train(config_file="pipeline_config.yaml"):
 
-    logging.info(["-"]*20 + " Step 2: Constructing graphs from metric learning model " + ["-"]*20)
+    logging.info(headline("Step 2: Constructing graphs from metric learning model "))
 
     with open(config_file) as file:
         all_configs = yaml.load(file, Loader=yaml.FullLoader)
@@ -32,14 +33,16 @@ def train(config_file="pipeline_config.yaml"):
     common_configs = all_configs["common_configs"]
     metric_learning_configs = all_configs["metric_learning_configs"]
 
-    logging.info(["-"]*20 + "a) Loading trained model" + ["-"]*20)
+    logging.info(headline("a) Loading trained model" ))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = LayerlessEmbedding.load_from_checkpoint(os.path.join(common_configs["artifact_directory"], "metric_learning", common_configs["experiment_name"]+".ckpt")).to(device)
 
-    logging.info(["-"]*20 + "b) Running inferencing" + ["-"]*20)
+    logging.info(headline("b) Running inferencing"))
     graph_builder = EmbeddingInferenceBuilder(model, metric_learning_configs["train_split"], overwrite=True, knn_max=1000, radius=metric_learning_configs["r_test"])
     graph_builder.build()
+
+    return graph_builder
 
 
 
@@ -48,4 +51,4 @@ if __name__ == "__main__":
     args = parse_args()
     config_file = args.config
 
-    train(config_file) 
+    gb = train(config_file) 

@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 from datetime import timedelta
 import torch.nn.functional as F
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from torch.nn import Linear
 import torch
 
@@ -49,17 +49,17 @@ class GNNBase(LightningModule):
         if ("trainset" not in self.__dict__.keys()) or (self.trainset is None):
             self.setup_data()
 
-        return DataLoader(self.trainset, batch_size=1, num_workers=1)
+        return DataLoader(self.trainset, batch_size=1, num_workers=16)
 
     def val_dataloader(self):
         if self.valset is not None:
-            return DataLoader(self.valset, batch_size=1, num_workers=1)
+            return DataLoader(self.valset, batch_size=1, num_workers=16)
         else:
             return None
 
     def test_dataloader(self):
         if self.testset is not None:
-            return DataLoader(self.testset, batch_size=1, num_workers=1)
+            return DataLoader(self.testset, batch_size=1, num_workers=16)
         else:
             return None
 
@@ -136,7 +136,7 @@ class GNNBase(LightningModule):
             output, truth_sample.float(), weight=manual_weights, pos_weight=weight
         )
 
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_epoch=True, on_step=False, batch_size=10000)
 
         return loss
 
@@ -148,8 +148,8 @@ class GNNBase(LightningModule):
             (truth.bool() & preds).sum().float()
         )
 
-        eff = edge_true_positive / max(1, edge_true)
-        pur = edge_true_positive / max(1, edge_positive)
+        eff = edge_true_positive.clone().detach() / max(1, edge_true)
+        pur = edge_true_positive.clone().detach() / max(1, edge_positive)
 
         auc = roc_auc_score(truth.bool().cpu().detach(), score.cpu().detach())
 
@@ -161,7 +161,7 @@ class GNNBase(LightningModule):
                 "eff": eff,
                 "pur": pur,
                 "current_lr": current_lr,
-            }
+            }, on_epoch=True, on_step=False, batch_size=10000
         )
 
     def shared_evaluation(self, batch, batch_idx, log=False):
@@ -190,7 +190,7 @@ class GNNBase(LightningModule):
         )
 
         # Edge filter performance
-        score = F.sigmoid(output)
+        score = torch.sigmoid(output)
         preds = score > self.hparams["edge_cut"]
 
         if log:
