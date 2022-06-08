@@ -14,7 +14,6 @@ from pytorch_lightning.loggers import CSVLogger
 
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.GNN.Models.interaction_gnn import InteractionGNN
-from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 from utils import headline
 
 def parse_args():
@@ -46,7 +45,7 @@ def train(config_file="pipeline_config.yaml"):
 
     trainer = Trainer(
         gpus=common_configs["gpus"],
-        max_epochs=common_configs["max_epochs"],
+        max_epochs=gnn_configs["max_epochs"],
         logger=logger
     )
 

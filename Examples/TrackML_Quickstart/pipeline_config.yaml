@@ -2,7 +2,6 @@ common_configs:
   experiment_name: trackml_quickstart_1
   artifact_directory: artifacts
   gpus: 1
-  max_epochs: 20
 
 metric_learning_configs:
   # Dataset parameters
@@ -21,18 +20,19 @@ metric_learning_configs:
   emb_dim: 12
   activation: Tanh
   weight: 1
-  randomisation: 1
+  randomisation: 2
   points_per_batch: 100000
   r_train: 0.1
   r_val: 0.1
-  r_test: 0.15
-  knn: 100
-  warmup: 5
+  r_test: 0.1
+  knn: 50
+  warmup: 10
   margin: 0.1
   lr: 0.001
-  factor: 0.5
-  patience: 30
-  regime: [rp, hnm, ci, norm]
+  factor: 0.9
+  patience: 1
+  regime: [rp, hnm, norm]
+  max_epochs: 30
 
 gnn_configs:
   # Dataset parameters
@@ -63,6 +63,7 @@ gnn_configs:
   truth_key: pid_signal
   regime: [[pid]]
   mask_background: True
+  max_epochs: 20
 
 
 track_building_configs:

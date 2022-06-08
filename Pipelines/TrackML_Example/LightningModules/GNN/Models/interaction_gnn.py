@@ -2,14 +2,6 @@ import sys
 
 import torch.nn as nn
 from torch.nn import Linear
-from torch.nn.init import (
-    uniform_,
-    normal_,
-    xavier_uniform_,
-    xavier_normal_,
-    kaiming_uniform_,
-    kaiming_normal_,
-)
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
@@ -114,8 +106,6 @@ class InteractionGNN(GNNBase):
         e_out = self.edge_network(edge_inputs)
 
         e_out += e
-
-        # print(torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated() * 100)
 
         return x_out, e_out
 

@@ -83,7 +83,7 @@ class EmbeddingBase(LightningModule):
 
     def get_input_data(self, batch):
 
-        if "ci" in self.hparams["regime"]:
+        if self.hparams["cell_channels"] > 0:
             input_data = torch.cat(
                 [batch.cell_data[:, : self.hparams["cell_channels"]], batch.x], axis=-1
             )

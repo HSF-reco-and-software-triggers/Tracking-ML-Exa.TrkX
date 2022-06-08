@@ -1,4 +1,5 @@
 
 
 def headline(message):
-    return "-"*20 + ' ' + message + ' ' + '-'*20
+    buffer_len = (80 - len(message))//2 if len(message) < 80 else 0
+    return "-"*buffer_len + ' ' + message + ' ' + '-'*buffer_len
