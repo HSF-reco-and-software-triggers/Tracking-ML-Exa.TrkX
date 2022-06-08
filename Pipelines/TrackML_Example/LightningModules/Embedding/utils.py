@@ -49,6 +49,7 @@ def load_dataset(
         for event in all_events[:num]:
             try:
                 loaded_event = torch.load(event, map_location=torch.device("cpu"))
+                loaded_event.event_file = event
                 loaded_events.append(loaded_event)
                 logging.info("Loaded event: {}".format(loaded_event.event_file))
             except:
