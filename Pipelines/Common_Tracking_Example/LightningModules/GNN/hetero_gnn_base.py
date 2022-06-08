@@ -61,7 +61,7 @@ class HeteroGNNBase(LightningModule):
     def train_dataloader(self):
         if self.trainset is not None:
             return DataLoader(
-                self.trainset, batch_size=1, num_workers=4
+                self.trainset, batch_size=1, num_workers=2
             )  # , pin_memory=True, persistent_workers=True)
         else:
             return None
@@ -242,9 +242,11 @@ class HeteroGNNBase(LightningModule):
                 output, truth_sample.float().squeeze(), pos_weight=weight
             )
 
-        preds = self.log_metrics(output, sample_indices, batch, loss, log)
-
-        return {"loss": loss, "preds": preds, "score": torch.sigmoid(output)}
+        try:
+            preds = self.log_metrics(output, sample_indices, batch, loss, log)
+            return {"loss": loss, "preds": preds, "score": torch.sigmoid(output)}
+        except:
+            return {"loss": loss, "score": torch.sigmoid(output)}
 
     def validation_step(self, batch, batch_idx):
 

@@ -83,7 +83,7 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets, inpu
     return events
 
 def background_cut_event(event, pt_background_cut=0, pt_signal_cut=0):
-    edge_mask = ((event.pt[event.edge_index] > pt_background_cut) & (event.pid[event.edge_index] == event.pid[event.edge_index])).any(0)
+    edge_mask = ((event.pt[event.edge_index] > pt_background_cut) & (event.pid[event.edge_index] == event.pid[event.edge_index]) & (event.pid[event.edge_index] != 0)).any(0)
     event.edge_index = event.edge_index[:, edge_mask]
     event.y = event.y[edge_mask]
 

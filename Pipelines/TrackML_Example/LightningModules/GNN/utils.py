@@ -4,7 +4,13 @@ import torch.nn as nn
 import torch
 import pandas as pd
 import numpy as np
-import cupy as cp
+
+# Find current device.
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Only import cupy in CUDA environment.
+if device == "cuda":
+    import cupy as cp
 
 # ---------------------------- Dataset Processing -------------------------
 

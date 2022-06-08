@@ -6,8 +6,6 @@ from torch.utils.data import random_split
 from torch import nn
 import scipy as sp
 import numpy as np
-import pandas as pd
-import trackml.dataset
 
 """
 Ideally, we would be using FRNN and the GPU. But in the case of a user not having a GPU, or not having FRNN, we import FAISS as the 
@@ -248,7 +246,7 @@ def build_edges(
 
         if device == "cuda":
             res = faiss.StandardGpuResources()
-            Dsq, I = faiss.knn_gpu(res, database, query, k_max)
+            Dsq, I = faiss.knn_gpu(res, query, database, k_max)
         elif device == "cpu":
             index = faiss.IndexFlatL2(database.shape[1])
             index.add(database)

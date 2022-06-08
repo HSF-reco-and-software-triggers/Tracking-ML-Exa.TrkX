@@ -73,9 +73,12 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
 
     # Define the signal edges
     for event in events:
-        edge_subset = (event.pt[event[true_edges]] > pt_signal_cut).all(0)
-        event.signal_true_edges = event[true_edges][:, edge_subset]
-
+        if pt_signal_cut > 0:
+            edge_subset = (event.pt[event[true_edges]] > pt_signal_cut).all(0)
+            event.signal_true_edges = event[true_edges][:, edge_subset]
+        else:
+            event.signal_true_edges = event[true_edges]
+    
     return events
 
 
