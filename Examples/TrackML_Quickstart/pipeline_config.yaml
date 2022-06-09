@@ -47,7 +47,7 @@ gnn_configs:
 
   # Model parameters
   spatial_channels: 3
-  cell_channels: 8
+  cell_channels: 9
   hidden: 128
   n_graph_iters: 8
   nb_node_layer: 3
@@ -61,7 +61,7 @@ gnn_configs:
   factor: 0.3
   patience: 10
   truth_key: pid_signal
-  regime: [[pid]]
+  regime: [pid]
   mask_background: True
   max_epochs: 20
 

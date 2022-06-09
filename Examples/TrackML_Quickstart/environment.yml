@@ -17,4 +17,4 @@ dependencies:
     - pytorch>=1.10
     - pytorch-lightning>=1.6
     - pyg
-    - faiss-gpu
+    - faiss-gpu>=1.7.2

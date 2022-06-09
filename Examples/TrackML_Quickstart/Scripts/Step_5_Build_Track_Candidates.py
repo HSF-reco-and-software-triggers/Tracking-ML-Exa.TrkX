@@ -13,6 +13,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from tqdm.contrib.concurrent import process_map
+from tqdm import tqdm
 from functools import partial
 
 from utils import headline
@@ -68,8 +69,13 @@ def train(config_file="pipeline_config.yaml"):
     score_cut = track_building_configs["score_cut"]
     save_dir = track_building_configs["output_dir"]
     
-    label_graph_list_partial = partial(label_graph, score_cut=score_cut, save_dir=save_dir)
-    all_graphs = process_map(label_graph_list_partial, all_graphs)
+    # THIS SEEMS TO NOT BE WORKING (AT LEAST IN JUPYTER) -->
+    # label_graph_list_partial = partial(label_graph, score_cut=score_cut, save_dir=save_dir)
+    # process_map(label_graph_list_partial, all_graphs, max_workers=1)
+
+    # RUN IN SERIAL FOR NOW -->
+    for graph in tqdm(all_graphs):
+        label_graph(graph, score_cut=score_cut, save_dir=save_dir)
 
 
 

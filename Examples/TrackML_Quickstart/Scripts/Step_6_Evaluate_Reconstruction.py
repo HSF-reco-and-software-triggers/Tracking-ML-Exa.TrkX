@@ -13,6 +13,7 @@ import pandas as pd
 import scipy.sparse as sps
 
 from tqdm.contrib.concurrent import process_map
+from tqdm import tqdm
 from functools import partial
 from utils import headline
 
@@ -48,14 +49,16 @@ def get_matching_df(reconstruction_df):
             columns={"index":"track_id", "track_id": "n_reco_hits"})
 
     # Get true track lengths
-    particle_lengths = reconstruction_df.groupby("particle_id").track_id.value_counts(sort=False)\
+    particle_lengths = reconstruction_df.drop_duplicates(subset=['hit_id']).particle_id.value_counts(sort=False)\
         .reset_index().rename(
-            columns={"index":"track_id", "track_id": "n_true_hits"})
+            columns={"index":"particle_id", "particle_id": "n_true_hits"})
 
     spacepoint_matching = reconstruction_df.groupby(['track_id', 'particle_id']).size()\
         .reset_index().rename(columns={0:"n_shared"})
     spacepoint_matching = spacepoint_matching.merge(candidate_lengths, on=['track_id'], how='left')
     spacepoint_matching = spacepoint_matching.merge(particle_lengths, on=['particle_id'], how='left')
+
+    print(spacepoint_matching.head())
 
     return spacepoint_matching
 
@@ -64,6 +67,8 @@ def calculate_matching_fraction(spacepoint_matching_df):
         purity_reco=np.true_divide(spacepoint_matching_df.n_shared, spacepoint_matching_df.n_reco_hits))
     spacepoint_matching_df = spacepoint_matching_df.assign(
         eff_true = np.true_divide(spacepoint_matching_df.n_shared, spacepoint_matching_df.n_true_hits))
+
+    print(spacepoint_matching_df.head())
 
     return spacepoint_matching_df
 
@@ -106,7 +111,7 @@ def evaluate_labelled_graph(graph_file, matching_fraction=0.5):
 
 def evaluate(config_file="pipeline_config.yaml"):
 
-    logging.info(["-"]*20 + " Step 6: Evaluating the track reconstruction performance " + ["-"]*20)
+    logging.info(headline("Step 6: Evaluating the track reconstruction performance"))
 
     with open(config_file) as file:
         all_configs = yaml.load(file, Loader=yaml.FullLoader)
@@ -124,8 +129,14 @@ def evaluate(config_file="pipeline_config.yaml"):
     all_graph_files = os.listdir(input_dir)
     all_graph_files = [os.path.join(input_dir, graph) for graph in all_graph_files]
 
-    evaluate_partial_fn = partial(evaluate_labelled_graph, matching_fraction=evaluation_configs["matching_fraction"])
-    evaluated_events = process_map(evaluate_partial_fn, all_graph_files, n_workers=evaluation_configs["n_workers"])
+    # evaluate_partial_fn = partial(evaluate_labelled_graph, matching_fraction=evaluation_configs["matching_fraction"])
+    # evaluated_events = process_map(evaluate_partial_fn, all_graph_files, n_workers=evaluation_configs["n_workers"])
+
+    evaluated_events = []
+    for graph_file in tqdm(all_graph_files):
+        particles_df, reconstruction_df = evaluate_labelled_graph(graph_file, matching_fraction=evaluation_configs["matching_fraction"])
+        evaluated_events.append((particles_df, reconstruction_df))
+        break
 
     # Check this logic!!
     n_true_tracks, n_reco_tracks, n_matched_particles, n_matched_tracks, n_duplicated_tracks, n_single_matched_particles = 0, 0, 0, 0, 0, 0
@@ -133,14 +144,15 @@ def evaluate(config_file="pipeline_config.yaml"):
         particles_df, reconstruction_df = event
         n_true_tracks += len(particles_df)
         n_reco_tracks += len(reconstruction_df)
-        n_matched_particles += len(particles_df[particles_df.is_matched])
-        n_matched_tracks += len(reconstruction_df[reconstruction_df.is_matched])
+        n_matched_particles += particles_df.is_matched.sum()
+        n_matched_tracks += reconstruction_df.is_matched.sum()
         n_duplicated_tracks += len(reconstruction_df[reconstruction_df.is_matched]) - len(reconstruction_df[reconstruction_df.is_matched].drop_duplicates())
         n_single_matched_particles += len(particles_df[particles_df.is_matched]) - len(particles_df[particles_df.is_matched].drop_duplicates())
 
     # Plot the results across pT and eta
     logging.info(headline("b) Plotting the results"))
-    eff = n_matched_tracks / n_reco_tracks
+    track_eff = n_matched_tracks / n_reco_tracks
+    particle_eff = n_matched_tracks / n_reco_tracks
     purity = n_matched_particles / n_true_tracks
     fake_rate = 1 - purity
     dup_rate = n_duplicated_tracks / n_reco_tracks
