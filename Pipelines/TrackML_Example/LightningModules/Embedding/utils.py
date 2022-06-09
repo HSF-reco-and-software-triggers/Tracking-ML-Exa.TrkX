@@ -246,7 +246,7 @@ def build_edges(
 
         if device == "cuda":
             res = faiss.StandardGpuResources()
-            Dsq, I = faiss.knn_gpu(res, query, database, k_max)
+            Dsq, I = faiss.knn_gpu(res=res, xq=query, xb=database, k=k_max)
         elif device == "cpu":
             index = faiss.IndexFlatL2(database.shape[1])
             index.add(database)
