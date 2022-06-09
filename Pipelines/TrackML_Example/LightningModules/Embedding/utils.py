@@ -275,7 +275,7 @@ def build_knn(spatial, k):
 
     if device == "cuda":
         res = faiss.StandardGpuResources()
-        _, I = faiss.knn_gpu(res, spatial, spatial, k_max)
+        _, I = faiss.knn_gpu(res=res, xq=spatial, xb=spatial, k=k_max)
     elif device == "cpu":
         index = faiss.IndexFlatL2(spatial.shape[1])
         index.add(spatial)
