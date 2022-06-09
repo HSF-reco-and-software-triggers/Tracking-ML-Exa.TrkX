@@ -23,6 +23,7 @@ nav:
   - Performance:
     - Overview: performance/overview.md
     - Truth Definitions: performance/truth_definitions.md
+    - Track Matching Definitions: performance/matching_definitions.md
     # - Use Cases: performance/usage.md
   - Tools:
     - Overview: tools/overview.md
