@@ -12,6 +12,6 @@ Exactly how we define the goodness of reconstruction and matching is somewhat ar
 The following infographic explains the three styles of track matching used in this repository.
 
 <figure>
-  <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.pdf"/>
+  <img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png"/>
   <figcaption>The three styles of matching - correponding to `matching_style=` `ATLAS`, `one_way` and `two_way`</figcaption>
 </figure>
