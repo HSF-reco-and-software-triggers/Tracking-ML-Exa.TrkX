@@ -9,13 +9,7 @@ Exactly how we define the goodness of reconstruction and matching is somewhat ar
 
 ## Styles of Matching
 
-The following infographic explains the three styles of track matching used in this repository.
+The following infographic explains the three styles of track matching used in this repository (click to zoom in).
 
-<figure>
-  [<img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png"/>](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png)
-  <figcaption>The three styles of matching - corresponding to matching_style=ATLAS, one_way and two_way</figcaption>
-</figure>
-
-[<img src="https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png"/>](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png)
-
-[![name](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png)](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png)
+[![](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png)](https://raw.githubusercontent.com/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/master/docs/media/matching_diagram.png)
+The three styles of matching - corresponding to `matching_style=` `ATLAS`, `one_way` and `two_way`
