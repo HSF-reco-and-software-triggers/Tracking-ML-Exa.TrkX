@@ -16,7 +16,7 @@ from tqdm.contrib.concurrent import process_map
 from tqdm import tqdm
 from functools import partial
 
-from utils import headline
+from utils.convenience_utils import headline
 
 sys.path.append("../../")
 

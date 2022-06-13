@@ -12,7 +12,7 @@ import torch
 
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
-from utils import headline
+from utils.convenience_utils import headline
 from Pipelines.TrackML_Example.notebooks.build_embedding import EmbeddingInferenceBuilder
 
 def parse_args():
@@ -22,10 +22,9 @@ def parse_args():
     add_arg("config", nargs="?", default="pipeline_config.yaml")
     return parser.parse_args()
 
-
 def train(config_file="pipeline_config.yaml"):
 
-    logging.info(headline("Step 2: Constructing graphs from metric learning model "))
+    logging.info(headline("Step 2: Constructing graphs from metric learning model"))
 
     with open(config_file) as file:
         all_configs = yaml.load(file, Loader=yaml.FullLoader)
@@ -33,7 +32,7 @@ def train(config_file="pipeline_config.yaml"):
     common_configs = all_configs["common_configs"]
     metric_learning_configs = all_configs["metric_learning_configs"]
 
-    logging.info(headline("a) Loading trained model" ))
+    logging.info(headline("a) Loading trained model"))
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = LayerlessEmbedding.load_from_checkpoint(os.path.join(common_configs["artifact_directory"], "metric_learning", common_configs["experiment_name"]+".ckpt")).to(device)
@@ -43,7 +42,6 @@ def train(config_file="pipeline_config.yaml"):
     graph_builder.build()
 
     return graph_builder
-
 
 
 if __name__ == "__main__":

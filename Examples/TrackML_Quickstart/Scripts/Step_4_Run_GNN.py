@@ -13,7 +13,7 @@ import torch
 sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.GNN.Models.interaction_gnn import InteractionGNN
 from Pipelines.TrackML_Example.notebooks.build_gnn import GNNInferenceBuilder
-from utils import headline
+from utils.convenience_utils import headline
 
 
 def parse_args():

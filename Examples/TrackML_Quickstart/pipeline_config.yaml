@@ -74,7 +74,7 @@ evaluation_configs:
   output_dir: datasets/quickstart_evaluation
   min_pt: 1
   max_eta: 4
-  min_track_length: 1
-  min_particle_length: 1
+  min_track_length: 3
+  min_particle_length: 3
   matching_fraction: 0.5
   matching_style: ATLAS

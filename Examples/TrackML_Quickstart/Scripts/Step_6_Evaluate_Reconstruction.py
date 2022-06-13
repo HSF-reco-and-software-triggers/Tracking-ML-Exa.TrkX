@@ -11,11 +11,13 @@ import torch
 import numpy as np
 import pandas as pd
 import scipy.sparse as sps
+import matplotlib.pyplot as plt
 
 from tqdm.contrib.concurrent import process_map
 from tqdm import tqdm
 from functools import partial
-from utils import headline
+from utils.convenience_utils import headline
+from utils.plotting_utils import plot_pt_eff
 
 def parse_args():
     """Parse command line arguments."""
@@ -42,7 +44,8 @@ def load_particles_df(file):
 
     return particles_df
 
-def get_matching_df(reconstruction_df, min_track_length=1, min_particle_length=1):
+def get_matching_df(reconstruction_df, particles_df, min_track_length=1, min_particle_length=1):
+    
     # Get track lengths
     candidate_lengths = reconstruction_df.track_id.value_counts(sort=False)\
         .reset_index().rename(
@@ -55,8 +58,10 @@ def get_matching_df(reconstruction_df, min_track_length=1, min_particle_length=1
 
     spacepoint_matching = reconstruction_df.groupby(['track_id', 'particle_id']).size()\
         .reset_index().rename(columns={0:"n_shared"})
+
     spacepoint_matching = spacepoint_matching.merge(candidate_lengths, on=['track_id'], how='left')
     spacepoint_matching = spacepoint_matching.merge(particle_lengths, on=['particle_id'], how='left')
+    spacepoint_matching = spacepoint_matching.merge(particles_df, on=['particle_id'], how='left')
 
     # Filter out tracks with too few shared spacepoints
     spacepoint_matching["is_matchable"] = spacepoint_matching.n_reco_hits >= min_track_length
@@ -83,9 +88,11 @@ def evaluate_labelled_graph(graph_file, matching_fraction=0.5, matching_style="A
 
     # Load the labelled graphs as reconstructed dataframes
     reconstruction_df = load_reconstruction_df(graph_file)
+    particles_df = load_particles_df(graph_file)
 
     # Get matching dataframe
-    matching_df = get_matching_df(reconstruction_df, min_track_length=min_track_length, min_particle_length=min_particle_length) 
+    matching_df = get_matching_df(reconstruction_df, particles_df, min_track_length=min_track_length, min_particle_length=min_particle_length) 
+    matching_df["event_id"] = int(graph_file.split("/")[-1])
 
     # calculate matching fraction
     matching_df = calculate_matching_fraction(matching_df)
@@ -121,9 +128,6 @@ def evaluate(config_file="pipeline_config.yaml"):
     all_graph_files = os.listdir(input_dir)
     all_graph_files = [os.path.join(input_dir, graph) for graph in all_graph_files]
 
-    # evaluate_partial_fn = partial(evaluate_labelled_graph, matching_fraction=evaluation_configs["matching_fraction"])
-    # evaluated_events = process_map(evaluate_partial_fn, all_graph_files, n_workers=evaluation_configs["n_workers"])
-
     evaluated_events = []
     for graph_file in tqdm(all_graph_files):
         evaluated_events.append(evaluate_labelled_graph(graph_file, 
@@ -131,28 +135,49 @@ def evaluate(config_file="pipeline_config.yaml"):
                                 matching_style=evaluation_configs["matching_style"],
                                 min_track_length=evaluation_configs["min_track_length"],
                                 min_particle_length=evaluation_configs["min_particle_length"]))
+    evaluated_events = pd.concat(evaluated_events)
 
-    n_reconstructed_particles, n_particles, n_matched_tracks, n_tracks, n_dup_reconstructed_particles = 0, 0, 0, 0, 0
-    for event in evaluated_events:
-        n_particles += event[event["is_reconstructable"]].particle_id.nunique()
-        reconstructed_particles = event[event["is_reconstructable"] & event["is_reconstructed"]]
-        n_reconstructed_particles += reconstructed_particles.particle_id.nunique()
-        n_tracks += event[event["is_matchable"]].track_id.nunique()
-        n_matched_tracks += event[event["is_matchable"] & event["is_matched"]].track_id.nunique()
-        n_dup_reconstructed_particles += reconstructed_particles[reconstructed_particles.particle_id.duplicated()].particle_id.nunique()
+    particles = evaluated_events[evaluated_events["is_reconstructable"]]
+    reconstructed_particles = particles[particles["is_reconstructed"] & particles["is_matchable"]]    
+    tracks = evaluated_events[evaluated_events["is_matchable"]]
+    matched_tracks = tracks[tracks["is_matched"]]
+
+    n_particles = len(particles.drop_duplicates(subset=['event_id', 'particle_id']))
+    n_reconstructed_particles = len(reconstructed_particles.drop_duplicates(subset=['event_id', 'particle_id']))
+    
+    n_tracks = len(tracks.drop_duplicates(subset=['event_id', 'track_id']))
+    n_matched_tracks = len(matched_tracks.drop_duplicates(subset=['event_id', 'track_id']))
+
+    n_dup_reconstructed_particles = len(reconstructed_particles) - n_reconstructed_particles
+
+    logging.info(headline("b) Calculating the performance metrics"))
+    logging.info(f"Number of reconstructed particles: {n_reconstructed_particles}")
+    logging.info(f"Number of particles: {n_particles}")
+    logging.info(f"Number of matched tracks: {n_matched_tracks}")
+    logging.info(f"Number of tracks: {n_tracks}")
+    logging.info(f"Number of duplicate reconstructed particles: {n_dup_reconstructed_particles}")   
 
     # Plot the results across pT and eta
-    logging.info(headline("b) Plotting the results"))
     eff = n_reconstructed_particles / n_particles
     fake_rate = 1 - (n_matched_tracks / n_tracks)
-    # dup_rate = n_dup_reconstructed_particles / n_reconstructed_particles
-    dup_rate = n_dup_reconstructed_particles / n_matched_tracks
+    dup_rate = n_dup_reconstructed_particles / n_reconstructed_particles
     
     logging.info(f"Efficiency: {eff:.3f}")
     logging.info(f"Fake rate: {fake_rate:.3f}")
     logging.info(f"Duplication rate: {dup_rate:.3f}")
 
+    logging.info(headline("c) Plotting results"))
+
+    # First get the list of particles without duplicates
+    grouped_reco_particles = particles.groupby('particle_id')["is_reconstructed"].any()
+    particles["is_reconstructed"] = particles["particle_id"].isin(grouped_reco_particles[grouped_reco_particles].index.values)
+    particles = particles.drop_duplicates(subset=['particle_id'])
+
+    # Plot the results across pT and eta
+    plot_pt_eff(particles)
+
     # TODO: Plot the results
+    return evaluated_events, reconstructed_particles, particles, matched_tracks, tracks
     
 
 
