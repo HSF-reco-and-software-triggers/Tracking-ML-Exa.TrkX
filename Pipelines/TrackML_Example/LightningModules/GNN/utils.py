@@ -56,6 +56,10 @@ def select_data(events, pt_background_cut, pt_signal_cut, noise):
                 signal_mask = (event.pt[event.signal_true_edges] > pt_signal_cut).all(0)
                 event.signal_true_edges = event.signal_true_edges[:, signal_mask]
 
+    for event in events:
+        if "y_pid" not in event.__dict__.keys():
+            event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+
     return events
 
 

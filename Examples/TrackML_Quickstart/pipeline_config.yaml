@@ -19,7 +19,7 @@ metric_learning_configs:
   nb_layer: 4
   emb_dim: 12
   activation: Tanh
-  weight: 1
+  weight: 2
   randomisation: 2
   points_per_batch: 100000
   r_train: 0.1
@@ -32,7 +32,7 @@ metric_learning_configs:
   factor: 0.9
   patience: 1
   regime: [rp, hnm, norm]
-  max_epochs: 30
+  max_epochs: 40
 
 gnn_configs:
   # Dataset parameters
@@ -58,16 +58,16 @@ gnn_configs:
   weight: 2
   warmup: 5
   lr: 0.001
-  factor: 0.3
+  factor: 0.7
   patience: 10
   truth_key: pid_signal
   regime: [pid]
   mask_background: True
-  max_epochs: 20
+  max_epochs: 40
 
 
 track_building_configs:
-  score_cut: 0.8
+  score_cut: 0.9
   output_dir: datasets/quickstart_track_building_processed
 
 evaluation_configs:
