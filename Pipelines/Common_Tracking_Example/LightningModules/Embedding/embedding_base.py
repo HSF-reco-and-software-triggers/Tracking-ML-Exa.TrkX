@@ -246,11 +246,6 @@ class EmbeddingBase(LightningModule):
 
         hinge, d = self.get_hinge_distance(spatial, e_spatial, y_cluster)
 
-        # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
-        new_weights[hinge == -1] = 1
-
-        # d = d * new_weights ## Handle this later
-
         negative_loss = torch.nn.functional.hinge_embedding_loss(
             d[hinge == -1],
             hinge[hinge == -1],
@@ -286,13 +281,10 @@ class EmbeddingBase(LightningModule):
         )
 
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
-        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
         hinge, d = self.get_hinge_distance(
             spatial, e_spatial.to(self.device), y_cluster
         )
-
-        new_weights[y_cluster == 0] = 1
 
         loss = torch.nn.functional.hinge_embedding_loss(
             d, hinge, margin=self.hparams["margin"]**2, reduction="mean"
@@ -301,8 +293,6 @@ class EmbeddingBase(LightningModule):
         cluster_true = e_bidir.shape[1]
         cluster_true_positive = y_cluster.sum()
         cluster_positive = len(e_spatial[0])
-
-        # print(f"Average nbhood: {cluster_positive / len(spatial)}")
 
         eff = cluster_true_positive / cluster_true
         pur = cluster_true_positive / cluster_positive

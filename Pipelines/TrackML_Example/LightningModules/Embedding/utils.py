@@ -39,6 +39,7 @@ def load_dataset(
     primary_only,
     true_edges,
     noise,
+    **kwargs
 ):
     if input_dir is not None:
         all_events = os.listdir(input_dir)

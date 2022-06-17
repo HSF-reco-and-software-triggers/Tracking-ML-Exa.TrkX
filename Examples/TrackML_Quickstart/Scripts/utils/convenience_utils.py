@@ -1,8 +1,11 @@
 import os
+import sys
+import shutil
 
 import pandas as pd
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from bokeh.io import output_notebook, show
 from bokeh.plotting import figure, row
@@ -12,7 +15,11 @@ from bokeh.models.annotations import Label
 output_notebook()
 
 from sklearn.metrics import roc_auc_score  
+from matplotlib import pyplot as plt
 
+# sys.path.append("../../../../")
+# sys.path.append("../../../")
+# sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -21,6 +28,14 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 def headline(message):
     buffer_len = (80 - len(message))//2 if len(message) < 80 else 0
     return "-"*buffer_len + ' ' + message + ' ' + '-'*buffer_len
+
+def delete_directory(dir):
+    for files in os.listdir(dir):
+                path = os.path.join(dir, files)
+                try:
+                    shutil.rmtree(path)
+                except OSError:
+                    os.remove(path)
 
 def get_example_data(configs):
 
@@ -186,6 +201,21 @@ def plot_track_lengths(model):
     p1.quad(bottom=0, top='true_hist', left='low', right='high', source=ColumnDataSource(true_histogram))
     p2.quad(bottom=0, top='pred_hist', left='low', right='high', source=ColumnDataSource(pred_histogram))
     show(row([p1,p2]))
+
+def plot_graph_sizes(model):
+
+    graph_sizes = []
+    model = model.to(device)
+    with torch.no_grad():
+        for data in tqdm(model.trainset):
+            results = model.shared_evaluation(data.to(device), 0, 0.12, 100, log=False)
+            graph_sizes.append(results['preds'].shape[1])
+
+    # Make histogram of graph sizes
+    plt.figure(figsize=(10,5))
+    plt.hist(graph_sizes);
+    plt.title('Histogram of predicted graph sizes');
+    plt.xlabel('Number of edges');
 
 def plot_edge_performance(model):
 

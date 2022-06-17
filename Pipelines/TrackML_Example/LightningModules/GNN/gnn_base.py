@@ -25,20 +25,18 @@ class GNNBase(LightningModule):
     def setup(self, stage):
         # Handle any subset of [train, val, test] data split, assuming that ordering
 
-        input_dirs = [None, None, None]
-        input_dirs[: len(self.hparams["datatype_names"])] = [
+        input_subdirs = [None, None, None]
+        input_subdirs[: len(self.hparams["datatype_names"])] = [
             os.path.join(self.hparams["input_dir"], datatype)
             for datatype in self.hparams["datatype_names"]
         ]
         self.trainset, self.valset, self.testset = [
             load_dataset(
-                input_dir,
-                self.hparams["datatype_split"][i],
-                self.hparams["pt_background_min"],
-                self.hparams["pt_signal_min"],
-                self.hparams["noise"],
+                input_subdir=input_subdir,
+                num_events=self.hparams["datatype_split"][i],
+                **self.hparams
             )
-            for i, input_dir in enumerate(input_dirs)
+            for i, input_subdir in enumerate(input_subdirs)
         ]
 
     def setup_data(self):

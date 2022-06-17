@@ -16,7 +16,7 @@ from tqdm.contrib.concurrent import process_map
 from tqdm import tqdm
 from functools import partial
 
-from utils.convenience_utils import headline
+from utils.convenience_utils import headline, delete_directory
 
 sys.path.append("../../")
 
@@ -69,9 +69,8 @@ def train(config_file="pipeline_config.yaml"):
     score_cut = track_building_configs["score_cut"]
     save_dir = track_building_configs["output_dir"]
     
-    # THIS SEEMS TO NOT BE WORKING (AT LEAST IN JUPYTER) -->
-    # label_graph_list_partial = partial(label_graph, score_cut=score_cut, save_dir=save_dir)
-    # process_map(label_graph_list_partial, all_graphs, max_workers=1)
+    if common_configs["clear_directories"]:
+        delete_directory(track_building_configs["output_dir"])
 
     # RUN IN SERIAL FOR NOW -->
     for graph in tqdm(all_graphs):

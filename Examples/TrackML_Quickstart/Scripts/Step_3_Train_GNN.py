@@ -13,6 +13,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import CSVLogger
 
 sys.path.append("../../")
+
 from Pipelines.TrackML_Example.LightningModules.GNN.Models.interaction_gnn import InteractionGNN
 from utils.convenience_utils import headline
 

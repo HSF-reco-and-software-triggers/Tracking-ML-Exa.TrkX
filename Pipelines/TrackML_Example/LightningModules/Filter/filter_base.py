@@ -15,7 +15,7 @@ import wandb
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Local imports
-from .utils import graph_intersection, load_dataset
+from .utils import load_dataset
 
 
 class FilterBase(LightningModule):

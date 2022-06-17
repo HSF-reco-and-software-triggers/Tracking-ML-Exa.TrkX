@@ -5,7 +5,8 @@ project: CodaFilteringStudy
 filter_cut: 0.15
 
 # Dataset parameters
-pt_min: 1.
+pt_background_min: 0.
+pt_signal_min: 0.
 datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
 datatype_split: [[90, 5, 5]] # Number of [training, validation, testing] examples
 noise: False

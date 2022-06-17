@@ -60,7 +60,7 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets, inpu
         events = [events]
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
-    if pt_background_cut > 0:
+    if pt_background_cut > 0 or not noise:
         for i, event in tqdm(enumerate(events)):
 
             if triplets:  # Keep all event data for posterity!

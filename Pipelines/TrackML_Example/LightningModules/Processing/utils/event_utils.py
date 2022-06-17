@@ -34,8 +34,6 @@ def get_cell_information(
 ):
 
     event_file = data.event_file
-    evtid = event_file[-4:]
-
     angles = get_one_event(event_file, detector_orig, detector_proc)
     logging.info("Angles: {}".format(angles))
     hid = pd.DataFrame(data.hid.numpy(), columns=["hit_id"])
@@ -269,12 +267,12 @@ def build_event(
     return (
         hits[["r", "phi", "z"]].to_numpy() / feature_scale,
         hits.particle_id.to_numpy(),
-        layer_id,
         module_id,
         modulewise_true_edges,
         layerwise_true_edges,
         hits["hit_id"].to_numpy(),
         hits.pt.to_numpy(),
+        hits.weight.to_numpy(),
         edge_weight_norm,
     )
 
@@ -284,7 +282,6 @@ def prepare_event(
     detector_orig,
     detector_proc,
     cell_features,
-    progressbar=None,
     output_dir=None,
     endcaps=False,
     modulewise=True,
@@ -307,13 +304,13 @@ def prepare_event(
             (
                 X,
                 pid,
-                layer_id,
                 module_id,
                 modulewise_true_edges,
                 layerwise_true_edges,
                 hid,
                 pt,
-                weights,
+                hit_weights,
+                edge_weights
             ) = build_event(
                 event_file,
                 feature_scale,
@@ -332,7 +329,8 @@ def prepare_event(
                 event_file=event_file,
                 hid=torch.from_numpy(hid),
                 pt=torch.from_numpy(pt),
-                weights=torch.from_numpy(weights),
+                hit_weights=torch.from_numpy(hit_weights),
+                edge_weights=torch.from_numpy(edge_weights),
             )
             if modulewise_true_edges is not None:
                 data.modulewise_true_edges = torch.from_numpy(modulewise_true_edges)
