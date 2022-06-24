@@ -43,11 +43,12 @@ def get_example_data(configs):
 
     model = LayerlessEmbedding(metric_learning_configs)
     model.setup(stage='fit')
+    training_example = model.trainset[0]
 
-    example_data = model.get_input_data(model.trainset[0])
-    example_data_df = pd.DataFrame(example_data.numpy())
+    example_hit_inputs = model.get_input_data(training_example)
+    example_hit_df = pd.DataFrame(example_hit_inputs.numpy())
 
-    return example_data_df
+    return example_hit_df, training_example
 
 
 def get_training_metrics(trainer):
@@ -117,6 +118,31 @@ def plot_neighbor_performance(model):
 
     show(row(figures))
 
+def plot_true_graph(sample_data, num_tracks=100):
+
+    p = figure(title='Truth graphs', x_axis_label='x', y_axis_label='y', height=800, width=800) 
+ 
+    true_edges = sample_data.signal_true_edges
+    true_unique, true_lengths = sample_data.pid[true_edges[0]].unique(return_counts=True)
+    pid = sample_data.pid
+    r, phi, z = sample_data.cpu().x.T
+    x, y = r * np.cos(phi * np.pi), r * np.sin(phi * np.pi)
+    cmap = viridis(num_tracks)
+    source = ColumnDataSource(dict(x=x.numpy(), y=y.numpy()))
+    p.circle(x='x', y='y', source=source, color=cmap[0], size=1, alpha=0.1)
+
+    for i, track in enumerate(true_unique[true_lengths >= 5][:num_tracks]):
+        # Get true track plot
+        track_true_edges = true_edges[:, pid[ true_edges[0]] == track ]
+        X_edges, Y_edges = x[track_true_edges].numpy(), y[track_true_edges].numpy()
+        X = np.concatenate(X_edges)
+        Y = np.concatenate(Y_edges)
+
+        p.circle(X, Y, color=cmap[i], size=5)
+        p.multi_line(X_edges.T.tolist(), Y_edges.T.tolist(), color=cmap[i])
+        
+    show(p)
+
 def plot_predicted_graph(model):
 
     # from matplotlib import pyplot as plt
@@ -145,7 +171,7 @@ def plot_predicted_graph(model):
         Y = np.concatenate(Y_edges)
 
         p.circle(X, Y, color=cmap[i], size=5)
-        p.multi_line(X_edges.T.tolist(), Y_edges.T.tolist())
+        p.multi_line(X_edges.T.tolist(), Y_edges.T.tolist(), color=cmap[i])
 
         track_pred_edges = pred_edges[:, (pid[pred_edges] == track).any(0)]
 
@@ -154,7 +180,7 @@ def plot_predicted_graph(model):
         Y = np.concatenate(Y_edges)
 
         q.circle(X, Y, color=cmap[i], size=5)
-        q.multi_line(X_edges.T.tolist(), Y_edges.T.tolist())
+        q.multi_line(X_edges.T.tolist(), Y_edges.T.tolist(), color=cmap[i])
         
     show(row([p,q]))
 
