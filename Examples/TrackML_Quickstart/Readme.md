@@ -4,7 +4,7 @@
 
 ## Option A: Run in Colab Notebook
 
-Absolutely the easiest way to get started. Visit the [TrackML Colab Quickstart](https://colab.research.google.com/github/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/blob/master/Examples/TrackML_Quickstart/DM_colab_quickstart.ipynb) notebook on Google Colab. The notebook will run the training and inference pipelines in a around 20 minutes.
+Absolutely the easiest way to get started. Visit the [TrackML Colab Quickstart](https://colab.research.google.com/github/HSF-reco-and-software-triggers/Tracking-ML-Exa.TrkX/blob/master/Examples/TrackML_Quickstart/colab_quickstart.ipynb) notebook on Google Colab. The notebook will run the training and inference pipelines in a around 20 minutes.
 
 ## Option B: Run in Local Notebook
 
