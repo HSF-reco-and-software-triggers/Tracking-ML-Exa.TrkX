@@ -120,7 +120,7 @@ def plot_neighbor_performance(model):
 
 def plot_true_graph(sample_data, num_tracks=100):
 
-    p = figure(title='Truth graphs', x_axis_label='x', y_axis_label='y', height=800, width=800) 
+    p = figure(title='Truth graph', x_axis_label='x', y_axis_label='y', height=800, width=800) 
  
     true_edges = sample_data.signal_true_edges
     true_unique, true_lengths = sample_data.pid[true_edges[0]].unique(return_counts=True)
@@ -149,8 +149,8 @@ def plot_predicted_graph(model):
     test_data = model.testset[0].to(device)
     test_results = model.to(device).shared_evaluation(test_data.to(device), 0, model.hparams["r_test"], 1000, log=False)
 
-    p = figure(title='Truth graphs', x_axis_label='x', y_axis_label='y', height=800, width=800) 
-    q = figure(title='Predicted graphs', x_axis_label='x', y_axis_label='y', height=800, width=800) 
+    p = figure(title='Truth graphs', x_axis_label='x', y_axis_label='y', height=500, width=500) 
+    q = figure(title='Predicted graphs', x_axis_label='x', y_axis_label='y', height=500, width=500) 
 
     true_edges = test_results['truth_graph']
     true_unique, true_lengths = test_data.pid[true_edges[0]].unique(return_counts=True)
@@ -222,8 +222,8 @@ def plot_track_lengths(model):
         )
     )
 
-    p1 =  figure(title='Histogram of true track lengths', x_axis_label='Edges', y_axis_label='Count', height=800, width=800) 
-    p2 =  figure(title='Histogram of predicted track lengths', x_axis_label='Edges', y_axis_label='Count', height=800, width=800) 
+    p1 =  figure(title='Histogram of true track lengths', x_axis_label='Edges', y_axis_label='Count', height=400, width=400) 
+    p2 =  figure(title='Histogram of predicted track lengths', x_axis_label='Edges', y_axis_label='Count', height=400, width=400) 
     p1.quad(bottom=0, top='true_hist', left='low', right='high', source=ColumnDataSource(true_histogram))
     p2.quad(bottom=0, top='pred_hist', left='low', right='high', source=ColumnDataSource(pred_histogram))
     show(row([p1,p2]))
