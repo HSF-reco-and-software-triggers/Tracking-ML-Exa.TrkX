@@ -30,12 +30,13 @@ def headline(message):
     return "-"*buffer_len + ' ' + message + ' ' + '-'*buffer_len
 
 def delete_directory(dir):
-    for files in os.listdir(dir):
-                path = os.path.join(dir, files)
-                try:
-                    shutil.rmtree(path)
-                except OSError:
-                    os.remove(path)
+    if os.path.isdir(dir):
+        for files in os.listdir(dir):
+            path = os.path.join(dir, files)
+            try:
+                shutil.rmtree(path)
+            except OSError:
+                os.remove(path)
 
 def get_example_data(configs):
 
