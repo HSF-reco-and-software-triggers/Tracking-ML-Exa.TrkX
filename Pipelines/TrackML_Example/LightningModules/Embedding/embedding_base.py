@@ -370,6 +370,11 @@ class EmbeddingBase(LightningModule):
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
 
+        # set minimum lr
+        if optimizer.param_groups[0]["lr"] < self.hparams.get('min_lr', 1e-4):
+            for pg in optimizer.param_groups:
+                pg["lr"] = self.hparams.get('min_lr', 1e-4)
+
         # update params
         optimizer.step(closure=optimizer_closure)
         optimizer.zero_grad()
