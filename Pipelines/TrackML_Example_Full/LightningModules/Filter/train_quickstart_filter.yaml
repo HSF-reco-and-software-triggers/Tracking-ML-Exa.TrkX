@@ -1,0 +1,32 @@
+# Input/output configuration
+input_dir: ${EXATRKX_DATA}/embedding_processed/1GeV_pt_cut_quickstart_example
+output_dir: ${EXATRKX_DATA}/filter_processed/1GeV_pt_cut_quickstart_example
+project: CodaFilteringStudy
+filter_cut: 0.15
+
+# Dataset parameters
+pt_min: 1.
+datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [[90, 5, 5]] # Number of [training, validation, testing] examples
+noise: False
+
+# Model parameters
+in_channels: 12
+hidden: 512
+nb_layer: 3
+emb_channels: 0
+layernorm: True
+batchnorm: False
+ratio: 2
+weight: 1
+val_subset: 0.1
+warmup: 400
+lr: 0.01
+factor: 0.3
+patience: 8
+regime: [[weighting, ci]]
+max_epochs: 100
+
+# Post-processing
+callbacks: #[FilterInferenceCallback]
+

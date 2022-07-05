@@ -8,7 +8,7 @@
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=4
 #SBATCH --mem=0
-#SBATCH --time=02:00:00
+#SBATCH --time=04:00:00
 #SBATCH --signal=SIGUSR1@90
 
 #SBATCH --gpu-bind=none
@@ -20,6 +20,7 @@
 export SLURM_CPU_BIND="cores"
 export NCCL_DEBUG=INFO
 export PYTHONFAULTHANDLER=1
+export num_nodes=1
 echo -e "\nStarting sweeps\n"
 
 # for i in {0..3}; do

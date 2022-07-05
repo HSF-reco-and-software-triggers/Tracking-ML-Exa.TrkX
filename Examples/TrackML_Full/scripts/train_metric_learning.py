@@ -1,21 +1,20 @@
 """
 This script runs step 1 of the TrackML Quickstart example: Training the metric learning model.
 """
-
-import sys
-import os
-import yaml
-import argparse
-import logging
-logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
-
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import CSVLogger, WandbLogger, TensorBoardLogger
+import sys
+import os
+import argparse
+import logging
+import yaml
+logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
+
 import torch
 
 sys.path.append("../../")
 # sys.path.append('./')
-from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
+from Pipelines.TrackML_Example_Full.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 from utils import headline
 from datetime import datetime
 
@@ -44,15 +43,17 @@ def train(config_file="pipeline_config.yaml"):
     logging.info(headline("b) Running training" ))
 
     save_directory = os.path.join(common_configs["artifact_directory"], "metric_learning")
-    logger = [
-        CSVLogger(save_directory, name=common_configs["experiment_name"]),
-        WandbLogger(name=common_configs['experiment_name'], project='TrackML')
-    ]
+    logger = []
+    for lg in metric_learning_configs.get('loggers', []):
+        if lg == 'CSVLogger':
+            logger.append(CSVLogger(save_directory, name=common_configs["experiment_name"]))
+        if lg == 'WandbLogger':
+            logger.append(WandbLogger(name=common_configs['experiment_name'], project='TrackML'))
 
     trainer = Trainer(
         strategy='ddp',
         accelerator='gpu',
-        num_nodes=common_configs['num_nodes'],
+        num_nodes=metric_learning_configs.get('num_nodes') or os.environ.get('num_nodes') or 1,
         devices=common_configs["gpus"],
         max_epochs=metric_learning_configs["max_epochs"],
         logger=logger

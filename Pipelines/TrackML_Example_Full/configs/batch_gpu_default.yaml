@@ -1,0 +1,8 @@
+job_name: train_filter
+constraint: gpu
+nodes: 1
+gpus: 1
+time: "4:00:00"
+qos: regular
+output: logs/%x-%j.out
+account: m1759

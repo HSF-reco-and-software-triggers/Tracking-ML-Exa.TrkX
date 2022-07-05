@@ -5,18 +5,19 @@ common_configs:
 
 metric_learning_configs:
   # Training parameters
-  # num_nodes: 8
-  loggers: [CSVLogger, WandbLogger]
+  # num_nodes: 1
+  loggers: [CSVLogger]
 
   # Dataset parameters
   input_dir: datasets/full_data
-  output_dir: datasets/full_metric_learning_processed
+  output_dir: datasets/quickstart_metric_learning_processed
   pt_signal_cut: 1.
   pt_background_cut: 0.
   # train_split: [7000, 50, 50] # Number of [training, validation, testing] examples
-  train_split: [84, 8, 8]
+  train_split: [95, 2.5, 2.5]
+  n_events: 100
   true_edges: modulewise_true_edges
-  n_examples: 600
+  n_examples: 100
 
   # Model parameters
   spatial_channels: 3
@@ -25,7 +26,7 @@ metric_learning_configs:
   nb_layer: 4
   emb_dim: 12
   activation: Tanh
-  weight: 3
+  weight: 1
   randomisation: 2
   points_per_batch: 100000
   r_train: 0.1
@@ -39,7 +40,8 @@ metric_learning_configs:
   factor: 0.9
   patience: 1
   regime: [rp, hnm, norm]
-  max_epochs: 400
+  max_epochs: 100
+
 
 gnn_configs:
   # Dataset parameters

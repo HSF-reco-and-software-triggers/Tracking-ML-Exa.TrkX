@@ -3,7 +3,6 @@ from pytorch_lightning import LightningDataModule
 
 
 class FeatureStoreBase(LightningDataModule):
-
     def __init__(self, hparams):
         super().__init__()
         self.save_hyperparameters(hparams)
