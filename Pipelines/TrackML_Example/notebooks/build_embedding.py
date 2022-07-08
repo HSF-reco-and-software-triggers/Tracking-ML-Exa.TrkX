@@ -33,7 +33,7 @@ class EmbeddingInferenceBuilder:
         
         self.model.eval()
         with torch.no_grad():
-            for set_idx, (datatype, dataset) in enumerate(datasets.items()):
+            for datatype, dataset in datasets.items():
                 for event in tqdm(dataset):
                     
                     event_file = os.path.join(self.input_dir, event)

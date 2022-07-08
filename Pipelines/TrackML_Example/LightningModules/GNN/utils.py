@@ -14,14 +14,18 @@ if device == "cuda":
 
 # ---------------------------- Dataset Processing -------------------------
 
-
-def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, noise):
-    if input_dir is not None:
-        all_events = os.listdir(input_dir)
-        all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+def load_dataset(input_subdir="",
+    num_events=10,
+    pt_background_cut=0,
+    pt_signal_cut=0,
+    noise=False,
+    **kwargs):
+    if input_subdir is not None:
+        all_events = os.listdir(input_subdir)
+        all_events = sorted([os.path.join(input_subdir, event) for event in all_events])
         loaded_events = [
             torch.load(event, map_location=torch.device("cpu"))
-            for event in all_events[:num]
+            for event in all_events[:num_events]
         ]
         loaded_events = select_data(
             loaded_events, pt_background_cut, pt_signal_cut, noise
@@ -30,8 +34,6 @@ def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, noise):
     else:
         return None
 
-    return included_edges, included_edges_mask
-
 
 def select_data(events, pt_background_cut, pt_signal_cut, noise):
     # Handle event in batched form
@@ -39,10 +41,10 @@ def select_data(events, pt_background_cut, pt_signal_cut, noise):
         events = [events]
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
-    if (pt_background_cut > 0) | (pt_signal_cut > 0):
+    if (pt_background_cut > 0) or not noise:
         for event in events:
 
-            edge_mask = (event.pt[event.edge_index] > pt_background_cut).all(0)
+            edge_mask = ((event.pt[event.edge_index] > pt_background_cut) & (event.pid[event.edge_index] == event.pid[event.edge_index]) & (event.pid[event.edge_index] != 0)).all(0)
             event.edge_index = event.edge_index[:, edge_mask]
             event.y = event.y[edge_mask]
 
@@ -50,11 +52,21 @@ def select_data(events, pt_background_cut, pt_signal_cut, noise):
                 if event.weights.shape[0] == edge_mask.shape[0]:
                     event.weights = event.weights[edge_mask]
 
-            if (pt_signal_cut > pt_background_cut) and (
-                "signal_true_edges" in event.__dict__.keys()
-            ):
-                signal_mask = (event.pt[event.signal_true_edges] > pt_signal_cut).all(0)
-                event.signal_true_edges = event.signal_true_edges[:, signal_mask]
+            if "y_pid" in event.__dict__.keys():
+                event.y_pid = event.y_pid[edge_mask]
+
+    for event in events:
+        if "y_pid" not in event.__dict__.keys():
+            event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+
+        if (
+            "signal_true_edges" in event.__dict__.keys()
+            and event.signal_true_edges is not None
+        ):
+            signal_mask = (
+                event.pt[event.signal_true_edges] > pt_signal_cut
+            ).all(0)
+            event.signal_true_edges = event.signal_true_edges[:, signal_mask]   
 
     return events
 

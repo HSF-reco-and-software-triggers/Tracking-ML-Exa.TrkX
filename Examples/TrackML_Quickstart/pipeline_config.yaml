@@ -2,6 +2,7 @@ common_configs:
   experiment_name: trackml_quickstart_1
   artifact_directory: artifacts
   gpus: 1
+  clear_directories: True
 
 metric_learning_configs:
   # Dataset parameters
@@ -19,20 +20,20 @@ metric_learning_configs:
   nb_layer: 4
   emb_dim: 12
   activation: Tanh
-  weight: 1
+  weight: 2
   randomisation: 2
   points_per_batch: 100000
   r_train: 0.1
   r_val: 0.1
   r_test: 0.1
   knn: 50
-  warmup: 10
+  warmup: 8
   margin: 0.1
   lr: 0.001
-  factor: 0.9
-  patience: 1
+  factor: 0.7
+  patience: 4
   regime: [rp, hnm, norm]
-  max_epochs: 30
+  max_epochs: 20
 
 gnn_configs:
   # Dataset parameters
@@ -47,7 +48,7 @@ gnn_configs:
 
   # Model parameters
   spatial_channels: 3
-  cell_channels: 8
+  cell_channels: 0
   hidden: 128
   n_graph_iters: 8
   nb_node_layer: 3
@@ -56,22 +57,24 @@ gnn_configs:
   aggregation: sum_max
   hidden_activation: SiLU
   weight: 2
-  warmup: 5
-  lr: 0.001
-  factor: 0.3
-  patience: 10
+  warmup: 10
+  lr: 0.002
+  factor: 0.7
+  patience: 8
   truth_key: pid_signal
-  regime: [[pid]]
+  regime: [pid]
   mask_background: True
-  max_epochs: 20
-
+  max_epochs: 30
 
 track_building_configs:
-  score_cut: 0.8
+  score_cut: 0.9
   output_dir: datasets/quickstart_track_building_processed
 
 evaluation_configs:
   output_dir: datasets/quickstart_evaluation
   min_pt: 1
   max_eta: 4
+  min_track_length: 3
+  min_particle_length: 3
   matching_fraction: 0.5
+  matching_style: ATLAS

@@ -14,9 +14,9 @@ from pytorch_lightning.loggers import CSVLogger
 import torch
 
 sys.path.append("../../")
-# sys.path.append('./')
+
 from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
-from utils import headline
+from utils.convenience_utils import headline
 
 def parse_args():
     """Parse command line arguments."""

@@ -39,6 +39,7 @@ def load_dataset(
     primary_only,
     true_edges,
     noise,
+    **kwargs
 ):
     if input_dir is not None:
         all_events = os.listdir(input_dir)
@@ -48,8 +49,7 @@ def load_dataset(
             try:
                 loaded_event = torch.load(event, map_location=torch.device("cpu"))
                 loaded_event.event_file = event
-                loaded_events.append(loaded_event)
-                logging.info("Loaded event: {}".format(loaded_event.event_file))
+                loaded_events.append(loaded_event)                
             except:
                 logging.info("Corrupted event file: {}".format(event))
         loaded_events = select_data(

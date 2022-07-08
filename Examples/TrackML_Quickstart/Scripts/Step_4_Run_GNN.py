@@ -11,9 +11,10 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
 import torch
 
 sys.path.append("../../")
+
 from Pipelines.TrackML_Example.LightningModules.GNN.Models.interaction_gnn import InteractionGNN
 from Pipelines.TrackML_Example.notebooks.build_gnn import GNNInferenceBuilder
-from utils import headline
+from utils.convenience_utils import headline, delete_directory
 
 
 def parse_args():
@@ -34,6 +35,9 @@ def train(config_file="pipeline_config.yaml"):
     gnn_configs = all_configs["gnn_configs"]
 
     logging.info(headline( "a) Loading trained model" ))
+
+    if common_configs["clear_directories"]:
+        delete_directory(gnn_configs["output_dir"])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = InteractionGNN.load_from_checkpoint(os.path.join(common_configs["artifact_directory"], "gnn", common_configs["experiment_name"]+".ckpt")).to(device)

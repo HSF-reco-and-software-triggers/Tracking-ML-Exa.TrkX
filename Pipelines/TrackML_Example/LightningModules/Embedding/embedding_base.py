@@ -243,7 +243,7 @@ class EmbeddingBase(LightningModule):
         hinge, d = self.get_hinge_distance(spatial, e_spatial, y_cluster)
 
         # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
-        new_weights[y_cluster == 0] = 1
+        new_weights[hinge == -1] = 1
 
         negative_loss = torch.nn.functional.hinge_embedding_loss(
             d[hinge == -1],
@@ -261,7 +261,7 @@ class EmbeddingBase(LightningModule):
 
         loss = negative_loss + self.hparams["weight"] * positive_loss
 
-        self.log("train_loss", loss, on_epoch=True, on_step=False, batch_size=10000)
+        self.log("train_loss", loss, on_epoch=True, on_step=False)
 
         return loss
 
@@ -280,14 +280,10 @@ class EmbeddingBase(LightningModule):
         )
 
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
-        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
 
         hinge, d = self.get_hinge_distance(
             spatial, e_spatial.to(self.device), y_cluster
         )
-
-        new_weights[y_cluster == 0] = 1
-        d = d  # * new_weights THIS IS BETTER TO NOT INCLUDE
 
         loss = torch.nn.functional.hinge_embedding_loss(
             d, hinge, margin=self.hparams["margin"]**2, reduction="mean"
@@ -305,8 +301,7 @@ class EmbeddingBase(LightningModule):
             self.log_dict(
                 {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr},
                 on_epoch=True,
-                on_step=False,
-                batch_size=10000
+                on_step=False
             )
 
         if verbose:
