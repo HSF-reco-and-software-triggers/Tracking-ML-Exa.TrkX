@@ -135,15 +135,18 @@ class LargeDataset(Dataset):
         event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
         event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
         
-        if ("delta_eta" in self.hparams.keys()) and (self.subdir == "train"):
-            eta_mask = hard_eta_edge_slice(delta_eta, batch)
+        # if ("delta_eta" in self.hparams.keys()) and ((self.subdir == "train") or (self.subdir == "val" and self.hparams["n_graph_iters"] == 0)):
+        if "delta_eta" in self.hparams.keys():
+            eta_mask = hard_eta_edge_slice(self.hparams["delta_eta"], event)
             for edge_attr in ["edge_index", "y", "y_pid", "pid_signal", "scores"]:
-                event[edge_attr] = event[edge_attr][..., eta_mask]    
+                if edge_attr in event.keys:
+                    event[edge_attr] = event[edge_attr][..., eta_mask]   
             
         if ("input_cut" in self.hparams.keys()) and (self.hparams["input_cut"] is not None) and "scores" in event.keys:
             score_mask = event.scores > self.hparams["input_cut"]
             for edge_attr in ["edge_index", "y", "y_pid", "pid_signal", "scores"]:
-                event[edge_attr] = event[edge_attr][..., score_mask]
+                if edge_attr in event.keys:
+                    event[edge_attr] = event[edge_attr][..., eta_mask]
                 
         return event
     

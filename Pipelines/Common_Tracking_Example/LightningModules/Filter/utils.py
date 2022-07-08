@@ -1,4 +1,3 @@
-import sys
 import os
 import logging
 import random
@@ -10,7 +9,6 @@ import scipy as sp
 import numpy as np
 from tqdm import tqdm
 
-# from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import Dataset
 
 device = "cuda" if torch.cuda.is_available() else "cpu"

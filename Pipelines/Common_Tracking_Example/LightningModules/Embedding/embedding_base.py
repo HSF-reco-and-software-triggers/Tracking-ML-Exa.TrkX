@@ -39,16 +39,17 @@ class EmbeddingBase(LightningModule):
 
     def setup(self, stage):
         self.trainset, self.valset, self.testset = split_datasets(**self.hparams)
+        print(torch.cuda.max_memory_allocated() / 1024**3, "Gb")
 
     def train_dataloader(self):
         if len(self.trainset) > 0:
-            return DataLoader(self.trainset, batch_size=1, num_workers=1)
+            return DataLoader(self.trainset, batch_size=1, num_workers=0)
         else:
             return None
 
     def val_dataloader(self):
         if len(self.valset) > 0:
-            return DataLoader(self.valset, batch_size=1, num_workers=1)
+            return DataLoader(self.valset, batch_size=1, num_workers=0)
         else:
             return None
 
@@ -112,16 +113,20 @@ class EmbeddingBase(LightningModule):
 
         return query_indices, query
 
-    def append_hnm_pairs(self, e_spatial, query, query_indices, spatial):
+    def append_hnm_pairs(self, e_spatial, query, query_indices, spatial, r_train=None, knn=None):
+        if r_train is None:
+            r_train = self.hparams["r_train"]
+        if knn is None:
+            knn = self.hparams["knn"]
 
         if "low_purity" in self.hparams["regime"]:
             knn_edges = build_edges(
-                query, spatial, query_indices, self.hparams["r_train"], 500
+                query, spatial, query_indices, r_train, 500
             )
             knn_edges = knn_edges[
                 :,
                 torch.randperm(knn_edges.shape[1])[
-                    : int(self.hparams["r_train"] * len(query))
+                    : int(r_train * len(query))
                 ],
             ]
 
@@ -130,8 +135,8 @@ class EmbeddingBase(LightningModule):
                 query,
                 spatial,
                 query_indices,
-                self.hparams["r_train"],
-                self.hparams["knn"],
+                r_train,
+                knn,
             )
 
         e_spatial = torch.cat(
@@ -174,6 +179,8 @@ class EmbeddingBase(LightningModule):
 
     def get_hinge_distance(self, spatial, e_spatial, y_cluster):
 
+        logging.info(f"Memory at hinge start: {torch.cuda.max_memory_allocated() / 1024**3} Gb")
+
         hinge = y_cluster.float().to(self.device)
         hinge[hinge == 0] = -1
 
@@ -187,6 +194,8 @@ class EmbeddingBase(LightningModule):
             for ref, nei in zip(reference.chunk(10), neighbors.chunk(10)):
                 d.append(torch.sum((ref - nei) ** 2, dim=-1))
             d = torch.cat(d)
+
+        logging.info(f"Memory at hinge end: {torch.cuda.max_memory_allocated() / 1024**3} Gb")
         return hinge, d
 
     def get_truth(self, batch, e_spatial, e_bidir):
@@ -205,6 +214,8 @@ class EmbeddingBase(LightningModule):
         Returns:
             ``torch.tensor`` The loss function as a tensor
         """
+
+        logging.info(f"Memory at train start: {torch.cuda.max_memory_allocated() / 1024**3} Gb")
 
         # Instantiate empty prediction edge list
         e_spatial = torch.empty([2, 0], dtype=torch.int64, device=self.device)
@@ -296,9 +307,11 @@ class EmbeddingBase(LightningModule):
 
         eff = cluster_true_positive / cluster_true
         pur = cluster_true_positive / cluster_positive
-        module_veto_pur = cluster_true_positive / (batch.modules[e_spatial[0]] != batch.modules[e_spatial[1]]).sum()
+        if "module_veto" in self.hparams["regime"]:
+            module_veto_pur = cluster_true_positive / (batch.modules[e_spatial[0]] != batch.modules[e_spatial[1]]).sum()
+        else:
+            module_veto_pur = 0
         
-
         if log:
             current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
@@ -320,9 +333,9 @@ class EmbeddingBase(LightningModule):
         """
         Step to evaluate the model's performance
         """
-
+        knn_val = 500 if "knn_val" not in self.hparams else self.hparams["knn_val"]
         outputs = self.shared_evaluation(
-            batch, batch_idx, self.hparams["r_val"], 500, log=True
+            batch, batch_idx, self.hparams["r_val"], knn_val, log=True
         )
 
         return outputs["loss"]
@@ -351,7 +364,7 @@ class EmbeddingBase(LightningModule):
         """
         Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
         """
-
+        logging.info("Optimizer step for batch {}".format(batch_idx))
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
             self.trainer.current_epoch < self.hparams["warmup"]
@@ -365,3 +378,5 @@ class EmbeddingBase(LightningModule):
         # update params
         optimizer.step(closure=optimizer_closure)
         optimizer.zero_grad()
+
+        logging.info("Optimizer step done for batch {}".format(batch_idx))
