@@ -24,7 +24,6 @@ n_chunks: 8
 edges_per_batch: 500000
 ratio: 8
 weight: 8
-# val_subset: 0.1
 warmup: 5
 lr: 0.01
 factor: 0.7
