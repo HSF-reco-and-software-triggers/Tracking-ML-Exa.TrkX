@@ -1,13 +1,14 @@
-import sys
 import os
 import logging
 
 import torch
 import scipy as sp
 import numpy as np
+import random
+
+from torch_geometric.data import Dataset
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
 
 def load_dataset(input_dir, num, pt_background_cut, pt_signal_cut, true_edges, noise):
     if input_dir is not None:
@@ -80,26 +81,38 @@ def select_data(events, pt_background_cut, pt_signal_cut, true_edges, noise):
             event.signal_true_edges = event[true_edges]
     
     return events
+    
+class LargeDataset(Dataset):
+    def __init__(self, root, num_events, data_name, hparams, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, transform, pre_transform, pre_filter)
+        self.hparams = hparams
+        self.data_name = data_name
+        
+        self.input_paths = os.listdir(root)
+        if "sorted_events" in hparams.keys() and hparams["sorted_events"]:
+            self.input_paths = sorted(self.input_paths)
+        else:
+            random.shuffle(self.input_paths)
+        
+        self.input_paths = [os.path.join(root, event) for event in self.input_paths][:num_events]
+        
+    def len(self):
+        return len(self.input_paths)
 
+    def get(self, idx):
+        data = torch.load(self.input_paths[idx], map_location=torch.device("cpu"))
+        
+        # Order edges by increasing module ID
+        if "volume_id" in data.keys:
+            edges_to_be_flipped = data.volume_id[data.edge_index[0]] > data.volume_id[data.edge_index[1]]
+            data.edge_index[:, edges_to_be_flipped] =  data.edge_index[:, edges_to_be_flipped].flip(0)
+            assert (data.volume_id[data.edge_index[0]] <= data.volume_id[data.edge_index[1]]).all(), "Flip didn't work!"
+        
 
-def graph_intersection(pred_graph, truth_graph):
-    array_size = max(pred_graph.max().item(), truth_graph.max().item()) + 1
+        if "train_fake_sample" in self.hparams.keys() and self.hparams["train_fake_sample"] and (self.data_name=="train"):
+            sampled_indices = sample_fake_ratio(data, self.hparams["train_fake_sample"])
+            data.edge_index = data.edge_index[:, sampled_indices]
+            data.y = data.y[sampled_indices]
 
-    l1 = pred_graph.cpu().numpy()
-    l2 = truth_graph.cpu().numpy()
-    e_1 = sp.sparse.coo_matrix(
-        (np.ones(l1.shape[1]), l1), shape=(array_size, array_size)
-    ).tocsr()
-    e_2 = sp.sparse.coo_matrix(
-        (np.ones(l2.shape[1]), l2), shape=(array_size, array_size)
-    ).tocsr()
-    e_intersection = (e_1.multiply(e_2) - ((e_1 - e_2) > 0)).tocoo()
-
-    new_pred_graph = (
-        torch.from_numpy(np.vstack([e_intersection.row, e_intersection.col]))
-        .long()
-        .to(device)
-    )
-    y = e_intersection.data > 0
-
-    return new_pred_graph, y
+        data.y_pid = (data.pid[data.edge_index[0]] == data.pid[data.edge_index[1]]) & data.pid[data.edge_index[0]].bool()
+        return data

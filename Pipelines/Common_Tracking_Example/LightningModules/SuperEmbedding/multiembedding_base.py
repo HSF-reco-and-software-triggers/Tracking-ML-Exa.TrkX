@@ -8,11 +8,11 @@ Example:
 Todo:
     * Refactor the training & validation pipeline, since the use of the different regimes (rp, hnm, etc.) looks very messy
 """
-
 import logging
 
 # 3rd party imports
 import torch
+import numpy as np
 
 # Local Imports
 from ..Embedding.utils import build_edges
@@ -20,7 +20,7 @@ from ..Embedding.embedding_base import EmbeddingBase
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-class SuperEmbeddingBase(EmbeddingBase):
+class MultiEmbeddingBase(EmbeddingBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
@@ -28,41 +28,59 @@ class SuperEmbeddingBase(EmbeddingBase):
         """
         self.save_hyperparameters(hparams)
 
-    def append_hnm_pairs(self, e_spatial, query, query_indices, spatial, r_train=None, knn=None):
-        if r_train is None:
-            r_train = self.hparams["r_train"]
-        if knn is None:
-            knn = self.hparams["knn"]
+    def build_training_set(self, batch, embedding, r_train=None, knn=None):
 
-        knn_edges = build_edges(
-                query,
-                spatial,
-                query_indices,
-                r_train,
-                knn,
-                remove_self_loops=False
-            )
+        # Instantiate empty prediction edge list
+        training_edges = torch.empty([2, 0], dtype=torch.int64, device=self.device)
 
-        e_spatial = torch.cat(
-            [
-                e_spatial,
-                knn_edges,
-            ],
-            axis=-1,
+        query_indices, query = self.get_query_points(batch, embedding)
+        
+        # Append Hard Negative Mining (hnm) with KNN graph
+        if "hnm" in self.hparams["regime"]:
+            training_edges = self.append_hnm_pairs(training_edges, query, query_indices, embedding, r_train, knn)
+
+        # Append random edges pairs (rp) for stability
+        if "rp" in self.hparams["regime"]:
+            training_edges = self.append_random_pairs(training_edges, query_indices, embedding)
+
+        # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
+        e_bidir = torch.cat(
+            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
         )
 
-        return e_spatial
+        # Calculate truth from intersection between Prediction graph and Truth graph
+        training_edges, y = self.get_truth(batch, training_edges, e_bidir)
+        new_weights = y.to(self.device)
 
-    def get_hinge_distance(self, spatial1, spatial2, e_spatial, y_cluster):
+        # Append all positive examples and their truth and weighting
+        training_edges, y, new_weights = self.get_true_pairs(
+            training_edges, y, new_weights, e_bidir
+        )
 
-        hinge = y_cluster.float().to(self.device)
-        hinge[hinge == 0] = -1
+        return training_edges, y
 
-        reference = spatial1[e_spatial[0]]
-        neighbors = spatial2[e_spatial[1]]
-        d = torch.sum((reference - neighbors) ** 2, dim=-1)
+    def get_loss(self, hinge, d, margin=None, weight=1):
 
-        return hinge, d
+        if margin is None:
+            margin = self.hparams["margin"]**2
+
+        negative_loss = torch.nn.functional.hinge_embedding_loss(
+            d[hinge == -1],
+            hinge[hinge == -1],
+            margin=margin,
+            reduction="mean",
+        )
+
+        positive_loss = torch.nn.functional.hinge_embedding_loss(
+            d[hinge == 1],
+            hinge[hinge == 1],
+            margin=margin,
+            reduction="mean",
+        )
+
+        loss = negative_loss +  weight * positive_loss
+
+        return loss
 
     def training_step(self, batch, batch_idx):
 
@@ -75,58 +93,25 @@ class SuperEmbeddingBase(EmbeddingBase):
             ``torch.tensor`` The loss function as a tensor
         """
 
-        # Instantiate empty prediction edge list
-        e_spatial = torch.empty([2, 0], dtype=torch.int64, device=self.device)
+        logging.info(f"Memory at train start: {torch.cuda.max_memory_allocated() / 1024**3} Gb")
 
         # Forward pass of model, handling whether Cell Information (ci) is included
         input_data = self.get_input_data(batch)
 
-        spatial1, spatial2 = self(input_data)
+        # Embed hits
+        topo, spatial = self(input_data)
 
-        query_indices, query = self.get_query_points(batch, spatial1)
+        # Build training set
+        e_spatial, y_spatial = self.build_training_set(batch, spatial)
+        e_topo, y_topo = self.build_training_set(batch, topo, r_train=self.hparams["topo_margin"])
 
-        # Append Hard Negative Mining (hnm) with KNN graph
-        if "hnm" in self.hparams["regime"]:
-            e_spatial = self.append_hnm_pairs(e_spatial, query, query_indices, spatial2)
-            # print(e_spatial.shape[1] / len(query))
+        # Loss functions
+        spatial_hinge, spatial_d = self.get_hinge_distance(spatial, e_spatial, y_spatial)
+        topo_hinge, topo_d = self.get_hinge_distance(topo, e_topo, y_topo)
 
-        # Append random edges pairs (rp) for stability
-        if "rp" in self.hparams["regime"]:
-            e_spatial = self.append_random_pairs(e_spatial, query_indices, spatial2)
-
-        # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
-        e_bidir = torch.cat(
-            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
-        )
-
-        # Calculate truth from intersection between Prediction graph and Truth graph
-        e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
-        new_weights = y_cluster.to(self.device) * self.hparams["weight"]
-
-        # Append all positive examples and their truth and weighting
-        e_spatial, y_cluster, new_weights = self.get_true_pairs(
-            e_spatial, y_cluster, new_weights, e_bidir
-        )
-
-        hinge, d = self.get_hinge_distance(spatial1, spatial2, e_spatial, y_cluster)
-
-        # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
-
-        negative_loss = torch.nn.functional.hinge_embedding_loss(
-            d[hinge == -1],
-            hinge[hinge == -1],
-            margin=self.hparams["margin"]**2,
-            reduction="mean",
-        )
-
-        positive_loss = torch.nn.functional.hinge_embedding_loss(
-            d[hinge == 1],
-            hinge[hinge == 1],
-            margin=self.hparams["margin"]**2,
-            reduction="mean",
-        )
-
-        loss = negative_loss + self.hparams["weight"] * positive_loss
+        spatial_loss = self.get_loss(spatial_hinge, spatial_d, self.hparams["margin"]**2, self.hparams["weight"])
+        topo_loss = self.get_loss(topo_hinge, topo_d, self.hparams["topo_margin"]**2)
+        loss = spatial_loss + topo_loss      
 
         self.log("train_loss", loss)
 
@@ -135,7 +120,7 @@ class SuperEmbeddingBase(EmbeddingBase):
     def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False):
 
         input_data = self.get_input_data(batch)
-        spatial1, spatial2 = self(input_data)
+        topo, spatial = self(input_data)
 
         e_bidir = torch.cat(
             [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
@@ -143,13 +128,13 @@ class SuperEmbeddingBase(EmbeddingBase):
 
         # Build whole KNN graph
         e_spatial = build_edges(
-            spatial1, spatial2, indices=None, r_max=knn_radius, k_max=knn_num, remove_self_loops=False
+            spatial, spatial, indices=None, r_max=knn_radius, k_max=knn_num
         )
 
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
 
         hinge, d = self.get_hinge_distance(
-            spatial1, spatial2, e_spatial.to(self.device), y_cluster
+            spatial, e_spatial.to(self.device), y_cluster
         )
 
         loss = torch.nn.functional.hinge_embedding_loss(
@@ -160,19 +145,25 @@ class SuperEmbeddingBase(EmbeddingBase):
         cluster_true_positive = y_cluster.sum()
         cluster_positive = len(e_spatial[0])
 
-        eff = torch.tensor(cluster_true_positive / cluster_true)
-        pur = torch.tensor(cluster_true_positive / cluster_positive)
-
+        eff = cluster_true_positive / cluster_true
+        pur = cluster_true_positive / cluster_positive
+        if "module_veto" in self.hparams["regime"]:
+            module_veto_pur = cluster_true_positive / (batch.modules[e_spatial[0]] != batch.modules[e_spatial[1]]).sum()
+        else:
+            module_veto_pur = 0
+        
         if log:
             current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
-                {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
+                {"val_loss": loss, "eff": eff, "pur": pur, "module_veto_pur": module_veto_pur, "current_lr": current_lr}
             )
         logging.info("Efficiency: {}".format(eff))
         logging.info("Purity: {}".format(pur))
+        logging.info(batch.event_file)
 
         return {
             "loss": loss,
+            "distances": d,
             "preds": e_spatial,
             "truth": y_cluster,
             "truth_graph": e_bidir,

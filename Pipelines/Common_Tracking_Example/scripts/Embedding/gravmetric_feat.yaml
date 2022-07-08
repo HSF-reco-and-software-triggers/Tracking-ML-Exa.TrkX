@@ -1,0 +1,46 @@
+# Input/output configuration
+input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_barrel_v3
+artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
+project: ITk_1GeV_GravMetric
+model: DirectedGravMetric
+gpus: 1
+
+# Dataset parameters
+pt_signal_cut: 1000.
+pt_background_cut: 1000.
+nhits: 3.
+primary_only: True
+train_split: [1000, 40, 10] # Number of [training, validation, testing] examples
+true_edges: modulewise_true_edges
+noise: False
+
+# Model parameters
+spatial_channels: 3
+cell_channels: 11
+emb_hidden: 1024
+feature_hidden: 16
+nb_layer: 4
+emb_dim: 12
+weight: 4
+activation: Tanh
+randomisation: 5
+points_per_batch: 50000
+r_train: 0.1
+r_val: 0.1
+r_test: 0.1
+knn: 100
+knn_val: 1000
+warmup: 20
+margin: 0.1
+
+topo_margin: 0.1
+topo_k: 100
+topo_weight: 4
+node_update: feat
+aggregation: mean
+
+lr: 0.002
+factor: 0.7
+patience: 100
+regime: [rp, ci, hnm, norm]
+max_epochs: 1000

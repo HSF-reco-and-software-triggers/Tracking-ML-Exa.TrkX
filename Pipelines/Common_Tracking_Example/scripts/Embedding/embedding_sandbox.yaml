@@ -1,0 +1,40 @@
+# Input/output configuration
+input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_all_v3
+artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
+project: ITk_EmbeddingSandbox_B
+model: DirectedEmbedding
+gpus: 1
+
+# Dataset parameters
+pt_signal_cut: 1000.
+pt_background_cut: 1000.
+nhits: 3.
+primary_only: True
+train_split: [100, 5, 1] # Number of [training, validation, testing] examples
+true_edges: modulewise_true_edges
+noise: False
+
+# Model parameters
+spatial_channels: 3
+cell_channels: 11
+emb_hidden: 1024
+nb_layer: 4
+emb_dim: 12
+weight: 4
+activation: Tanh
+randomisation: 1
+points_per_batch: 100000
+r_train: 0.1
+r_val: 0.1
+r_test: 0.1
+knn: 50
+knn_val: 1000
+warmup: 50
+margin: 0.1
+
+lr: 0.002
+factor: 1
+scheduler: cosine
+patience: 50
+regime: [rp, ci, hnm, norm]
+max_epochs: 500

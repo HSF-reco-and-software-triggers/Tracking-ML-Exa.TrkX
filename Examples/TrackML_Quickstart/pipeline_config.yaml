@@ -50,7 +50,7 @@ gnn_configs:
   spatial_channels: 3
   cell_channels: 0
   hidden: 128
-  n_graph_iters: 8
+  n_graph_iters: 6
   nb_node_layer: 3
   nb_edge_layer: 3
   layernorm: True

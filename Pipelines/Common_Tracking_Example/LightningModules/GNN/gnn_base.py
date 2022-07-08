@@ -159,9 +159,16 @@ class GNNBase(LightningModule):
             y_subset = truth_sample | ~batch.y_pid[sample_indices].bool()
             output, truth_sample = output[y_subset], truth_sample[y_subset]
 
-        loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float(), pos_weight=weight
+
+        positive_loss = F.binary_cross_entropy_with_logits(
+            output[truth_sample], torch.ones(truth_sample.sum()).to(self.device)
         )
+
+        negative_loss = F.binary_cross_entropy_with_logits(
+            output[~truth_sample], torch.zeros((~truth_sample).sum()).to(self.device)
+        )
+
+        loss = positive_loss*weight + negative_loss
 
         self.log("train_loss", loss, on_step=False, on_epoch=True)
 
@@ -175,7 +182,7 @@ class GNNBase(LightningModule):
         edge_positive = preds.sum().float()
 
         # Signal true & signal tp
-        sig_truth = batch.pid_signal[sample_indices]
+        sig_truth = batch[self.hparams["truth_key"]][sample_indices]
         sig_true = sig_truth.sum().float()
         sig_true_positive = (sig_truth.bool() & preds).sum().float()
         sig_auc = roc_auc_score(
@@ -246,9 +253,15 @@ class GNNBase(LightningModule):
         input_data = self.get_input_data(batch)
         output = self(input_data, edge_sample).squeeze()
 
-        loss = F.binary_cross_entropy_with_logits(
-            output, truth_sample.float().squeeze(), pos_weight=weight
+        positive_loss = F.binary_cross_entropy_with_logits(
+            output[truth_sample], torch.ones(truth_sample.sum()).to(self.device)
         )
+
+        negative_loss = F.binary_cross_entropy_with_logits(
+            output[~truth_sample], torch.zeros((~truth_sample).sum()).to(self.device)
+        )
+
+        loss = positive_loss*weight + negative_loss
 
         preds = self.log_metrics(output, sample_indices, batch, loss, log)
 

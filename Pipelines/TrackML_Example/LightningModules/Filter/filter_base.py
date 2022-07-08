@@ -1,21 +1,17 @@
 # System imports
-import sys, os
+import os
 
 # 3rd party imports
-import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 import torch
-from torch.nn import Linear
 import torch.nn.functional as F
-from torch.utils.data import random_split
 from torch_geometric.data import DataLoader
 import numpy as np
-import wandb
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Local imports
-from .utils import load_dataset
+from .utils import load_dataset, LargeDataset
 
 
 class FilterBase(LightningModule):
@@ -271,10 +267,6 @@ class FilterBaseBalanced(FilterBase):
 
     def training_step(self, batch, batch_idx):
 
-        emb = (
-            None if (self.hparams["emb_channels"] == 0) else batch.embedding
-        )  # Does this work??
-
         if "subset" in self.hparams["regime"]:
             subset_mask = np.isin(
                 batch.edge_index.cpu(), batch.layerless_true_edges.unique().cpu()
@@ -291,11 +283,10 @@ class FilterBaseBalanced(FilterBase):
                 if "ci" in self.hparams["regime"]:
                     output = self(
                         torch.cat([batch.cell_data, batch.x], axis=-1),
-                        batch.edge_index[:, subset_ind],
-                        emb,
+                        batch.edge_index[:, subset_ind]
                     ).squeeze()
                 else:
-                    output = self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                    output = self(batch.x, batch.edge_index[:, subset_ind]).squeeze()
                     
                 cut = F.sigmoid(output) > self.hparams["filter_cut"]
                 cut_list.append(cut)
@@ -324,11 +315,10 @@ class FilterBaseBalanced(FilterBase):
         if "ci" in self.hparams["regime"]:
             output = self(
                 torch.cat([batch.cell_data, batch.x], axis=-1),
-                batch.edge_index[:, combined_indices],
-                emb,
+                batch.edge_index[:, combined_indices]
             ).squeeze()
         else:
-            output = self(batch.x, batch.edge_index[:, combined_indices], emb).squeeze()
+            output = self(batch.x, batch.edge_index[:, combined_indices]).squeeze()
 
         if "weighting" in self.hparams["regime"]:
             manual_weights = batch.weights[combined_indices]
@@ -374,10 +364,6 @@ class FilterBaseBalanced(FilterBase):
         This method is shared between validation steps and test steps
         """
 
-        emb = (
-            None if (self.hparams["emb_channels"] == 0) else batch.embedding
-        )  # Does this work??
-
         score_list = []
         val_loss = torch.tensor(0).to(self.device)
         for j in range(self.hparams["n_chunks"]):
@@ -387,11 +373,10 @@ class FilterBaseBalanced(FilterBase):
             output = (
                 self(
                     torch.cat([batch.cell_data, batch.x], axis=-1),
-                    batch.edge_index[:, subset_ind],
-                    emb,
+                    batch.edge_index[:, subset_ind]
                 ).squeeze()
                 if ("ci" in self.hparams["regime"])
-                else self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
+                else self(batch.x, batch.edge_index[:, subset_ind]).squeeze()
             )
             scores = torch.sigmoid(output)
             score_list.append(scores)
@@ -440,3 +425,49 @@ class FilterBaseBalanced(FilterBase):
                 }
             )
         return {"loss": val_loss, "preds": score_list, "truth": true_y}
+
+
+class LargeFilterBaseBalanced(FilterBaseBalanced):
+    def __init__(self, hparams):
+        super().__init__(hparams)
+        
+    def setup(self, stage):
+        # Handle any subset of [train, val, test] data split, assuming that ordering
+
+        input_dirs = [None, None, None]
+        input_dirs[: len(self.hparams["datatype_names"])] = [
+            os.path.join(self.hparams["input_dir"], datatype)
+            for datatype in self.hparams["datatype_names"]
+        ]
+        
+        if "trainset" not in self.__dict__.keys():
+            self.trainset, self.valset, self.testset = [
+                LargeDataset(input_dir, split, name, self.hparams)
+                for split, name, input_dir in zip(self.hparams["datatype_split"], self.hparams["datatype_names"], input_dirs)
+            ]
+            
+        if (
+            "logger" in self.__dict__.keys()
+            and "_experiment" in self.logger.__dict__.keys()
+        ):
+            self.logger.experiment.define_metric("val_loss", summary="min")
+            self.logger.experiment.define_metric("auc", summary="max")
+        
+    def train_dataloader(self):
+        if self.trainset is not None:
+            return DataLoader(self.trainset, batch_size=1, num_workers=8)
+        else:
+            return None
+
+    def val_dataloader(self):
+        if self.valset is not None:
+            num_val_workers = 0 if ("gpus" in self.hparams.keys() and self.hparams["gpus"] > 0) else 8
+            return DataLoader(self.valset, batch_size=1, num_workers=num_val_workers)
+        else:
+            return None
+
+    def test_dataloader(self):
+        if self.testset is not None:
+            return DataLoader(self.testset, batch_size=1, num_workers=0)
+        else:
+            return None

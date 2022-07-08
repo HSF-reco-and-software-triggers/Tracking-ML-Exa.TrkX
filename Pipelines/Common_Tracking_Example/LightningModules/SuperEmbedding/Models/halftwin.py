@@ -1,68 +1,61 @@
-"""The base classes for the embedding process.
-
-The embedding process here is both the embedding models (contained in Models/) and the training procedure, which is a Siamese network strategy. Here, the network is run on all points, and then pairs (or triplets) are formed by one of several strategies (e.g. random pairs (rp), hard negative mining (hnm)) upon which some sort of contrastive loss is applied. The default here is a hinge margin loss, but other loss functions can work, including cross entropy-style losses. Also available are triplet loss approaches.
-
-Example:
-    See Quickstart for a concrete example of this process.
-    
-Todo:
-    * Refactor the training & validation pipeline, since the use of the different regimes (rp, hnm, etc.) looks very messy
-"""
-
-import logging
-
 # 3rd party imports
+from ..super_embedding_base import SuperEmbeddingBase
 import torch
+import torch.nn.functional as F
 
-# Local Imports
-from ..Embedding.utils import build_edges
-from ..Embedding.embedding_base import EmbeddingBase
+# Local imports
+from ...GNN.utils import make_mlp
+from ...Embedding.utils import build_edges
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
-class SuperEmbeddingBase(EmbeddingBase):
+class UndirectedHalfTwinEmbedding(SuperEmbeddingBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
-        self.save_hyperparameters(hparams)
 
-    def append_hnm_pairs(self, e_spatial, query, query_indices, spatial, r_train=None, knn=None):
-        if r_train is None:
-            r_train = self.hparams["r_train"]
-        if knn is None:
-            knn = self.hparams["knn"]
+        # Construct the MLP architecture
+        if "ci" in hparams["regime"]:
+            in_channels = hparams["spatial_channels"] + hparams["cell_channels"]
+        else:
+            in_channels = hparams["spatial_channels"]
 
-        knn_edges = build_edges(
-                query,
-                spatial,
-                query_indices,
-                r_train,
-                knn,
-                remove_self_loops=False
-            )
+        torch.manual_seed(0)
 
-        e_spatial = torch.cat(
-            [
-                e_spatial,
-                knn_edges,
-            ],
-            axis=-1,
+        self.net1 = make_mlp(
+            in_channels,
+            [hparams["emb_hidden"]] * hparams["nb_layer"] + [hparams["emb_dim"]],
+            hidden_activation="Tanh",
+            output_activation=None,
+            layer_norm=True,
         )
 
-        return e_spatial
+        self.net2 = make_mlp(
+            in_channels,
+            [hparams["emb_hidden"]] * hparams["nb_layer"] + [hparams["emb_dim"]],
+            hidden_activation="Tanh",
+            output_activation=None,
+            layer_norm=True,
+        )
 
-    def get_hinge_distance(self, spatial1, spatial2, e_spatial, y_cluster):
+        self.save_hyperparameters()
 
-        hinge = y_cluster.float().to(self.device)
-        hinge[hinge == 0] = -1
+    def forward(self, x):
+        x1_out = self.net1(x)
+        x2_out = self.net2(x)
+        
+        if "norm" in self.hparams["regime"]:
+            return F.normalize(x1_out), F.normalize(x2_out)
+        else:
+            return x1_out, x2_out
 
-        reference = spatial1[e_spatial[0]]
-        neighbors = spatial2[e_spatial[1]]
-        d = torch.sum((reference - neighbors) ** 2, dim=-1)
-
-        return hinge, d
+class DirectedHalfTwinEmbedding(UndirectedHalfTwinEmbedding):
+    def __init__(self, hparams):
+        super().__init__(hparams)
+        """
+        Initialise the Lightning Module that can scan over different embedding training regimes
+        """
 
     def training_step(self, batch, batch_idx):
 
@@ -88,16 +81,13 @@ class SuperEmbeddingBase(EmbeddingBase):
         # Append Hard Negative Mining (hnm) with KNN graph
         if "hnm" in self.hparams["regime"]:
             e_spatial = self.append_hnm_pairs(e_spatial, query, query_indices, spatial2)
-            # print(e_spatial.shape[1] / len(query))
 
         # Append random edges pairs (rp) for stability
         if "rp" in self.hparams["regime"]:
             e_spatial = self.append_random_pairs(e_spatial, query_indices, spatial2)
 
         # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
-        e_bidir = torch.cat(
-            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
-        )
+        e_bidir = batch.signal_true_edges
 
         # Calculate truth from intersection between Prediction graph and Truth graph
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
@@ -109,8 +99,6 @@ class SuperEmbeddingBase(EmbeddingBase):
         )
 
         hinge, d = self.get_hinge_distance(spatial1, spatial2, e_spatial, y_cluster)
-
-        # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
 
         negative_loss = torch.nn.functional.hinge_embedding_loss(
             d[hinge == -1],
@@ -137,13 +125,11 @@ class SuperEmbeddingBase(EmbeddingBase):
         input_data = self.get_input_data(batch)
         spatial1, spatial2 = self(input_data)
 
-        e_bidir = torch.cat(
-            [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
-        )
+        e_bidir = batch.signal_true_edges
 
         # Build whole KNN graph
         e_spatial = build_edges(
-            spatial1, spatial2, indices=None, r_max=knn_radius, k_max=knn_num, remove_self_loops=False
+            spatial1, spatial2, indices=None, r_max=knn_radius, k_max=knn_num
         )
 
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
@@ -168,11 +154,10 @@ class SuperEmbeddingBase(EmbeddingBase):
             self.log_dict(
                 {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr}
             )
-        logging.info("Efficiency: {}".format(eff))
-        logging.info("Purity: {}".format(pur))
 
         return {
             "loss": loss,
+            #             "distances": d,
             "preds": e_spatial,
             "truth": y_cluster,
             "truth_graph": e_bidir,
