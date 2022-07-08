@@ -33,6 +33,9 @@ class FilterBase(LightningModule):
             os.path.join(self.hparams["input_dir"], datatype)
             for datatype in self.hparams["datatype_names"]
         ]
+        datatype_split, n_events = np.array(self.hparams['datatype_split']), self.hparams['n_events']
+        datatype_split = (datatype_split * n_events / np.sum(datatype_split) ).astype(np.int16)
+        datatype_split[0] = n_events - np.sum(datatype_split[1:])
         if "trainset" not in self.__dict__.keys():
             self.trainset, self.valset, self.testset = [
                 load_dataset(

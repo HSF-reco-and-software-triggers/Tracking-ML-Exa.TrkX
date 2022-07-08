@@ -92,3 +92,6 @@ src/Pipelines/Examples/notebooks/*.png
 # dataset and outputs
 *datasets*
 *artifacts*
+
+# slurm logs
+*slurm*

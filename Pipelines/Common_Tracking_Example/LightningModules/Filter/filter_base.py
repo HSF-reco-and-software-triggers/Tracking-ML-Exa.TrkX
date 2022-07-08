@@ -53,7 +53,7 @@ class FilterBase(LightningModule):
     def train_dataloader(self):
         self.trainset = filter_dataset(self.trainset, self.hparams)
         if self.trainset is not None:
-            return DataLoader(self.trainset, batch_size=1, num_workers=4)
+            return DataLoader(self.trainset, batch_size=1, num_workers=1)
         else:
             return None
 

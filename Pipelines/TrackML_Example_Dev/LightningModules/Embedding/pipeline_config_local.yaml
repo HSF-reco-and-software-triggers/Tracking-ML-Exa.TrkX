@@ -1,22 +1,23 @@
 common_configs:
-  experiment_name: trackml
+  experiment_name: trackml_quickstart_1
   artifact_directory: artifacts
   gpus: -1
 
 metric_learning_configs:
   # Training parameters
-  # num_nodes: 8
-  loggers: [CSVLogger, WandbLogger]
+  # num_nodes: 1
+  loggers: [CSVLogger]
 
   # Dataset parameters
   input_dir: datasets/full_data
-  output_dir: datasets/metric_learning_processed
+  output_dir: datasets/quickstart_metric_learning_processed
   pt_signal_cut: 1.
   pt_background_cut: 0.
   # train_split: [7000, 50, 50] # Number of [training, validation, testing] examples
-  train_split: [80, 10, 10]
+  train_split: [95, 2.5, 2.5]
+  n_events: 100
   true_edges: modulewise_true_edges
-  n_examples: 600
+  n_examples: 100
 
   # Model parameters
   spatial_channels: 3
@@ -25,7 +26,7 @@ metric_learning_configs:
   nb_layer: 4
   emb_dim: 12
   activation: Tanh
-  weight: 3
+  weight: 1
   randomisation: 2
   points_per_batch: 100000
   r_train: 0.1
@@ -39,58 +40,8 @@ metric_learning_configs:
   factor: 0.9
   patience: 1
   regime: [rp, hnm, norm]
-  max_epochs: 400
+  max_epochs: 100
 
-filter_configs:
-  input_dir: datasets/full_metric_learning_processed
-  output_dir: datasets/filter_processed
-  project: trackml
-  filter_cut: 0.15
-  edge_cut: 0.2
-  overwrite: True
-
-  # Dataset parameters
-  pt_background_min: 0.
-  pt_signal_min: 0.
-  pt_min: 0
-  datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
-  datatype_split: [80, 10, 10] # Number of [training, validation, testing] examples
-  n_events: 60
-  endcaps: True
-  true_edges: modulewise_true_edges
-  layerwise: False
-  layerless: True
-  noise: False
-  adjacent: False
-
-  # Model parameters
-  spatial_channels: 3
-  cell_channels: 8
-  in_channels: 12
-  hidden: 512
-  nb_layer: 3
-  emb_channels: 0
-  layernorm: True
-  batchnorm: False
-  n_chunks: 8
-  edges_per_batch: 500000
-  ratio: 4
-  weight: 4
-  warmup: 10
-  lr: 0.01
-  factor: 0.3
-  patience: 1
-  regime: [ci]
-  max_epochs: 400
-
-  # Post-processing
-  callbacks: [] #[FilterInferenceCallback]
-
-  # Logging
-  wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data
-  loggers:
-   - CSVLogger
-   - WandbLogger
 
 gnn_configs:
   # Dataset parameters

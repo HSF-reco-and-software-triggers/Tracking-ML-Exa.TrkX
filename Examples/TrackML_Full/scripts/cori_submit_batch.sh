@@ -1,18 +1,16 @@
 #!/bin/bash
 
-#SBATCH -A m3443_g
+#SBATCH -A m3443
 #SBATCH -C gpu
 #SBATCH -q regular
-
-#SBATCH --nodes=4
+#SBATCH -t 4:00:00
+#SBATCH -n 1
+#SBATCH -c 64
 #SBATCH --gres=gpu:4
-#SBATCH --ntasks-per-node=4
-#SBATCH --mem=0
-#SBATCH --time=04:00:00
+#SBATCH --gpus-per-task=4
+#SBATCH --mem-per-gpu=60G
 #SBATCH --signal=SIGUSR1@90
-
-#SBATCH --gpu-bind=none
-#SBATCH -o slurm_logs/slurm-%j.out
+#SBATCH --requeue
 
 # eval "$(conda shell.bash hook)"
 
@@ -28,6 +26,6 @@ echo -e "\nStarting sweeps\n"
 #     srun --exact -u -n 1 -c 32 --mem-per-gpu=60G --gpus-per-task 1 wandb agent murnanedaniel/ITk_1GeVSignal_Embedding_Barrel/phlxe237 &
 # done
 
-srun python scripts/train_metric_learning.py
+srun python scripts/train_metric_learning.py pipeline_config.yaml
 
 wait
