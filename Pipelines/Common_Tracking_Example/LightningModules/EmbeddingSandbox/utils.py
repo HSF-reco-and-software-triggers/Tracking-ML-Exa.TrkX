@@ -7,6 +7,7 @@ import scipy as sp
 import numpy as np
 import pandas as pd
 import trackml.dataset
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 """
 Ideally, we would be using FRNN and the GPU. But in the case of a user not having a GPU, or not having FRNN, we import FAISS as the 
@@ -179,6 +180,7 @@ def select_data(
     return events
 
 
+
 def reset_edge_id(subset, graph):
     subset_ind = np.where(subset)[0]
     filler = -np.ones((graph.max() + 1,))
@@ -280,11 +282,11 @@ def build_knn(spatial, k):
 
     if device == "cuda":
         res = faiss.StandardGpuResources()
-        _, I = faiss.knn_gpu(res, spatial, spatial, k_max)
+        _, I = faiss.knn_gpu(res, spatial, spatial, k)
     elif device == "cpu":
         index = faiss.IndexFlatL2(spatial.shape[1])
         index.add(spatial)
-        _, I = index.search(spatial, k_max)
+        _, I = index.search(spatial, k)
 
     ind = torch.Tensor.repeat(
         torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
@@ -308,6 +310,41 @@ def get_best_run(run_label, wandb_save_dir):
 
     return best_run_path
 
+
+
+class CustomReduceLROnPlateau(ReduceLROnPlateau):
+
+    def __init__(self, optimizer, mode='min', factor=0.1, patience=10,
+                threshold=1e-4, threshold_mode='rel', cooldown=0,
+                min_lr=0, eps=1e-8, verbose=False, ignore_first_n_epochs=0):
+        super(CustomReduceLROnPlateau, self).__init__(optimizer, mode, factor, patience, threshold, threshold_mode, cooldown, min_lr, eps, verbose)
+
+        self.ignore_first_n_epochs = ignore_first_n_epochs
+
+    def step(self, metrics, epoch=None):
+        # convert `metrics` to float, in case it's a zero-dim Tensor
+        current = float(metrics)
+        epoch = self.last_epoch + 1
+        self.last_epoch = epoch
+
+        if self.ignore_first_n_epochs > 0 and epoch <= self.ignore_first_n_epochs:
+            return
+        if self.is_better(current, self.best):
+            self.best = current
+            self.num_bad_epochs = 0
+        else:
+            self.num_bad_epochs += 1
+
+        if self.in_cooldown:
+            self.cooldown_counter -= 1
+            self.num_bad_epochs = 0  # ignore any bad epochs in cooldown
+
+        if self.num_bad_epochs > self.patience:
+            self._reduce_lr(epoch)
+            self.cooldown_counter = self.cooldown
+            self.num_bad_epochs = 0
+
+        self._last_lr = [group['lr'] for group in self.optimizer.param_groups]
 
 # -------------------------- Performance Evaluation -------------------
 

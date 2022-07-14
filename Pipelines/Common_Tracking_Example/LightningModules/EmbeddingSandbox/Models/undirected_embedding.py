@@ -1,12 +1,12 @@
 import torch.nn.functional as F
 
 # 3rd party imports
-from ..sandbox_base import SandboxUndirectedEmbeddingBase
+from ..sandbox_base import SandboxEmbeddingBase
 
 # Local imports
 from ...GNN.utils import make_mlp
 
-class UndirectedEmbedding(SandboxUndirectedEmbeddingBase):
+class UndirectedEmbedding(SandboxEmbeddingBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """

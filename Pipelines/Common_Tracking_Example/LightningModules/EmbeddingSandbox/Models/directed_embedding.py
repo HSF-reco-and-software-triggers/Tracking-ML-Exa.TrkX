@@ -1,12 +1,12 @@
 import torch.nn.functional as F
 
 # 3rd party imports
-from ..sandbox_base import SandboxDirectedEmbeddingBase
+from ..sandbox_base import SandboxEmbeddingBase
 
 # Local imports
 from ...GNN.utils import make_mlp
 
-class DirectedEmbedding(SandboxDirectedEmbeddingBase):
+class DirectedEmbedding(SandboxEmbeddingBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
@@ -37,6 +37,6 @@ class DirectedEmbedding(SandboxDirectedEmbeddingBase):
         x2_out = self.network2(x)
 
         if "norm" in self.hparams["regime"]:
-            return F.normalize(x1_out), F.normalize(x2_out)
+            return (F.normalize(x1_out), F.normalize(x2_out))
         else:
-            return x1_out, x2_out
+            return (x1_out, x2_out)

@@ -163,7 +163,7 @@ class EmbeddingBase(LightningModule):
         )
         return e_spatial
 
-    def get_true_pairs(self, e_spatial, y_cluster, new_weights, e_bidir):
+    def get_true_pairs(self, e_spatial, y_cluster, e_bidir, new_weights=None):
         e_spatial = torch.cat(
             [
                 e_spatial.to(self.device),
@@ -172,9 +172,10 @@ class EmbeddingBase(LightningModule):
             axis=-1,
         )
         y_cluster = torch.cat([y_cluster.int(), torch.ones(e_bidir.shape[1])])
-        new_weights = torch.cat(
-            [new_weights, torch.ones(e_bidir.shape[1], device=self.device)]
-        )
+        if new_weights is not None:
+            new_weights = torch.cat(
+                [new_weights, torch.ones(e_bidir.shape[1], device=self.device)]
+            )
         return e_spatial, y_cluster, new_weights
 
     def get_hinge_distance(self, spatial, e_spatial, y_cluster):
