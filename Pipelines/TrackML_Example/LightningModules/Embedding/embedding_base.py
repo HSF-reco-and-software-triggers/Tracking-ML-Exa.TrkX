@@ -243,7 +243,7 @@ class EmbeddingBase(LightningModule):
         hinge, d = self.get_hinge_distance(spatial, e_spatial, y_cluster)
 
         # Give negative examples a weight of 1 (note that there may still be TRUE examples that are weightless)
-        new_weights[hinge == -1] = 1
+        new_weights[y_cluster == 0] = 1
 
         negative_loss = torch.nn.functional.hinge_embedding_loss(
             d[hinge == -1],
@@ -261,7 +261,14 @@ class EmbeddingBase(LightningModule):
 
         loss = negative_loss + self.hparams["weight"] * positive_loss
 
-        self.log("train_loss", loss, on_epoch=True, on_step=False)
+        self.log_dict(
+            dict(
+                train_loss=loss,
+                positive_loss=positive_loss * self.hparams['weight'],
+                negative_loss=negative_loss
+            ),
+            on_epoch=True, on_step=False, batch_size=10000, prog_bar=True
+            )
 
         return loss
 
@@ -301,7 +308,10 @@ class EmbeddingBase(LightningModule):
             self.log_dict(
                 {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr},
                 on_epoch=True,
-                on_step=False
+                on_step=False,
+                batch_size=10000,
+                prog_bar=True
+
             )
 
         if verbose:
@@ -354,6 +364,9 @@ class EmbeddingBase(LightningModule):
         """
         Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
         """
+        if self.hparams.get('min_lr') is not None and optimizer.param_groups[0]["lr"] < self.hparams['min_lr']:
+            for pg in optimizer.param_groups:
+                pg["lr"] = self.hparams['min_lr']
 
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
@@ -364,11 +377,6 @@ class EmbeddingBase(LightningModule):
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
-
-        # set minimum lr
-        if optimizer.param_groups[0]["lr"] < self.hparams.get('min_lr', 1e-4):
-            for pg in optimizer.param_groups:
-                pg["lr"] = self.hparams.get('min_lr', 1e-4)
 
         # update params
         optimizer.step(closure=optimizer_closure)

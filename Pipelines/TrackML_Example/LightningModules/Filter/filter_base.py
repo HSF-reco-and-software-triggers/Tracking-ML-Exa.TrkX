@@ -5,7 +5,7 @@ import os
 from pytorch_lightning import LightningModule
 import torch
 import torch.nn.functional as F
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 import numpy as np
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -144,9 +144,9 @@ class FilterBase(LightningModule):
                 pos_weight=weight,
             )
 
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, batch_size=int(1e5), on_epoch=True, on_step=False)
 
-        return result
+        return loss
 
     def shared_evaluation(self, batch, batch_idx, log=False):
 
@@ -169,7 +169,7 @@ class FilterBase(LightningModule):
             else:
                 output = self(batch.x, batch.edge_index[:, subset_ind], emb).squeeze()
                 
-            cut = F.sigmoid(output) > self.hparams["filter_cut"]
+            cut = torch.sigmoid(output) > self.hparams["filter_cut"]
             cut_list.append(cut)
 
             if "weighting" in self.hparams["regime"]:
@@ -207,11 +207,12 @@ class FilterBase(LightningModule):
             current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
                 {
-                    "eff": torch.tensor(edge_true_positive / edge_true),
-                    "pur": torch.tensor(edge_true_positive / edge_positive),
+                    "eff": edge_true_positive.clone().detach() / edge_true, # torch.tensor(edge_true_positive / edge_true),
+                    "pur": edge_true_positive.clone().detach() / edge_positive, # torch.tensor(edge_true_positive / edge_positive),
                     "val_loss": val_loss,
                     "current_lr": current_lr,
-                }
+                },
+                batch_size=int(1e5), on_epoch=True, on_step=False, prog_bar=True
             )
         return {"loss": val_loss, "preds": score_list, "truth": true_y}
 
@@ -243,16 +244,18 @@ class FilterBase(LightningModule):
         """
         Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
         """
+        if self.hparams.get('min_lr') is not None and optimizer.param_groups[0]["lr"] < self.hparams['min_lr']:
+            for pg in optimizer.param_groups:
+                pg["lr"] = self.hparams['min_lr']
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
-            self.trainer.global_step < self.hparams["warmup"]
+            self.trainer.current_epoch < self.hparams["warmup"]
         ):
             lr_scale = min(
-                1.0, float(self.trainer.global_step + 1) / self.hparams["warmup"]
+                1.0, float(self.trainer.current_epoch + 1) / self.hparams["warmup"]
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
-
         # update params
         optimizer.step(closure=optimizer_closure)
         optimizer.zero_grad()
@@ -288,7 +291,7 @@ class FilterBaseBalanced(FilterBase):
                 else:
                     output = self(batch.x, batch.edge_index[:, subset_ind]).squeeze()
                     
-                cut = F.sigmoid(output) > self.hparams["filter_cut"]
+                cut = torch.sigmoid(output) > self.hparams["filter_cut"]
                 cut_list.append(cut)
 
             cut_list = torch.cat(cut_list)
@@ -342,7 +345,7 @@ class FilterBaseBalanced(FilterBase):
                 pos_weight=weight,
             )
 
-        self.log_dict({"train_loss": loss}, on_step=True, on_epoch=True)
+        self.log_dict({"train_loss": loss}, on_step=False, on_epoch=True, batch_size=int(1e5), prog_bar=True)
 
         return loss
 
@@ -379,6 +382,7 @@ class FilterBaseBalanced(FilterBase):
                 else self(batch.x, batch.edge_index[:, subset_ind]).squeeze()
             )
             scores = torch.sigmoid(output)
+            # scores = output
             score_list.append(scores)
 
             if "weighting" in self.hparams["regime"]:
@@ -418,11 +422,12 @@ class FilterBaseBalanced(FilterBase):
 
             self.log_dict(
                 {
-                    "eff": torch.tensor(edge_true_positive / edge_true),
-                    "pur": torch.tensor(edge_true_positive / edge_positive),
+                    "eff": edge_true_positive.clone().detach() / edge_true,
+                    "pur": edge_true_positive.clone().detach() / edge_positive,
                     "val_loss": val_loss,
                     "current_lr": current_lr,
                 }
+            , batch_size=int(1e5), on_step=False, on_epoch=True, prog_bar=True
             )
         return {"loss": val_loss, "preds": score_list, "truth": true_y}
 
@@ -439,11 +444,12 @@ class LargeFilterBaseBalanced(FilterBaseBalanced):
             os.path.join(self.hparams["input_dir"], datatype)
             for datatype in self.hparams["datatype_names"]
         ]
-        
+        splits = (np.array(self.hparams['datatype_split']) / np.sum(self.hparams['datatype_split']) * self.hparams['n_events']).astype(np.int16)
+        splits[0] = self.hparams['n_events'] - np.sum(splits[1:])
         if "trainset" not in self.__dict__.keys():
             self.trainset, self.valset, self.testset = [
                 LargeDataset(input_dir, split, name, self.hparams)
-                for split, name, input_dir in zip(self.hparams["datatype_split"], self.hparams["datatype_names"], input_dirs)
+                for split, name, input_dir in zip(splits, self.hparams["datatype_names"], input_dirs)
             ]
             
         if (
@@ -461,7 +467,7 @@ class LargeFilterBaseBalanced(FilterBaseBalanced):
 
     def val_dataloader(self):
         if self.valset is not None:
-            num_val_workers = 0 if ("gpus" in self.hparams.keys() and self.hparams["gpus"] > 0) else 8
+            num_val_workers = 8 # 0 if ("gpus" in self.hparams.keys() and self.hparams["gpus"] > 0) else 8
             return DataLoader(self.valset, batch_size=1, num_workers=num_val_workers)
         else:
             return None

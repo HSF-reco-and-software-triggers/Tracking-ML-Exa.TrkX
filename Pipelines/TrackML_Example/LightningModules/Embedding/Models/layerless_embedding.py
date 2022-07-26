@@ -44,3 +44,7 @@ class LayerlessEmbedding(EmbeddingBase):
             return F.normalize(x_out)
         else:
             return x_out
+
+    def on_train_start(self):
+        self.trainer.strategy.optimizers = [self.trainer.lr_scheduler_configs[0].scheduler.optimizer]
+        # self.trainer.lr_scheduler_configs[0].scheduler.optimizer = self.optimizers()
