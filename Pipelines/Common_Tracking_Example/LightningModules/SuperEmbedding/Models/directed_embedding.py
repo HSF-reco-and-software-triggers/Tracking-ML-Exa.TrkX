@@ -6,15 +6,22 @@ from ..sandbox_base import SandboxEmbeddingBase
 # Local imports
 from ...GNN.utils import make_mlp
 
-class UndirectedEmbedding(SandboxEmbeddingBase):
+class DirectedEmbedding(SandboxEmbeddingBase):
     def __init__(self, hparams):
         super().__init__(hparams)
         """
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
-
         # Construct the MLP architecture
-        self.network = make_mlp(
+        self.network1 = make_mlp(
+            hparams["spatial_channels"] + hparams["cell_channels"],
+            [hparams["emb_hidden"]] * hparams["nb_layer"] + [hparams["emb_dim"]],
+            hidden_activation=hparams["activation"],
+            output_activation=None,
+            layer_norm=True,
+        )
+
+        self.network2 = make_mlp(
             hparams["spatial_channels"] + hparams["cell_channels"],
             [hparams["emb_hidden"]] * hparams["nb_layer"] + [hparams["emb_dim"]],
             hidden_activation=hparams["activation"],
@@ -26,6 +33,10 @@ class UndirectedEmbedding(SandboxEmbeddingBase):
 
     def forward(self, x):
 
-        x_out = self.network(x)
+        x1_out = self.network1(x)
+        x2_out = self.network2(x)
 
-        return F.normalize(x_out) if "norm" in self.hparams["regime"] else x_out
+        if "norm" in self.hparams["regime"]:
+            return (F.normalize(x1_out), F.normalize(x2_out))
+        else:
+            return (x1_out, x2_out)

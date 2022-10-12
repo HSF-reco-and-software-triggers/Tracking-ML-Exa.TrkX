@@ -29,13 +29,19 @@ output_margin: 0.1
 latent_k: 10
 latent_r: 0.1
 latent_margin: 0.1
-latent_weight: 2
+latent_weight: 4
+
+feature_hidden: 64
+node_update: topofeat
+aggregation: mean
+use_knn: true
 
 warmup: 10
-lr: 0.004
-factor: 0.7
+lr: 0.002
+factor: 0.9
 scheduler: step
 patience: 10
 regime: [rp, ci, hnm, norm]
 working_points: [99, 98, 95] # Need to list in decreasing efficiency
-max_epochs: 50
+margin_multiple: 2
+max_epochs: 100

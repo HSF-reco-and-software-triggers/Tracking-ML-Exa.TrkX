@@ -10,14 +10,24 @@ from pytorch_lightning import LightningModule
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.overrides import LightningDistributedModule
 
 sys.path.append("../../")
 from LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 from LightningModules.SuperEmbedding.Models.gravmetric import UndirectedGravMetric, DirectedGravMetric
 from LightningModules.SuperEmbedding.Models.gravmetric2 import GravMetric
-from LightningModules.EmbeddingSandbox.Models.undirected_embedding import UndirectedEmbedding
-from LightningModules.EmbeddingSandbox.Models.directed_embedding import DirectedEmbedding
+from LightningModules.SuperEmbedding.Models.undirected_embedding import UndirectedEmbedding
+from LightningModules.SuperEmbedding.Models.directed_embedding import DirectedEmbedding
 
+class CustomDDPPlugin(DDPPlugin):
+    def configure_ddp(self):
+        self.pre_configure_ddp()
+        self._model = self._setup_model(LightningDistributedModule(self.model))
+        self._register_ddp_hooks()
+        self._model._set_static_graph()
+        
+        
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser("train.py")
@@ -64,7 +74,7 @@ def main():
         gpus=default_configs["gpus"], 
         max_epochs=default_configs["max_epochs"], 
         logger=logger, 
-        strategy="ddp",
+        strategy=CustomDDPPlugin(find_unused_parameters=False),
         num_sanity_val_steps=0,
         callbacks=[checkpoint_callback],
         default_root_dir=default_root_dir

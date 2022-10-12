@@ -5,8 +5,9 @@ import torch
 from torch.utils.data import random_split
 import scipy as sp
 import numpy as np
-import pandas as pd
-import trackml.dataset
+from torch_geometric.nn import radius
+
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 """
 Ideally, we would be using FRNN and the GPU. But in the case of a user not having a GPU, or not having FRNN, we import FAISS as the 
@@ -241,28 +242,32 @@ def graph_intersection(
 
 
 def build_edges(
-    query, database, indices=None, r_max=1.0, k_max=10, return_indices=False
+    query, database, indices=None, r_max=1.0, k_max=10, return_indices=False, backend="FRNN"
 ):
 
-    dists, idxs, nn, grid = frnn.frnn_grid_points(
-        points1=query.unsqueeze(0),
-        points2=database.unsqueeze(0),
-        lengths1=None,
-        lengths2=None,
-        K=k_max,
-        r=r_max,
-        grid=None,
-        return_nn=False,
-        return_sorted=True,
-    )
-
-    idxs = idxs.squeeze().int()
-    ind = torch.Tensor.repeat(
+    if backend == "FRNN":
+        dists, idxs, nn, grid = frnn.frnn_grid_points(
+            points1=query.unsqueeze(0),
+            points2=database.unsqueeze(0),
+            lengths1=None,
+            lengths2=None,
+            K=k_max,
+            r=r_max,
+            grid=None,
+            return_nn=False,
+            return_sorted=True,
+        )      
+        
+        idxs = idxs.squeeze().int()
+        ind = torch.Tensor.repeat(
         torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1
-    ).T.int()
-    positive_idxs = idxs >= 0
-    edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]]).long()
+        ).T.int()
+        positive_idxs = idxs >= 0
+        edge_list = torch.stack([ind[positive_idxs], idxs[positive_idxs]]).long()
 
+    elif backend == "PYG":
+        edge_list = radius(database, query, r=r_max, max_num_neighbors=k_max)
+        
     # Reset indices subset to correct global index
     if indices is not None:
         edge_list[0] = indices[edge_list[0]]
@@ -280,11 +285,11 @@ def build_knn(spatial, k):
 
     if device == "cuda":
         res = faiss.StandardGpuResources()
-        _, I = faiss.knn_gpu(res, spatial, spatial, k_max)
+        _, I = faiss.knn_gpu(res, spatial, spatial, k)
     elif device == "cpu":
         index = faiss.IndexFlatL2(spatial.shape[1])
         index.add(spatial)
-        _, I = index.search(spatial, k_max)
+        _, I = index.search(spatial, k)
 
     ind = torch.Tensor.repeat(
         torch.arange(I.shape[0], device=device), (I.shape[1], 1), 1
@@ -296,70 +301,36 @@ def build_knn(spatial, k):
 
     return edge_list
 
+class CustomReduceLROnPlateau(ReduceLROnPlateau):
 
-def get_best_run(run_label, wandb_save_dir):
-    for (root_dir, dirs, files) in os.walk(wandb_save_dir + "/wandb"):
-        if run_label in dirs:
-            run_root = root_dir
+    def __init__(self, optimizer, mode='min', factor=0.1, patience=10,
+                threshold=1e-4, threshold_mode='rel', cooldown=0,
+                min_lr=0, eps=1e-8, verbose=False, ignore_first_n_epochs=0):
+        super(CustomReduceLROnPlateau, self).__init__(optimizer, mode, factor, patience, threshold, threshold_mode, cooldown, min_lr, eps, verbose)
 
-    best_run_base = os.path.join(run_root, run_label, "checkpoints")
-    best_run = os.listdir(best_run_base)
-    best_run_path = os.path.join(best_run_base, best_run[0])
+        self.ignore_first_n_epochs = ignore_first_n_epochs
 
-    return best_run_path
+    def step(self, metrics, epoch=None):
+        # convert `metrics` to float, in case it's a zero-dim Tensor
+        current = float(metrics)
+        epoch = self.last_epoch + 1
+        self.last_epoch = epoch
 
+        if self.ignore_first_n_epochs > 0 and epoch <= self.ignore_first_n_epochs:
+            return
+        if self.is_better(current, self.best):
+            self.best = current
+            self.num_bad_epochs = 0
+        else:
+            self.num_bad_epochs += 1
 
-# -------------------------- Performance Evaluation -------------------
+        if self.in_cooldown:
+            self.cooldown_counter -= 1
+            self.num_bad_epochs = 0  # ignore any bad epochs in cooldown
 
+        if self.num_bad_epochs > self.patience:
+            self._reduce_lr(epoch)
+            self.cooldown_counter = self.cooldown
+            self.num_bad_epochs = 0
 
-def embedding_model_evaluation(model, trainer, fom="eff", fixed_value=0.96):
-
-    # Seed solver with one batch, then run on full test dataset
-    sol = root(
-        evaluate_set_root,
-        args=(model, trainer, fixed_value, fom),
-        x0=0.9,
-        x1=1.2,
-        xtol=0.001,
-    )
-    print("Seed solver complete, radius:", sol.root)
-
-    # Return ( (efficiency, purity), radius_size)
-    return evaluate_set_metrics(sol.root, model, trainer), sol.root
-
-
-def evaluate_set_root(r, model, trainer, goal=0.96, fom="eff"):
-    eff, pur = evaluate_set_metrics(r, model, trainer)
-
-    if fom == "eff":
-        return eff - goal
-
-    elif fom == "pur":
-        return pur - goal
-
-
-def get_metrics(test_results, model):
-
-    ps = [len(result["truth"]) for result in test_results]
-    ts = [result["truth_graph"].shape[1] for result in test_results]
-    tps = [result["truth"].sum() for result in test_results]
-
-    efficiencies = [tp / t for (t, tp) in zip(ts, tps)]
-    purities = [tp / p for (p, tp) in zip(ps, tps)]
-
-    mean_efficiency = np.mean(efficiencies)
-    mean_purity = np.mean(purities)
-
-    return mean_efficiency, mean_purity
-
-
-def evaluate_set_metrics(r_test, model, trainer):
-
-    model.hparams.r_test = r_test
-    test_results = trainer.test(ckpt_path=None)
-
-    mean_efficiency, mean_purity = get_metrics(test_results, model)
-
-    print(mean_purity, mean_efficiency)
-
-    return mean_efficiency, mean_purity
+        self._last_lr = [group['lr'] for group in self.optimizer.param_groups]

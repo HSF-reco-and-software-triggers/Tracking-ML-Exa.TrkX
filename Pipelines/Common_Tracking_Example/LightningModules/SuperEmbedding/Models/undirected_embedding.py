@@ -1,4 +1,5 @@
 import torch.nn.functional as F
+import torch
 
 # 3rd party imports
 from ..sandbox_base import SandboxEmbeddingBase
@@ -24,8 +25,10 @@ class UndirectedEmbedding(SandboxEmbeddingBase):
 
         self.save_hyperparameters()
 
-    def forward(self, x):
-
+    def forward(self, batch):
+        
+        x = torch.cat([batch.x, batch.cell_data[:, : self.hparams["cell_channels"]]], axis=-1)
         x_out = self.network(x)
+        x_out = F.normalize(x_out) if "norm" in self.hparams["regime"] else x_out
 
-        return F.normalize(x_out) if "norm" in self.hparams["regime"] else x_out
+        return x_out

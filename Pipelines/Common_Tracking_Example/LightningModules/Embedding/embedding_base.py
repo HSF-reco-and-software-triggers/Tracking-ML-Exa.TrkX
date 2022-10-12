@@ -36,11 +36,12 @@ class EmbeddingBase(LightningModule):
         Initialise the Lightning Module that can scan over different embedding training regimes
         """
         self.save_hyperparameters(hparams)
+        self.trainset, self.valset, self.testset = None, None, None
 
     def setup(self, stage):
-        self.trainset, self.valset, self.testset = split_datasets(**self.hparams)
-        print(torch.cuda.max_memory_allocated() / 1024**3, "Gb")
-
+        if not self.trainset or not self.valset or not self.testset:
+            self.trainset, self.valset, self.testset = split_datasets(**self.hparams)
+    
     def train_dataloader(self):
         if len(self.trainset) > 0:
             return DataLoader(self.trainset, batch_size=1, num_workers=0)
@@ -164,6 +165,7 @@ class EmbeddingBase(LightningModule):
         return e_spatial
 
     def get_true_pairs(self, e_spatial, y_cluster, e_bidir, new_weights=None):
+
         e_spatial = torch.cat(
             [
                 e_spatial.to(self.device),

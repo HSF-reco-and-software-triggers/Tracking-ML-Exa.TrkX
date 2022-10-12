@@ -463,7 +463,7 @@ class SandboxEmbeddingBase(EmbeddingBase):
         metric_dict = self.evaluate_loss_metrics(embedding_objects, log)
 
         return {
-                "loss": metric_dict["output/val_loss"],
+                "loss": metric_dict["val_loss"],
             }
 
     def process_embeddings(self, embeddings, batch):
@@ -650,7 +650,7 @@ class SandboxEmbeddingBase(EmbeddingBase):
         Returns:
             ``torch.tensor``: The R95, R98, R99 values
         """
-        margin_multiple = 1
+        margin_multiple = 1 if "margin_multiple" not in self.hparams else self.hparams["margin_multiple"]
         max_dist = torch.tensor(margin_multiple*margin).float().to(self.device)
         
         distances = torch.pairwise_distance(spatial1[truth[0]], spatial2[truth[1]])
@@ -684,7 +684,7 @@ class SandboxEmbeddingBase(EmbeddingBase):
                     d_sq, hinge, margin=embedding_object["margin"]**2, reduction="mean"
                 )
 
-                log_dict["output/val_loss"] = loss.item()
+                log_dict["val_loss"] = loss.item()
 
                 log_prefix = "output/"
 

@@ -20,23 +20,28 @@ cell_channels: 11
 emb_hidden: 1024
 nb_layer: 4
 emb_dim: 12
-weight: 4
 activation: Tanh
 randomisation: 1
 points_per_batch: 100000
-r_train: 0.1
-r_val: 0.1
-r_test: 0.1
-knn: 10
-knn_val: 1000
-warmup: 50
-margin: 0.1
+output_k: 10
+output_r: 0.1
+output_weight: 4
+output_margin: 0.1
 
-working_points: [99, 98, 95]
+# latent_k: 10
+# latent_r: 0.1
+# latent_margin: 0.1
+# latent_weight: 2
 
+# feature_hidden: 64
+# node_update: topofeat
+# aggregation: mean
+
+warmup: 10
 lr: 0.004
-factor: 0.8
-scheduler: plateau
-patience: 40
+factor: 0.7
+scheduler: step
+patience: 200
 regime: [rp, ci, hnm, norm]
+working_points: [99, 98, 95] # Need to list in decreasing efficiency
 max_epochs: 2000

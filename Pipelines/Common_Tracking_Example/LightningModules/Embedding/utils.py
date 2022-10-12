@@ -22,7 +22,6 @@ import faiss.contrib.torch_utils
 
 try:
     import frnn
-
     FRNN_AVAILABLE = True
 except ImportError:
     FRNN_AVAILABLE = False

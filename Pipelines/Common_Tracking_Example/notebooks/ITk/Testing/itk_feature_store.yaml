@@ -1,0 +1,13 @@
+# Input/output configuration
+input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/full_events_v4
+output_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_all_v3
+n_files: 300
+n_workers: 32
+n_tasks: 1
+overwrite: True
+
+endcaps: True
+noise: True
+modulewise: True
+layerwise: False
+cell_information: True

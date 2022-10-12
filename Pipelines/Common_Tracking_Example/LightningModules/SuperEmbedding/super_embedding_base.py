@@ -15,7 +15,7 @@ import logging
 import torch
 
 # Local Imports
-from ..Embedding.utils import build_edges
+from .utils import build_edges
 from ..Embedding.embedding_base import EmbeddingBase
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -88,16 +88,18 @@ class SuperEmbeddingBase(EmbeddingBase):
         # Append Hard Negative Mining (hnm) with KNN graph
         if "hnm" in self.hparams["regime"]:
             e_spatial = self.append_hnm_pairs(e_spatial, query, query_indices, spatial2)
-            # print(e_spatial.shape[1] / len(query))
+            print(e_spatial.shape[1] / len(query))
 
         # Append random edges pairs (rp) for stability
         if "rp" in self.hparams["regime"]:
             e_spatial = self.append_random_pairs(e_spatial, query_indices, spatial2)
+            print(e_spatial.shape[1] / len(query))
 
         # Instantiate bidirectional truth (since KNN prediction will be bidirectional)
         e_bidir = torch.cat(
             [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
         )
+        print(e_bidir.shape)
 
         # Calculate truth from intersection between Prediction graph and Truth graph
         e_spatial, y_cluster = self.get_truth(batch, e_spatial, e_bidir)
@@ -105,7 +107,7 @@ class SuperEmbeddingBase(EmbeddingBase):
 
         # Append all positive examples and their truth and weighting
         e_spatial, y_cluster, new_weights = self.get_true_pairs(
-            e_spatial, y_cluster, new_weights, e_bidir
+            e_spatial, y_cluster, e_bidir, new_weights
         )
 
         hinge, d = self.get_hinge_distance(spatial1, spatial2, e_spatial, y_cluster)
