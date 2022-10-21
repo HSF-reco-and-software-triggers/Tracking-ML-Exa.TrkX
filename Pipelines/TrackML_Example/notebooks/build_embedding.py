@@ -8,6 +8,7 @@ import torch
 from tqdm import tqdm
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+from Pipelines.Common_Tracking_Example.LightningModules.Embedding.utils import build_edges, graph_intersection
 
 class EmbeddingInferenceBuilder:
     def __init__(self, model, split = [80, 10, 10], overwrite=False, knn_max = 1000, radius = 0.1):

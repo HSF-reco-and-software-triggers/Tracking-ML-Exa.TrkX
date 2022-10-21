@@ -2,7 +2,7 @@
 This script runs step 1 of the TrackML Quickstart example: Training the metric learning model.
 """
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import CSVLogger, WandbLogger, TensorBoardLogger
+from pytorch_lightning.loggers import CSVLogger, WandbLogger
 from pytorch_lightning.strategies.ddp import DDPStrategy
 import sys
 import os
@@ -43,6 +43,7 @@ def train(config_file="pipeline_config.yaml"):
     model = LayerlessEmbedding(metric_learning_configs)
 
     save_directory = os.path.join(common_configs["artifact_directory"])
+    os.makedirs(save_directory, exist_ok=True)
     logger = []
     for lg in metric_learning_configs.get('loggers', []):
         if lg == 'CSVLogger':
@@ -55,7 +56,7 @@ def train(config_file="pipeline_config.yaml"):
     trainer = Trainer(
         strategy=DDPStrategy(find_unused_parameters=False),
         accelerator='gpu',
-        num_nodes=os.environ.get('SLURM_JOB_NUM_NODES') or 1, # metric_learning_configs.get('num_nodes') or os.environ.get('num_nodes') or 1,
+        num_nodes=os.environ.get('SLURM_JOB_NUM_NODES', 1), # metric_learning_configs.get('num_nodes') or os.environ.get('num_nodes') or 1,
         devices=common_configs["gpus"],
         max_epochs=metric_learning_configs["max_epochs"],
         logger=logger
@@ -68,7 +69,6 @@ def train(config_file="pipeline_config.yaml"):
 
     logging.info(headline("c) Saving model") )
 
-    os.makedirs(save_directory, exist_ok=True)
     model_name = common_configs['experiment_name'] + f'{ ("_" + wandb_logger.name) if "WandbLogger" in metric_learning_configs.get("loggers", []) else ""}' + f'{ ("_version_" + str(csv_logger.version)) if "CSVLogger" in metric_learning_configs.get("loggers", []) else "" }' + '.ckpt'
     trainer.save_checkpoint(os.path.join(save_directory, model_name))
 

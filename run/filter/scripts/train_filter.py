@@ -13,6 +13,7 @@ from pytorch_lightning.loggers import CSVLogger, WandbLogger
 from utils import headline
 from datetime import datetime
 logging.basicConfig(level=logging.INFO, format='%(levelname)s:%(message)s')
+os.environ['TORCH_DISTRIBUTED_DEBUG']='DETAIL'
 sys.path.append("/global/cfs/cdirs/m3443/usr/pmtuan/Tracking-ML-Exa.TrkX")
 from Pipelines.TrackML_Example_Dev.LightningModules.Filter.Models.pyramid_filter import PyramidFilter
 

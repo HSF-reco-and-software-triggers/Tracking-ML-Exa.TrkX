@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH -A m3443_g -q early_science
+#SBATCH -A m3443_g -q regular
 #SBATCH -C gpu 
 #SBATCH -t 60:00
 #SBATCH -n 1

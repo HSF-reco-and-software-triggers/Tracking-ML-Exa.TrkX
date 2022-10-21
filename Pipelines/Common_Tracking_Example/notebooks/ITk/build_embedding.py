@@ -16,45 +16,64 @@ import torch.functional as F
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from pytorch_lightning import Trainer
 from sklearn.metrics import precision_recall_curve
-
+import random
 import copy
 
-sys.path.append("..")
-from LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
-from LightningModules.Embedding.utils import build_edges, graph_intersection
+sys.path.append(os.environ['EXATRKX_WD'])
+
+from Pipelines.Common_Tracking_Example.LightningModules.Embedding.utils import build_edges, graph_intersection
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class EmbeddingInferenceBuilder:
-    def __init__(self, model, output_dir, overwrite=False):
+    def __init__(self, model, split, output_dir, overwrite=False):
         self.output_dir = output_dir
         self.model = model
         self.overwrite = overwrite
+        self.split=split
 
         # Prep the directory to produce inference data to
         self.datatypes = ["train", "val", "test"]
+
+    def prepare_datastructure(self):
+        # Prep the directory to produce inference data to
+        self.output_dir = self.model.hparams.output_dir
+        self.datatypes = ["train", "val", "test"]
+
         os.makedirs(self.output_dir, exist_ok=True)
         [
             os.makedirs(os.path.join(self.output_dir, datatype), exist_ok=True)
             for datatype in self.datatypes
         ]
 
+        all_events = os.listdir(self.model.hparams["input_dir"])
+        random.shuffle(all_events)
+        self.dataset_list = np.split(np.array(all_events), np.cumsum(self.split))
+        
+        # By default, the set of examples propagated through the pipeline will be train+val+test set
+        datasets = {
+            "train": list(self.dataset_list[0]),
+            "val": list(self.dataset_list[1]),
+            "test": list(self.dataset_list[2]),
+        }
+        
+        return datasets
+
     def build(self):
         print("Training finished, running inference to build graphs...")
 
         # By default, the set of examples propagated through the pipeline will be train+val+test set
-        datasets = {
-            "train": self.model.trainset,
-            "val": self.model.valset,
-            "test": self.model.testset,
-        }
+        datasets = self.prepare_datastructure()
         total_length = sum([len(dataset) for dataset in datasets.values()])
         batch_incr = 0
+
         self.model.eval()
         with torch.no_grad():
             for set_idx, (datatype, dataset) in enumerate(datasets.items()):
-                for batch_idx, batch in enumerate(dataset):
+                for batch_idx, batch_file in enumerate(dataset):
+                    batch_file = os.path.join(self.model.hparams['input_dir'], batch_file)
+                    batch = torch.load(batch_file)
                     percent = (batch_incr / total_length) * 100
                     sys.stdout.flush()
                     sys.stdout.write(f"{percent:.01f}% inference complete \r")
@@ -105,7 +124,7 @@ class EmbeddingInferenceBuilder:
             spatial,
             indices=None,
             r_max=self.model.hparams["r_test"],
-            k_max=500,
+            k_max=1000,
         )  # This step should remove reliance on r_val, and instead compute an r_build based on the EXACT r required to reach target eff/pur
 
         # Arbitrary ordering to remove half of the duplicate edges
@@ -134,22 +153,23 @@ class EmbeddingInferenceBuilder:
             torch.save(batch, pickle_file)
 
 
-def main():
+# def main():
 
-    checkpoint_path = "/global/cscratch1/sd/danieltm/ExaTrkX/itk_lightning_checkpoints/ITk_1GeV/wnhns4e7/checkpoints/last.ckpt"
-    checkpoint = torch.load(checkpoint_path)
+#     checkpoint_path = "/global/cscratch1/sd/danieltm/ExaTrkX/itk_lightning_checkpoints/ITk_1GeV/wnhns4e7/checkpoints/last.ckpt"
+#     checkpoint = torch.load(checkpoint_path)
+#     from LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 
-    model = LayerlessEmbedding.load_from_checkpoint(checkpoint_path).to(device)
-    model.eval()
+#     model = LayerlessEmbedding.load_from_checkpoint(checkpoint_path).to(device)
+#     model.eval()
 
-    output_dir = "/project/projectdirs/m3443/data/ITk-upgrade/processed/embedding_processed/1_GeV_unweighted"
-    model.hparams["train_split"] = [2000, 20, 20]
-    model.hparams["r_test"] = 0.9
+#     output_dir = "/project/projectdirs/m3443/data/ITk-upgrade/processed/embedding_processed/1_GeV_unweighted"
+#     model.hparams["train_split"] = [2000, 20, 20]
+#     model.hparams["r_test"] = 0.9
 
-    model.setup(stage="fit")
-    edge_builder = EmbeddingInferenceBuilder(model, output_dir, overwrite=True)
+#     model.setup(stage="fit")
+#     edge_builder = EmbeddingInferenceBuilder(model, output_dir, overwrite=True)
 
-    edge_builder.build()
+#     edge_builder.build()
 
 
 if __name__ == "__main__":

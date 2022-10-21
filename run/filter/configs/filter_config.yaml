@@ -96,7 +96,7 @@ filter_configs:
  
   loggers:
    - CSVLogger
-   - WandbLogger
+  #  - WandbLogger
 
 gnn_configs:
   # Dataset parameters

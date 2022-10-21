@@ -72,9 +72,11 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*init.sh
 
 # Development files
 */dev/*
+*_Dev*
 
 # Lightning
 *lightning_logs*
@@ -95,3 +97,6 @@ src/Pipelines/Examples/notebooks/*.png
 
 # slurm logs
 *slurm*
+
+# misc
+Examples/TrackML_Full

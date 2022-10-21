@@ -13,7 +13,7 @@ except:
 
 from tqdm import tqdm
 
-from torch_geometric.data import Dataset
+from torch_geometric.data import Dataset, HeteroData
 
 # ---------------------------- Dataset Processing -------------------------
 
@@ -150,6 +150,41 @@ class LargeDataset(Dataset):
                 
         return event
     
+
+class LargeHeteroDataset(LargeDataset):
+    def __init__(self, root, subdir, num_events, hparams, transform=None, pre_transform=None, pre_filter=None):
+        super().__init__(root, subdir, num_events, hparams, transform, pre_transform, pre_filter)
+
+    def get(self, idx):
+        event = torch.load(self.input_paths[idx], map_location=torch.device('cpu'))
+
+        # Process event with pt cuts
+        if self.hparams["pt_background_cut"] > 0:
+            event = background_cut_event(event, self.hparams["pt_background_cut"], self.hparams["pt_signal_cut"])
+        
+        # Ensure PID definition is correct
+        event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+        event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
+
+        data = HeteroData()
+        for vol_id in event.volume_id.unique():
+            mask = event.volume_id==vol_id
+            for attr in ['x', 'cell_data', 'pid', 'hid', 'pt', 'primary', 'nhits', 'modules', 'volume_id']:
+                data[f'volume_{vol_id}'][attr] = event[attr][mask]
+        for id1, id2 in torch.combinations(event.volume_id.unique(), r=2, with_replacement=True):
+            mask = ((event.volume_id[event.edge_index[0]] == id1) & (event.volume_id[event.edge_index[1]] == id2)) | ((event.volume_id[event.edge_index[0]] == id2) & (event.volume_id[event.edge_index[1]] == 1))
+            data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].edge_index = event.edge_index.T[mask].T
+            data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].y = event.y[mask]
+            data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].y_pid = event.y_pid[mask]
+            for truth_edge in ['modulewise_true_edges', 'signal_true_edges']:
+                mask = ((event.volume_id[event[truth_edge][0]] == id1) & (event.volume_id[event[truth_edge][1]] == id2)) | ((event.volume_id[event[truth_edge][0]] == id2) & (event.volume_id[event[truth_edge][1]] == id1))
+                data[f'volume_{id1}', 'connected_to', f'volume_{id2}'][truth_edge] = event[truth_edge].T[mask].T
+        return data
+
+
+
+
+
 def convert_triplet_graph(event, edge_cut=0.5, directed=True):
 
     triplet_edges, triplet_y_truth, triplet_y_pid_truth = build_triplets(

@@ -88,7 +88,7 @@ class HeteroConv(torch.nn.Module):
 
         # Perform message passing
         edge_messages = get_aggregation(self.hparams["aggregation"])(e, end, x)
-        node_inputs = torch.cat([x, edge_messages], dim=-1)
+        node_inputs = torch.cat([x,  edge_messages], dim=-1)
         x_out = self.fill_hetero_nodes(node_inputs, volume_id)
         x_out += x
 

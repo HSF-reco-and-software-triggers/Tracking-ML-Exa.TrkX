@@ -121,14 +121,17 @@ class InteractionGNN(GNNBase):
 
         # Encode the graph features into the hidden space
         x.requires_grad = True
-        x = checkpoint(self.node_encoder, x)
-        e = checkpoint(self.edge_encoder, torch.cat([x[start], x[end]], dim=1))
-
+        x = checkpoint(self.node_encoder, x) # self.node_encoder(x) # 
+        e =  checkpoint(self.edge_encoder, torch.cat([x[start], x[end]], dim=1)) #  self.edge_encoder(torch.cat([x[start], x[end]], dim=1)) # 
         #         edge_outputs = []
         # Loop over iterations of edge and node networks
         for i in range(self.hparams["n_graph_iters"]):
 
-            x, e = checkpoint(self.message_step, x, start, end, e)
+            x, e = checkpoint(self.message_step, x, start, end, e) # self.message_step(x, start, end, e) # 
 
         # Compute final edge scores; use original edge directions only
-        return checkpoint(self.output_step, x, start, end, e)
+        return checkpoint(self.output_step, x, start, end, e) # self.output_step(x, start, end, e)  # 
+    
+    def on_train_start(self) -> None:
+        self.trainer.strategy.optimizers = [self.trainer.lr_scheduler_configs[0].scheduler.optimizer]
+        return 

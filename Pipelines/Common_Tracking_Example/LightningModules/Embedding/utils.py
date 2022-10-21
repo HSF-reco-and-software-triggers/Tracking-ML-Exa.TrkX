@@ -10,7 +10,7 @@ from tqdm import tqdm
 import scipy as sp
 import numpy as np
 import pandas as pd
-import trackml.dataset
+# import trackml.dataset
 
 """
 Ideally, we would be using FRNN and the GPU. But in the case of a user not having a GPU, or not having FRNN, we import FAISS as the 
@@ -115,7 +115,6 @@ def get_edge_subset(edges, mask_where, inverse_mask):
 
     included_edges_mask = np.isin(edges, mask_where).all(0)
     included_edges = edges[:, included_edges_mask]
-    included_edges = inverse_mask[included_edges]
 
     return included_edges, included_edges_mask
 

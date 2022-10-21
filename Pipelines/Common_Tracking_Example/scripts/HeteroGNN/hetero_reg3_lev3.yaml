@@ -28,7 +28,7 @@ layernorm: True
 batchnorm: True
 aggregation: sum_max
 hidden_activation: SiLU
-# output_activation: Tanh
+output_activation: Tanh
 model_ids: 
   - {"volume_ids": [0, 1], "num_features": 3}
   - {"volume_ids": [2], "num_features": 9}

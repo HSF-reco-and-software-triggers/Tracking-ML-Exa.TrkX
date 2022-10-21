@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from torch_geometric.loader import DataLoader
 from torch.nn import Linear
 import torch
+import numpy as np
 
 from .utils import load_dataset, random_edge_slice_v2
 from sklearn.metrics import roc_auc_score
@@ -30,10 +31,12 @@ class GNNBase(LightningModule):
             os.path.join(self.hparams["input_dir"], datatype)
             for datatype in self.hparams["datatype_names"]
         ]
+        split = (np.array(self.hparams['datatype_split']) / np.sum(self.hparams['datatype_split']) * self.hparams['n_events']).astype(np.int16)
+        split[0] = self.hparams['n_events'] - np.sum(split[1:])
         self.trainset, self.valset, self.testset = [
             load_dataset(
                 input_subdir=input_subdir,
-                num_events=self.hparams["datatype_split"][i],
+                num_events=split[i],
                 **self.hparams
             )
             for i, input_subdir in enumerate(input_subdirs)
@@ -224,6 +227,9 @@ class GNNBase(LightningModule):
         using_native_amp=False,
         using_lbfgs=False,
     ):
+        if self.hparams.get('min_lr') is not None and optimizer.param_groups[0]["lr"] < self.hparams['min_lr']:
+            for pg in optimizer.param_groups:
+                pg["lr"] = self.hparams['min_lr']
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
             self.current_epoch < self.hparams["warmup"]

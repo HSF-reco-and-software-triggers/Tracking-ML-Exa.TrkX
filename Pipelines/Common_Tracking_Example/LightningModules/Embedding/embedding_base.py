@@ -19,7 +19,8 @@ import pytorch_lightning as pl
 from pytorch_lightning import LightningModule
 import torch
 from torch.nn import Linear
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
+# from torch.utils.data import DataLoader
 from torch_cluster import radius_graph
 import numpy as np
 
@@ -273,11 +274,18 @@ class EmbeddingBase(LightningModule):
 
         loss = negative_loss + self.hparams["weight"] * positive_loss
 
-        self.log("train_loss", loss)
+        self.log_dict(
+            dict(
+                train_loss=loss,
+                positive_loss=positive_loss * self.hparams['weight'],
+                negative_loss=negative_loss
+            ),
+            on_epoch=True, on_step=False, batch_size=10000, prog_bar=True
+            )
 
         return loss
 
-    def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False):
+    def shared_evaluation(self, batch, batch_idx, knn_radius, knn_num, log=False, verbose=False):
 
         input_data = self.get_input_data(batch)
         spatial = self(input_data)
@@ -315,11 +323,14 @@ class EmbeddingBase(LightningModule):
         if log:
             current_lr = self.optimizers().param_groups[0]["lr"]
             self.log_dict(
-                {"val_loss": loss, "eff": eff, "pur": pur, "module_veto_pur": module_veto_pur, "current_lr": current_lr}
+                {"val_loss": loss, "eff": eff, "pur": pur, "module_veto_pur": module_veto_pur, "current_lr": current_lr}, 
+                on_epoch=True, on_step=False, batch_size=100000, prog_bar=True
             )
-        logging.info("Efficiency: {}".format(eff))
-        logging.info("Purity: {}".format(pur))
-        logging.info(batch.event_file)
+
+        if verbose:
+            logging.info("Efficiency: {}".format(eff))
+            logging.info("Purity: {}".format(pur))
+            logging.info(batch.event_file)
 
         return {
             "loss": loss,
@@ -364,7 +375,10 @@ class EmbeddingBase(LightningModule):
         """
         Use this to manually enforce warm-up. In the future, this may become built-into PyLightning
         """
-        logging.info("Optimizer step for batch {}".format(batch_idx))
+        if self.hparams.get('min_lr') is not None and optimizer.param_groups[0]["lr"] < self.hparams['min_lr']:
+            for pg in optimizer.param_groups:
+                pg["lr"] = self.hparams['min_lr']
+        
         # warm up lr
         if (self.hparams["warmup"] is not None) and (
             self.trainer.current_epoch < self.hparams["warmup"]
@@ -374,9 +388,7 @@ class EmbeddingBase(LightningModule):
             )
             for pg in optimizer.param_groups:
                 pg["lr"] = lr_scale * self.hparams["lr"]
-
+        
         # update params
         optimizer.step(closure=optimizer_closure)
         optimizer.zero_grad()
-
-        logging.info("Optimizer step done for batch {}".format(batch_idx))
