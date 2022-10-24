@@ -5,6 +5,11 @@ from torch.nn import Linear
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
+import torch_geometric
+from torch_geometric.typing import Adj, EdgeType, NodeType
+from typing import Dict, Optional
+from torch import Tensor
+from torch.nn import Module, ModuleDict
 
 from ...utils import make_mlp
 
@@ -183,3 +188,132 @@ class HomoConv(torch.nn.Module):
             e_out += e
 
         return x_out, e_out
+
+class InteractionHeteroConv(torch_geometric.nn.HeteroConv):
+    def __init__(self, convs: Dict[EdgeType, Module], aggr: Optional[str] = "sum"):
+        super().__init__(convs, aggr)
+
+    def edge_forward(self,x_dict: Dict[NodeType, Tensor],
+        edge_index_dict: Dict[EdgeType, Adj],
+        edge_dict,
+        *args_dict,
+        **kwargs_dict,
+    ) -> Dict[NodeType, Tensor]:
+
+        out_dict = {}
+        for edge_type, edge_index in edge_index_dict.items():
+            print(edge_type)
+            src, rel, dst = edge_type
+
+            str_edge_type = '__'.join(edge_type)
+            if str_edge_type not in self.convs:
+                continue
+
+            args = []
+            for value_dict in args_dict:
+                if edge_type in value_dict:
+                    args.append(value_dict[edge_type])
+                elif src == dst and src in value_dict:
+                    args.append(value_dict[src])
+                elif src in value_dict or dst in value_dict:
+                    args.append(
+                        (value_dict.get(src, None), value_dict.get(dst, None)))
+
+            kwargs = {}
+            for arg, value_dict in kwargs_dict.items():
+                arg = arg[:-5]  # `{*}_dict`
+                if edge_type in value_dict:
+                    kwargs[arg] = value_dict[edge_type]
+                elif src == dst and src in value_dict:
+                    kwargs[arg] = value_dict[src]
+                elif src in value_dict or dst in value_dict:
+                    kwargs[arg] = (value_dict.get(src, None),
+                                value_dict.get(dst, None))
+
+            conv = self.convs[str_edge_type]
+            edge = edge_dict[edge_type]
+
+            out = conv.edge_update((x_dict[src], x_dict[dst]), edge, edge_index, *args, **kwargs)
+
+            # if src == dst:
+            #     out = conv.edge_updater(x_dict[src], edge_index, *args, **kwargs)
+            # else:
+            #     out = conv.edge_update((x_dict[src], x_dict[dst]), edge_index, *args,
+            #             **kwargs)
+
+            out_dict[edge_type] = out
+
+        return out_dict
+
+class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
+    def __init__(self, hparams, aggr: str = "add", flow: str = "source_to_target", node_dim: int = -2, decomposed_layers: int = 1):
+        super().__init__(aggr, flow=flow, node_dim=node_dim, decomposed_layers=decomposed_layers)
+
+        self.hparams=hparams
+
+        # The edge network computes new edge features from connected nodes
+        self.edge_encoder = make_mlp(
+            2 * (hparams["hidden"]),
+            [hparams["hidden"]] * hparams["nb_edge_layer"],
+            layer_norm=hparams["layernorm"],
+            batch_norm=hparams["batchnorm"],
+            output_activation=hparams["output_activation"],
+            hidden_activation=hparams["hidden_activation"],
+        )
+
+        # The edge network computes new edge features from connected nodes
+        self.edge_network = make_mlp(
+            3 * hparams["hidden"],
+            [hparams["hidden"]] * hparams["nb_edge_layer"],
+            layer_norm=hparams["layernorm"],
+            batch_norm=hparams["batchnorm"],
+            output_activation=hparams["output_activation"],
+            hidden_activation=hparams["hidden_activation"],
+        )
+
+        # The node network computes new node features
+        self.node_network = make_mlp(
+            2 * hparams["hidden"],
+            [hparams["hidden"]] * hparams["nb_node_layer"],
+            layer_norm=hparams["layernorm"],
+            batch_norm=hparams["batchnorm"],
+            output_activation=hparams["output_activation"],
+            hidden_activation=hparams["hidden_activation"],
+        )
+
+    def message(self, edge):
+        return edge
+
+    def aggregate(self, out, edge_index):
+
+        src, dst = edge_index
+        return self.aggr_module(out, dst)[dst.unique()]
+    
+    def update(self, agg_message, x, edge_index):
+        src, dst = edge_index
+        indices_to_add = torch.arange(agg_message.shape[0])
+        print(dst.unique())
+        print(x)
+        x[dst.unique()] += agg_message
+        
+        return x
+
+    def edge_update(self, x, edge, edge_index, *args, **kwargs):
+        src, dst = edge_index
+        if isinstance(x, tuple):
+            x_src, x_dst = x[0][src], x[1][dst]
+        else:
+            x_src, x_dst = x[src], x[dst]
+        out = self.edge_network(torch.cat([x_src, x_dst, edge], dim=-1))
+        return out
+
+    def forward(self, x, edge_index, edge):
+
+        if isinstance(x, tuple):
+            x_src, x_dst = x
+        else:
+            x_src, x_dst = x, x
+
+        x_dst = self.propagate(edge_index, x=x_dst, edge=edge)
+
+        return x_dst

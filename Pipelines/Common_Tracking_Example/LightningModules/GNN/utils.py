@@ -519,3 +519,7 @@ def evaluate_set_metrics(edge_cut, model, trainer):
     print(mean_purity, mean_efficiency)
 
     return mean_efficiency, mean_purity
+
+
+def get_region(model):
+    return 'volume_' + '_'.join([str(i) for i in model['volume_ids']])

@@ -6,7 +6,7 @@ import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
 
-from ..hetero_gnn_base import LargeGNNBase
+from ..hetero_gnn_base import LargeGNNBase, PyGHeteroGNNBase
 from ..utils import make_mlp
 
 from .submodels.edge_decoders import HomoDecoder, HeteroDecoder
@@ -88,3 +88,39 @@ class HeteroGNN(LargeGNNBase):
         # Compute final edge scores
         # TODO: Apply output to SUM of directional edge features (across both directions!)
         return self.decoder(encoded_nodes, edge_index, encoded_edges, volume_id)
+
+class PyGHeteroGNN(PyGHeteroGNNBase):
+
+    def __init__(self, hparams):
+
+        super().__init__(hparams)
+        """
+        Initialise the Lightning Module that can scan over different GNN training regimes
+        """
+
+        hparams["batchnorm"] = (
+            False if "batchnorm" not in hparams else hparams["batchnorm"]
+        )
+        hparams["output_activation"] = (
+            None if "output_activation" not in hparams else hparams["output_activation"]
+        )
+
+        self.node_encoders = HeteroNodeEncoder(self.hparams)
+        self.edge_encoders = HeteroEdgeConv({
+            (get_region(model0), 'connected_to', get_region(model1)): EdgeEncoder(self.hparams)
+            for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+        })
+
+        self.convs = torch.nn.ModuleList()
+
+        for _ in range(2):
+            conv = InteractionHeteroConv({
+                (get_region(model0), 'connected_to', get_region(model1)): InteractionMessagePassing(hparams=self.hparams)
+                for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+            }, aggr='sum')
+            self.convs.append(conv)
+
+        self.edge_classifiers = HeteroEdgeConv({
+            (get_region(model0), 'connected_to', get_region(model1)): EdgeClassifier(self.hparams)
+            for model0, model1 in combinations_with_replacement(self.hparams['model_ids'], 2)
+        })
