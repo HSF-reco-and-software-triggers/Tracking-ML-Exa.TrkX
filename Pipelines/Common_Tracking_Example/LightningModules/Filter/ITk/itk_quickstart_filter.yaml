@@ -1,0 +1,38 @@
+# Input/output configuration
+input_dir: ${ITK_DATA}/embedding_processed/1GeV_barrel_quickstart
+output_dir: ${ITK_DATA}/filter_processed/1GeV_barrel_quickstart
+project: ITk_0.5GeVFilter
+edge_cut: 0.15
+overwrite: True
+
+# Dataset parameters
+pt_background_min: 1000.
+pt_signal_min: 1000.
+datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [[250, 20, 20]] # Number of [training, validation, testing] examples
+endcaps: True
+true_edges: modulewise_true_edges
+noise: False
+
+# Model parameters
+spatial_channels: 3
+cell_channels: 8
+hidden: 1024
+nb_layer: 3
+emb_channels: 0
+layernorm: True
+batchnorm: False
+hidden_activation: Tanh
+n_chunks: 8
+edges_per_batch: 500000
+ratio: 4
+weight: 4
+warmup: 200
+lr: 0.01
+factor: 0.3
+patience: 10
+regime: [[ci]]
+max_epochs: 30
+
+# Post-processing
+callbacks: [FilterTelemetry]

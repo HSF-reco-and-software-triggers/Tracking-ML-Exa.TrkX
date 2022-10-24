@@ -1,0 +1,20 @@
+name: trackml-quickstart
+
+channels:
+    - pytorch
+    - pyg
+    - conda-forge
+
+dependencies:
+    - pip
+    - numpy
+    - pandas
+    - scipy
+    - matplotlib
+    - bokeh
+    - cupy
+    - cudatoolkit>=11.3
+    - pytorch>=1.10
+    - pytorch-lightning>=1.6
+    - pyg
+    - faiss-gpu>=1.7.2

@@ -1,0 +1,36 @@
+# Dataset
+program: train_sweep.py
+method: random
+project: ITk_1GeVSignal_Embedding
+parameters:
+    # Model hyperparameters
+    train_split:
+        values: [[1000, 20, 20], [2000, 20, 20]]
+    pt_signal_cut:
+        values: [500., 1000.]
+    emb_hidden:
+        min: 256
+        max: 2048
+    emb_dim: 
+        min: 5
+        max: 15
+    weight: 
+        min: 4
+        max: 10
+    nb_layer:
+        min: 2
+        max: 10
+    knn:
+        min: 20
+        max: 200
+    lr:
+        min: 0.0001
+        max: 0.01
+    patience:
+        min: 2
+        max: 20
+    factor: 
+        min: 0.1
+        max: 0.9
+    regime:
+        values: [[rp, ci, hnm, norm, query_noise_points], [rp, ci, hnm, norm]]

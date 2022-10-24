@@ -1,0 +1,29 @@
+# Input/output configuration
+input_dir: /project/projectdirs/m3443/data/trackml-codalab/embedding_processed_1GeV_cut
+edge_cut: 0.5
+
+# Dataset parameters
+pt_background_min: 1.0
+pt_signal_min: 1.0
+datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [80, 10, 10] # Number of [training, validation, testing] examples
+endcaps: True
+true_edges: modulewise_true_edges
+noise: False
+
+# Model parameters
+in_channels: 3
+hidden: 64
+n_graph_iters: 8
+nb_node_layer: 3
+nb_edge_layer: 3
+emb_channels: 0
+layernorm: True
+hidden_activation: ReLU
+weight: 2
+warmup: 500
+lr: 0.006
+factor: 0.3
+patience: 8
+regime: [pid]
+max_epochs: 1

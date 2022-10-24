@@ -1,0 +1,40 @@
+# Input/output configuration
+input_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/filter_processed/0_pt_cut_endcaps_unweighted
+output_dir: /global/cscratch1/sd/danieltm/ExaTrkX/trackml-codalab/gnn_processed/0_pt_cut_endcaps_unweighted
+project: CodaGNNStudy
+edge_cut: 0.5
+
+# Dataset parameters
+pt_min: 0.
+datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [[400, 50, 50]] # Number of [training, validation, testing] examples
+endcaps: True
+layerwise: False
+layerless: True
+noise: False
+adjacent: False
+
+# Model parameters
+in_channels: 3
+hidden: [32, 48, 64, 96]
+n_graph_iters: 8
+nb_node_layer: 2
+nb_edge_layer: 2
+emb_channels: 0
+layernorm: True
+hidden_activation: ReLU
+weight: 2
+delta_eta: 1.6
+warmup: 100
+lr: 0.001
+factor: 0.3
+patience: 5
+regime: [[non_ci, pid]]
+max_epochs: 20
+slack_alert: False
+
+# Post-processing
+callbacks: #[GNNInferenceCallback]
+
+# Logging
+wandb_save_dir: /global/cscratch1/sd/danieltm/ExaTrkX/wandb_data

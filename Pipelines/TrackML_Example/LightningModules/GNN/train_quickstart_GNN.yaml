@@ -1,0 +1,34 @@
+# Input/output configuration
+input_dir: ${EXATRKX_DATA}/embedding_processed/1GeV_pt_cut_quickstart_example
+output_dir: ${EXATRKX_DATA}/gnn_processed/1GeV_pt_cut_quickstart_example
+project: CodaGNNStudy
+edge_cut: 0.5
+
+# Dataset parameters
+pt_signal_min: 1.
+pt_background_min: 1.
+datatype_names: [[train, val, test]] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [[300, 20, 20]] # Number of [training, validation, testing] examples
+noise: False
+
+# Model parameters
+spatial_channels: 3
+cell_channels: 8
+hidden: 128
+n_graph_iters: 8
+nb_node_layer: 3
+nb_edge_layer: 3
+emb_channels: 0
+layernorm: True
+aggregation: sum_max
+hidden_activation: ReLU
+weight: 2
+warmup: 200
+lr: 0.001
+factor: 0.3
+patience: 10
+regime: [[pid]]
+max_epochs: 30
+
+# Post-processing
+callbacks: [GNNTelemetry]

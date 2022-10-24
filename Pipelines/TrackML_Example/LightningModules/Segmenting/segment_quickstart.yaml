@@ -1,0 +1,7 @@
+input_dir: ${EXATRKX_DATA}/gnn_processed/1GeV_pt_cut_quickstart_example
+output_dir: ${EXATRKX_DATA}/segments_processed/1GeV_pt_cut_quickstart_example
+datatype_names: [[train, val, test]]
+edge_cut: 0.5
+
+n_files: 10
+n_workers: 1

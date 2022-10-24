@@ -1,0 +1,13 @@
+# Input/output configuration
+input_dir: ${ITK_DATA}/full_events_v4
+output_dir: ${ITK_DATA}/feature_store/feature_store_modulewise_barrel_quickstart
+n_files: 300
+n_workers: 32
+n_tasks: 1
+overwrite: False
+
+endcaps: False
+noise: True
+modulewise: True
+layerwise: False
+cell_information: True

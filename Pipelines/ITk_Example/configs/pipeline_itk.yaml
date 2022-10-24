@@ -1,0 +1,5 @@
+stage_list:
+#     - {set: Processing, name: FeatureStore, config: prepare_feature_store.yaml, batch: configs/batch_cpu_default.yaml}
+#     - {set: Embedding, name: LayerlessEmbedding, config: embedding_test.yaml, resume_id: 1l6pahjy, batch_config: configs/batch_gpu_default.yaml, override: {train_split: [1900, 50, 50], r_test: 1.5, callbacks: [EmbeddingBuilder], overwrite: False}}
+#     - {set: Filter, name: PyramidFilter, config: filter_test.yaml, resume_id: zbg9q5tn, batch_config: configs/batch_gpu_default.yaml, override: {filter_cut: 0.15, callbacks: [SingleFileFilterBuilder], datatype_split: [1900, 50, 50]}}
+    - {set: GNN, name: CheckpointedResAGNN, config: train_gnn.yaml, resume_id: k53btbvu, batch_config: configs/batch_gpu_default.yaml}

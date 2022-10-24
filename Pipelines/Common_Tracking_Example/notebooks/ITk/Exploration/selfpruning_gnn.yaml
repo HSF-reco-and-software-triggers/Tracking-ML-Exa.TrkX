@@ -1,0 +1,30 @@
+# Input/output configuration
+input_dir: /project/projectdirs/m3443/data/ITk-upgrade/processed/filter_processed/1_GeV_unweighted_high_eff
+
+# Dataset parameters
+pt_min: 0.
+datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [80, 10, 10] # Number of [training, validation, testing] examples
+endcaps: True
+layerwise: False
+layerless: True
+noise: False
+
+# Model parameters
+edge_cut: 0.5
+precut: 0.5
+in_channels: 3
+hidden: 64
+n_graph_iters: 6
+nb_node_layer: 3
+nb_edge_layer: 3
+emb_channels: 0
+layernorm: True
+hidden_activation: ReLU
+weight: 2
+warmup: 500
+lr: 0.001
+factor: 0.3
+patience: 15
+regime: [pid]
+max_epochs: 30

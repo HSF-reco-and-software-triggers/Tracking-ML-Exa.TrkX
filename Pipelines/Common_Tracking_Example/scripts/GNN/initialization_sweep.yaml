@@ -1,0 +1,30 @@
+# Dataset
+program: train.py
+method: bayes
+project: InitializationExplore
+metric:
+    name: auc.max
+    goal: maximize
+parameters:
+    # Training hyperparameters
+    lr: 
+        distribution: log_uniform
+        min: -11
+        max: -3
+    random_seed:
+        min: 1
+        max: 10000
+    hidden:
+        min: 16
+        max: 256
+    nb_node_layer:
+        min: 1
+        max: 4
+    nb_edge_layer:
+        min: 1
+        max: 4
+    n_graph_iters:
+        min: 1
+        max: 20
+        
+    

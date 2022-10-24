@@ -1,0 +1,38 @@
+# Input/output configuration
+input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/hetero_embedding_processed/0GeV_v3
+output_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/hetero_filter_processed/0GeV_v3
+artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
+project: ITk_1GeVSignal_HeteroFilter
+model: HeteroPyramidFilter
+edge_cut: 0.5
+gpus: 4
+nodes: 1
+
+# Dataset parameters
+datatype_names: [train, val, test] # Which directory prefixes to use, assuming at least a train dataset 
+datatype_split: [1600, 40, 1] # Number of [training, validation, testing] examples
+true_edges: modulewise_true_edges
+
+# Model parameters
+cell_channels: 8
+hidden: 1024
+nb_layer: 4
+layernorm: True
+batchnorm: False
+n_chunks: 4
+edges_per_batch: 1000000
+hidden_activation: Tanh
+model_ids: 
+  - {"volume_ids": [0, 1], "num_features": 3}
+  - {"volume_ids": [2], "num_features": 9}
+  - {"volume_ids": [3], "num_features": 9}
+ratio: 10
+weight: 3
+train_fake_sample: 0.02
+balance_volumes: True
+warmup: 10
+lr: 0.0016
+factor: 0.7
+patience: 100
+regime: [ci]
+max_epochs: 1300
