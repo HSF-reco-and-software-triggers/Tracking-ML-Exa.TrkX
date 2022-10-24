@@ -1,8 +1,0 @@
-job_name: build_feature_store
-constraint: haswell
-nodes: 1
-qos: debug
-ntasks_per_node: 32
-time: "30:00"
-output: logs/%x-%j.out
-account: m1759

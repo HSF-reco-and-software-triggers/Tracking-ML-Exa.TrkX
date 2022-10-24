@@ -1,8 +1,0 @@
-job_name: train_cpu
-constraint: haswell
-nodes: 1
-qos: regular
-ntasks_per_node: 32
-time: 10
-output: logs/%x-%j.out
-account: m1759

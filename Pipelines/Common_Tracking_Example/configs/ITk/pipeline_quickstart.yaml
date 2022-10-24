@@ -1,5 +1,0 @@
-stage_list:
-    - {set: Processing, name: FeatureStore, config: itk_quickstart_feature_store.yaml, batch: configs/batch_cpu_default.yaml}
-    - {set: Embedding, name: LayerlessEmbedding, config: itk_quickstart_embedding.yaml, batch_config: configs/batch_gpu_default.yaml}
-    - {set: Filter, name: PyramidFilter, config: itk_quickstart_filter.yaml, batch_config: configs/batch_gpu_default.yaml}
-    - {set: GNN, name: CheckpointedPyramid, config: itk_quickstart_gnn.yaml, batch: configs/batch_gpu_default.yaml}

@@ -1,9 +1,0 @@
-job_name: train_gpu
-constraint: gpu
-ntasks: 1
-cpus_per_task: 32
-gpus: 1
-time: "6:00:00"
-qos: early_science
-output: logs/%x-%j.out
-account: m3443_g
