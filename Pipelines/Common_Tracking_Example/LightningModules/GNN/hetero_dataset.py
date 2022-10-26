@@ -39,8 +39,10 @@ class LargeHeteroDataset(Dataset):
         if self.process_fuction is not None:
             event = self.process_fuction(event)  
 
+        # creates a map array 
         map = torch.zeros_like(event.hid)
         for model in self.hparams['model_ids']:
+            # map each 
             volume_id = model['volume_ids']
             homo_ids = event.hid[ torch.isin( event.volume_id, torch.tensor(volume_id) ) ]
             map[homo_ids] = torch.arange(homo_ids.shape[0])

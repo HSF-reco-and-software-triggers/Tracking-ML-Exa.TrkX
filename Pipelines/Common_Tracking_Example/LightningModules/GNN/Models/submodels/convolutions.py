@@ -252,14 +252,14 @@ class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
         self.hparams=hparams
 
         # The edge network computes new edge features from connected nodes
-        self.edge_encoder = make_mlp(
-            2 * (hparams["hidden"]),
-            [hparams["hidden"]] * hparams["nb_edge_layer"],
-            layer_norm=hparams["layernorm"],
-            batch_norm=hparams["batchnorm"],
-            output_activation=hparams["output_activation"],
-            hidden_activation=hparams["hidden_activation"],
-        )
+        # self.edge_encoder = make_mlp(
+        #     2 * (hparams["hidden"]),
+        #     [hparams["hidden"]] * hparams["nb_edge_layer"],
+        #     layer_norm=hparams["layernorm"],
+        #     batch_norm=hparams["batchnorm"],
+        #     output_activation=hparams["output_activation"],
+        #     hidden_activation=hparams["hidden_activation"],
+        # )
 
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
@@ -292,8 +292,8 @@ class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
     def update(self, agg_message, x, edge_index):
         src, dst = edge_index
         indices_to_add = torch.arange(agg_message.shape[0])
-        print(dst.unique())
-        print(x)
+        # print(dst.unique())
+        # print(x)
         x[dst.unique()] += agg_message
         
         return x

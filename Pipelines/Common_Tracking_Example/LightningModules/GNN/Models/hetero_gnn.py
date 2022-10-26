@@ -124,3 +124,12 @@ class PyGHeteroGNN(PyGHeteroGNNBase):
             (get_region(model0), 'connected_to', get_region(model1)): EdgeClassifier(self.hparams)
             for model0, model1 in combinations_with_replacement(self.hparams['model_ids'], 2)
         })
+
+    def forward(self, x_dict, edge_index_dict):
+
+        x_dict = self.node_encoders(x_dict)
+
+        edge_dict = self.edge_encoders(x_dict, edge_index_dict)
+
+        # for _ self.convs:
+
