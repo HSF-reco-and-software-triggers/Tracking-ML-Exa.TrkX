@@ -2,7 +2,7 @@
 
 #SBATCH -A m3944_g -q early_science
 #SBATCH -C gpu 
-#SBATCH -t 6:00:00
+#SBATCH -t 2:00:00
 #SBATCH -n 4
 #SBATCH --ntasks-per-node=4
 #SBATCH -c 32

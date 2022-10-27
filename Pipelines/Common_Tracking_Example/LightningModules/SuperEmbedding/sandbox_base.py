@@ -9,7 +9,7 @@ Todo:
     * Refactor the training & validation pipeline, since the use of the different regimes (rp, hnm, etc.) looks very messy
 """
 
-import logging
+import warnings
 
 # 3rd party imports
 import numpy as np
@@ -19,6 +19,7 @@ from torch import Tensor
 # Local Imports
 from .utils import build_edges
 from ..Embedding.embedding_base import EmbeddingBase
+from ..Embedding.utils import split_datasets
 from .utils import CustomReduceLROnPlateau
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -34,6 +35,19 @@ class SandboxEmbeddingBase(EmbeddingBase):
         """
         super().__init__(hparams)
         self.save_hyperparameters(hparams)
+
+    def setup(self, stage="fit"):
+
+        if not self.trainset or not self.valset or not self.testset:
+            self.trainset, self.valset, self.testset = split_datasets(**self.hparams)
+
+        try:
+            print("Defining figures of merit")
+            for working_point in self.hparams["working_points"]:
+                self.logger.experiment.define_metric(f"output/pur_{working_point}" , summary="max")
+            self.logger.experiment.define_metric("output/eff", summary="max")
+        except Exception:
+            warnings.warn("Failed to define figures of merit, due to logger unavailable")
 
     def training_step(self, batch, batch_idx):
 
@@ -103,7 +117,7 @@ class SandboxEmbeddingBase(EmbeddingBase):
                 embedding_tuple = (embedding, embedding)
                 truth = torch.cat(
                     [batch.signal_true_edges, batch.signal_true_edges.flip(0)], axis=-1
-                )                       
+                )
             else:
                 raise ValueError(
                     "Embedding must be a tensor or a tuple of tensors"

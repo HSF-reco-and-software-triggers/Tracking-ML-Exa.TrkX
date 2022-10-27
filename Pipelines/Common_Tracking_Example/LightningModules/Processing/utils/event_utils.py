@@ -154,7 +154,6 @@ def select_hits(hits, particles, pt_min=0, endcaps=True, noise=True):
 
     return hits
 
-
 def clean_duplicates(hits):
 
     noise_hits = hits[hits.particle_id == 0].drop_duplicates(subset="hit_id")
@@ -164,7 +163,6 @@ def clean_duplicates(hits):
     hits = pd.concat([signal_hits, non_duplicate_noise_hits], ignore_index=True)
 
     return hits
-
 
 def build_event(
     event_file,

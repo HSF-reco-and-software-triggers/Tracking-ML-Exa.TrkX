@@ -1,13 +1,13 @@
 # Input/output configuration
 input_dir: /global/cfs/cdirs/m3443/data/ITk-upgrade/processed/feature_store/feature_store_modulewise_barrel_v3
 artifacts: /global/cfs/cdirs/m3443/data/lightning_models/lightning_checkpoints
-project: ITk_GravMetric_Study_F
+project: ITk_GravMetric_Study_E
 model: GravMetric
-gpus: 8
+gpus: 4
 
 # ----------- Dataset parameters
 pt_signal_cut: 1000.
-pt_background_cut: 0.
+pt_background_cut: 1000.
 nhits: 3.
 primary_only: True
 train_split: [800, 80, 10] # Number of [training, validation, testing] examples
@@ -15,21 +15,21 @@ true_edges: modulewise_true_edges
 noise: False
 
 # ------------ Training parameters
-lr: 0.002
+lr: 0.001
 factor: 0.7
-patience: 200
+patience: 300
 regime: [rp, ci, hnm, norm]
-max_epochs: 800
+max_epochs: 1200
 scheduler: step
 working_points: [99, 98, 95] # Need to list in decreasing efficiency
 
 output_k: 30
 output_r: 0.1
-output_weight: 2
+output_weight: 4
 output_margin: 0.1
 randomisation: 1
 points_per_batch: 300000
-warmup: 20
+warmup: 1
 
 
 # ------------ MODEL PARAMETERS --------------
@@ -38,34 +38,30 @@ warmup: 20
 spatial_channels: 3
 cell_channels: 11
 feature_hidden: 256
-nb_layer: 4
-emb_dim: 12
+nb_layer: 3
+emb_dim: 16
 activation: SiLU
-feature_activation: Softplus
+feature_activation:
 layernorm: True 
 batchnorm: True 
 aggregation: mean_sum
 
 # ------------- GNN Parameters
-n_graph_iters: 5
+n_graph_iters: 8
 layer_shape: flat
 
 # ------------- GravConv Parameters
 knn:  # If knn_start_end not set, then the number of neighbors in each GravNet conv
-rand_k: 
+rand_k: [0, 50, 0]
 
-r: [0.3, 0.1, 0.1]
-max_knn: 30
+r: 0.1
+max_knn: 50
 
 grav_weight: 3.0
 grav_level: 0 # 
+grav_warmup: 800
 norm: True
 self_loop: True
 
 learned_grav_weight: False
 grav_activation: 
-
-
-
-
-

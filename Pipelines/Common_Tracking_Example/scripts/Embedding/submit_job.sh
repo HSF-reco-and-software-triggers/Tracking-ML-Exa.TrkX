@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH -C gpu 
-#SBATCH -t 4:00:00
+#SBATCH -t 2:00:00
 #SBATCH -n 8
 #SBATCH --ntasks-per-node=8
 #SBATCH --gpus-per-task=1

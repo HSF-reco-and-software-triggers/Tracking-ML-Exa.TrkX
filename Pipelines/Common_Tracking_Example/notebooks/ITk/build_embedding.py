@@ -1,21 +1,9 @@
 # System imports
 import os
 import sys
-import yaml
 
 # External imports
-import matplotlib.pyplot as plt
-import scipy as sp
-from sklearn.decomposition import PCA
-from sklearn.metrics import auc
-import numpy as np
-import pandas as pd
-import seaborn as sns
 import torch
-import torch.functional as F
-from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
-from pytorch_lightning import Trainer
-from sklearn.metrics import precision_recall_curve
 
 import copy
 

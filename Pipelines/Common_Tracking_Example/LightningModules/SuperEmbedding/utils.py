@@ -42,30 +42,29 @@ def load_dataset(
     noise,
     eta_cut,
 ):
-    if input_dir is not None:
-        all_events = os.listdir(input_dir)
-        all_events = sorted([os.path.join(input_dir, event) for event in all_events])
-        loaded_events = []
-        for event in all_events[:num]:
-            try:
-                loaded_event = torch.load(event, map_location=torch.device("cpu"))
-                loaded_events.append(loaded_event)
-                logging.info("Loaded event: {}".format(loaded_event.event_file))
-            except:
-                logging.info("Corrupted event file: {}".format(event))
-        loaded_events = select_data(
-            loaded_events,
-            pt_background_cut,
-            pt_signal_cut,
-            nhits,
-            primary_only,
-            true_edges,
-            noise,
-            eta_cut,
-        )
-        return loaded_events
-    else:
+    if input_dir is None:
         return None
+    all_events = os.listdir(input_dir)
+    all_events = sorted([os.path.join(input_dir, event) for event in all_events])
+    loaded_events = []
+    for event in all_events[:num]:
+        try:
+            loaded_event = torch.load(event, map_location=torch.device("cpu"))
+            loaded_events.append(loaded_event)
+            logging.info(f"Loaded event: {loaded_event.event_file}")
+        except Exception:
+            logging.info(f"Corrupted event file: {event}")
+    loaded_events = select_data(
+        loaded_events,
+        pt_background_cut,
+        pt_signal_cut,
+        nhits,
+        primary_only,
+        true_edges,
+        noise,
+        eta_cut,
+    )
+    return loaded_events
 
 
 def split_datasets(
@@ -77,14 +76,17 @@ def split_datasets(
     primary_only=False,
     true_edges=None,
     noise=True,
-    eta_cut=1,
-    seed=1,
+    eta_cut=None,
+    seed=None,
+    **kwargs,
 ):
     """
     Prepare the random Train, Val, Test split, using a seed for reproducibility. Seed should be
     changed across final varied runs, but can be left as default for experimentation.
     """
-    torch.manual_seed(seed)
+    if seed is not None:
+        torch.manual_seed(seed)
+        
     loaded_events = load_dataset(
         input_dir,
         sum(train_split),
@@ -191,58 +193,41 @@ def reset_edge_id(subset, graph):
     return graph, exist_edges
 
 
-def graph_intersection(
-    pred_graph, truth_graph, using_weights=False, weights_bidir=None
-):
+def graph_intersection(input_pred_graph, input_truth_graph, return_y_pred=True, return_y_truth=False, return_pred_to_truth=False, return_truth_to_pred=False):
+    """
+    An updated version of the graph intersection function, which is around 25x faster than the
+    Scipy implementation (on GPU). Takes a prediction graph and a truth graph.
+    """
+    
+    unique_edges, inverse = torch.unique(torch.cat([input_pred_graph, input_truth_graph], dim=1), dim=1, sorted=False, return_inverse=True, return_counts=False)
 
-    array_size = max(pred_graph.max().item(), truth_graph.max().item()) + 1
+    inverse_pred_map = torch.ones(unique_edges.shape[1], dtype=torch.long) * -1
+    inverse_pred_map[inverse[:input_pred_graph.shape[1]]] = torch.arange(input_pred_graph.shape[1])
+    
+    inverse_truth_map = torch.ones(unique_edges.shape[1], dtype=torch.long) * -1
+    inverse_truth_map[inverse[input_pred_graph.shape[1]:]] = torch.arange(input_truth_graph.shape[1])
 
-    if torch.is_tensor(pred_graph):
-        l1 = pred_graph.cpu().numpy()
-    else:
-        l1 = pred_graph
-    if torch.is_tensor(truth_graph):
-        l2 = truth_graph.cpu().numpy()
-    else:
-        l2 = truth_graph
-    e_1 = sp.sparse.coo_matrix(
-        (np.ones(l1.shape[1]), l1), shape=(array_size, array_size)
-    ).tocsr()
-    e_2 = sp.sparse.coo_matrix(
-        (np.ones(l2.shape[1]), l2), shape=(array_size, array_size)
-    ).tocsr()
-    del l1
+    pred_to_truth = inverse_truth_map[inverse][:input_pred_graph.shape[1]]
+    truth_to_pred = inverse_pred_map[inverse][input_pred_graph.shape[1]:]
 
-    e_intersection = e_1.multiply(e_2) - ((e_1 - e_2) > 0)
-    del e_1
-    del e_2
+    return_tensors = []
 
-    if using_weights:
-        weights_list = weights_bidir.cpu().numpy()
-        weights_sparse = sp.sparse.coo_matrix(
-            (weights_list, l2), shape=(array_size, array_size)
-        ).tocsr()
-        del weights_list
-        del l2
-        new_weights = weights_sparse[e_intersection.astype("bool")]
-        del weights_sparse
-        new_weights = torch.from_numpy(np.array(new_weights)[0])
+    if return_y_pred:
+        y_pred = pred_to_truth >= 0
+        return_tensors.append(y_pred)
+    if return_y_truth:
+        y_truth = truth_to_pred >= 0
+        return_tensors.append(y_truth)
+    if return_pred_to_truth:        
+        return_tensors.append(pred_to_truth)
+    if return_truth_to_pred:
+        return_tensors.append(truth_to_pred)
 
-    e_intersection = e_intersection.tocoo()
-    new_pred_graph = torch.from_numpy(
-        np.vstack([e_intersection.row, e_intersection.col])
-    ).long()  # .to(device)
-    y = torch.from_numpy(e_intersection.data > 0)  # .to(device)
-    del e_intersection
-
-    if using_weights:
-        return new_pred_graph, y, new_weights
-    else:
-        return new_pred_graph, y
+    return return_tensors if len(return_tensors) > 1 else return_tensors[0]
 
 
 def build_edges(
-    query, database, indices=None, r_max=1.0, k_max=10, return_indices=False, backend="FRNN"
+    query, database, indices=None, r_max=1.0, k_max=10, return_indices=False, backend="FRNN", self_loop=False
 ):
 
     if backend == "FRNN":
@@ -257,7 +242,7 @@ def build_edges(
             return_nn=False,
             return_sorted=True,
         )      
-        
+
         idxs = idxs.squeeze().int()
         ind = torch.Tensor.repeat(
         torch.arange(idxs.shape[0], device=device), (idxs.shape[1], 1), 1
@@ -267,18 +252,16 @@ def build_edges(
 
     elif backend == "PYG":
         edge_list = radius(database, query, r=r_max, max_num_neighbors=k_max)
-        
+
     # Reset indices subset to correct global index
     if indices is not None:
         edge_list[0] = indices[edge_list[0]]
 
     # Remove self-loops
-    edge_list = edge_list[:, edge_list[0] != edge_list[1]]
+    if not self_loop:
+        edge_list = edge_list[:, edge_list[0] != edge_list[1]]
 
-    if return_indices:
-        return edge_list, dists, idxs, ind
-    else:
-        return edge_list
+    return (edge_list, dists, idxs, ind) if return_indices else edge_list
 
 
 def build_knn(spatial, k):

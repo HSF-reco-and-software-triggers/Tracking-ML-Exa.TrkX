@@ -2,7 +2,7 @@
 
 #SBATCH -A m3443_g -q regular
 #SBATCH -C gpu 
-#SBATCH -t 1:00:00
+#SBATCH -t 4:00:00
 #SBATCH -n 4
 #SBATCH --ntasks-per-node=4
 #SBATCH --gpus-per-task=1
