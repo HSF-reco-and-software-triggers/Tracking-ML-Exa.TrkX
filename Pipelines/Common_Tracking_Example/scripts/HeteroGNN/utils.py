@@ -82,6 +82,34 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets, inpu
 
     return events
 
+def process_hetero_data(events, pt_background_cut, pt_signal_cut, noise, triplets, input_cut):
+    # Handle event in batched form
+    if type(events) is not list:
+        events = [events]
+
+    # NOTE: Cutting background by pT BY DEFINITION removes noise
+    if pt_background_cut > 0 or not noise:
+        for i, event in enumerate(events):
+
+            if triplets:  # Keep all event data for posterity!
+                event = convert_triplet_graph(event)
+
+            else:
+                event = background_cut_event(event, pt_background_cut, pt_signal_cut)                
+                    
+    for i, event in enumerate(events):
+        
+        # Ensure PID definition is correct
+        event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+        event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
+        
+        if (input_cut is not None) and "scores" in event.keys:
+            score_mask = event.scores > input_cut
+            for edge_attr in ["edge_index", "y", "y_pid", "pid_signal", "scores"]:
+                event[edge_attr] = event[edge_attr][..., score_mask]            
+
+    return events[0]
+
 def background_cut_event(event, pt_background_cut=0, pt_signal_cut=0):
     edge_mask = ((event.pt[event.edge_index] > pt_background_cut) & (event.pid[event.edge_index] == event.pid[event.edge_index]) & (event.pid[event.edge_index] != 0)).any(0)
     event.edge_index = event.edge_index[:, edge_mask]

@@ -6,6 +6,7 @@ import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
 from torch_geometric.nn import HeteroConv
+from functools import partial
 
 from ...utils import make_mlp, get_region
 
@@ -150,8 +151,11 @@ class NodeEncoder(torch.nn.Module):
             batch_norm=hparams["batchnorm"],
         )
 
-    def forward(self, x):
-        return  self.network( x.float() )
+    def forward(self, x: torch.Tensor):
+        if self.hparams.get('checkpoint'):
+            return checkpoint(self.network, x.to(torch.float32))
+        else:
+            return self.network( x.to(torch.float32) )
     
 class HeteroNodeEncoder(torch.nn.Module):
     def __init__(self, hparams) -> None:
@@ -164,13 +168,8 @@ class HeteroNodeEncoder(torch.nn.Module):
             region = get_region(model)
             self.encoders[region] = NodeEncoder(self.hparams, model)
         
-    def forward(self, x_dict):
-        for model in self.hparams['model_ids']:
-            region = get_region(model)
-            print(region)
-            x_dict[region] = self.encoders[region](x_dict[region][:, : model['num_features']])
-        
-        return x_dict
+    def forward(self, x_dict):        
+        return {region: enc(x_dict[region]) for region, enc in self.encoders.items()}
 
 class EdgeEncoder(torch.nn.Module):
     def __init__(self, hparams) -> None:
@@ -186,16 +185,18 @@ class EdgeEncoder(torch.nn.Module):
             batch_norm=hparams["batchnorm"],
         )
 
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, *args, **kwargs):
         src, dst = edge_index
-        print("Encoding edges")
         if isinstance(x, tuple):
             x1, x2 = x
             x_in = torch.cat([x1[src], x2[dst]], dim=-1)
         else:
             x_in = torch.cat([x[src], x[dst]], dim=-1)
 
-        return  self.network( x_in )
+        if self.hparams.get('checkpoint'):
+            return checkpoint(self.network, x_in)
+        else:
+            return  self.network( x_in )
 
 class HeteroEdgeConv(HeteroConv):
 
@@ -206,15 +207,14 @@ class HeteroEdgeConv(HeteroConv):
         self,
         x_dict: dict,
         edge_index_dict: dict,
+        edge_dict=None,
         *args_dict,
         **kwargs_dict,
     ) -> dict :
 
         out_dict = {}
         for edge_type, edge_index in edge_index_dict.items():
-            print(edge_type)
             src, rel, dst = edge_type
-
             str_edge_type = '__'.join(edge_type)
             if str_edge_type not in self.convs:
                 continue
@@ -241,12 +241,15 @@ class HeteroEdgeConv(HeteroConv):
                                 value_dict.get(dst, None))
 
             conv = self.convs[str_edge_type]
-            print(kwargs)
 
+            edge = None
+            if isinstance(edge_dict, dict):
+                edge = edge_dict.get(edge_type)
+            
             if src == dst:
-                out = conv(x_dict[src], edge_index, *args, **kwargs)
+                out = conv(x_dict[src], edge_index, edge)
             else:
-                out = conv((x_dict[src], x_dict[dst]), edge_index, *args, **kwargs)
+                out = conv((x_dict[src], x_dict[dst]), edge_index, edge)
 
             out_dict[edge_type] = out
 
@@ -262,16 +265,15 @@ class EdgeClassifier(torch.nn.Module):
             [hparams["hidden"]] * hparams["nb_edge_layer"] + [1],
             layer_norm=hparams["layernorm"],
             batch_norm=hparams["batchnorm"],
-            output_activation=hparams['output_activation'],
+            output_activation=None,
             hidden_activation=hparams["hidden_activation"],
         )
 
-    def forward(self, x, edge_index, edge):
+    def forward(self, x, edge_index, edge, *args, **kwargs):
         src, dst = edge_index
         if isinstance(x, tuple):
             x1, x2 = x
             classifier_input = torch.cat([x1[src], x2[dst], edge], dim=-1)
         else:
             classifier_input = torch.cat([x[src], x[dst], edge], dim=-1)
-        # classifier_input = torch.cat([x[src], x[dst], edge], dim=-1)
-        return self.network(classifier_input)
+        return self.network(classifier_input).squeeze()

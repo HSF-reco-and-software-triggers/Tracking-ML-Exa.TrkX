@@ -1,4 +1,5 @@
 import sys
+from tabnanny import check
 
 import torch.nn as nn
 from torch.nn import Linear
@@ -10,6 +11,7 @@ from torch_geometric.typing import Adj, EdgeType, NodeType
 from typing import Dict, Optional
 from torch import Tensor
 from torch.nn import Module, ModuleDict
+from functools import partial
 
 from ...utils import make_mlp
 
@@ -192,6 +194,7 @@ class HomoConv(torch.nn.Module):
 class InteractionHeteroConv(torch_geometric.nn.HeteroConv):
     def __init__(self, convs: Dict[EdgeType, Module], aggr: Optional[str] = "sum"):
         super().__init__(convs, aggr)
+        self.checkpoint=checkpoint
 
     def edge_forward(self,x_dict: Dict[NodeType, Tensor],
         edge_index_dict: Dict[EdgeType, Adj],
@@ -202,7 +205,6 @@ class InteractionHeteroConv(torch_geometric.nn.HeteroConv):
 
         out_dict = {}
         for edge_type, edge_index in edge_index_dict.items():
-            print(edge_type)
             src, rel, dst = edge_type
 
             str_edge_type = '__'.join(edge_type)
@@ -230,10 +232,14 @@ class InteractionHeteroConv(torch_geometric.nn.HeteroConv):
                     kwargs[arg] = (value_dict.get(src, None),
                                 value_dict.get(dst, None))
 
-            conv = self.convs[str_edge_type]
+            # if self.checkpoint:
+            #     conv = partial(checkpoint, self.convs[str_edge_type].edge_update)
+            # else:
+            conv = self.convs[str_edge_type].edge_update
+
             edge = edge_dict[edge_type]
 
-            out = conv.edge_update((x_dict[src], x_dict[dst]), edge, edge_index, *args, **kwargs)
+            out = conv((x_dict[src], x_dict[dst]), edge, edge_index, *args, **kwargs)
 
             # if src == dst:
             #     out = conv.edge_updater(x_dict[src], edge_index, *args, **kwargs)
@@ -251,15 +257,11 @@ class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
 
         self.hparams=hparams
 
-        # The edge network computes new edge features from connected nodes
-        # self.edge_encoder = make_mlp(
-        #     2 * (hparams["hidden"]),
-        #     [hparams["hidden"]] * hparams["nb_edge_layer"],
-        #     layer_norm=hparams["layernorm"],
-        #     batch_norm=hparams["batchnorm"],
-        #     output_activation=hparams["output_activation"],
-        #     hidden_activation=hparams["hidden_activation"],
-        # )
+        # self.aggr_module = get_aggregation(self.hparams['aggregation'])
+
+        concatenation_factor = (
+            3 if (self.hparams["aggregation"] in ["sum_max", "mean_max", "mean_sum"]) else 2
+        )
 
         # The edge network computes new edge features from connected nodes
         self.edge_network = make_mlp(
@@ -273,7 +275,7 @@ class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
 
         # The node network computes new node features
         self.node_network = make_mlp(
-            2 * hparams["hidden"],
+            concatenation_factor * hparams["hidden"],
             [hparams["hidden"]] * hparams["nb_node_layer"],
             layer_norm=hparams["layernorm"],
             batch_norm=hparams["batchnorm"],
@@ -284,19 +286,19 @@ class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
     def message(self, edge):
         return edge
 
-    def aggregate(self, out, edge_index):
+    def aggregate(self, out, x, edge_index):
 
         src, dst = edge_index
-        return self.aggr_module(out, dst)[dst.unique()]
+        return get_aggregation(self.hparams['aggregation'])(out, dst, x)
     
     def update(self, agg_message, x, edge_index):
-        src, dst = edge_index
-        indices_to_add = torch.arange(agg_message.shape[0])
         # print(dst.unique())
         # print(x)
-        x[dst.unique()] += agg_message
-        
-        return x
+        x_in = torch.cat([x, agg_message], dim=-1)
+        if self.hparams.get('checkpoint'):
+            return x + checkpoint(self.node_network, x_in)
+        else:
+            return x + self.node_network(x_in)
 
     def edge_update(self, x, edge, edge_index, *args, **kwargs):
         src, dst = edge_index
@@ -304,8 +306,11 @@ class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
             x_src, x_dst = x[0][src], x[1][dst]
         else:
             x_src, x_dst = x[src], x[dst]
-        out = self.edge_network(torch.cat([x_src, x_dst, edge], dim=-1))
-        return out
+        # out = self.edge_network(torch.cat([x_src, x_dst, edge], dim=-1))
+        if self.hparams.get('checkpoint'):
+            return checkpoint(self.edge_network, torch.cat([x_src, x_dst, edge], dim=-1))
+        else:
+            return self.edge_network(torch.cat([x_src, x_dst, edge], dim=-1))
 
     def forward(self, x, edge_index, edge):
 
@@ -314,6 +319,6 @@ class InteractionMessagePassing(torch_geometric.nn.MessagePassing):
         else:
             x_src, x_dst = x, x
 
-        x_dst = self.propagate(edge_index, x=x_dst, edge=edge)
+        # x_dst = self.propagate(edge_index, x=x_dst, edge=edge)
 
-        return x_dst
+        return self.propagate(edge_index, x=x_dst, edge=edge)

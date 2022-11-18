@@ -1,6 +1,7 @@
 import os, sys
 import logging
 import random
+from itertools import product
 
 import torch.nn as nn
 import torch
@@ -13,7 +14,7 @@ except:
 
 from tqdm import tqdm
 
-from torch_geometric.data import Dataset, HeteroData
+from torch_geometric.data import Dataset, HeteroData, Data as PyGData
 
 # ---------------------------- Dataset Processing -------------------------
 
@@ -54,7 +55,7 @@ def load_dataset(
         return None
 
 
-def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets, input_cut):
+def process_data(events, pt_background_cut, pt_signal_cut, noise=False, triplets=False, input_cut=None, prog_bar=False, **kwargs):
     # Handle event in batched form
     if type(events) is not list:
         events = [events]
@@ -68,8 +69,10 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets, inpu
 
             else:
                 event = background_cut_event(event, pt_background_cut, pt_signal_cut)                
-                    
-    for i, event in tqdm(enumerate(events)):
+
+    if prog_bar: iterator = tqdm(enumerate(events))        
+    else: iterator = enumerate(events)
+    for i, event in iterator:
         
         # Ensure PID definition is correct
         event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
@@ -81,6 +84,57 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise, triplets, inpu
                 event[edge_attr] = event[edge_attr][..., score_mask]            
 
     return events
+
+########### utils for hetero GNN
+
+def process_hetero_data(event, pt_background_cut, pt_signal_cut, noise, triplets, input_cut):
+    # Handle event in batched form
+
+    # NOTE: Cutting background by pT BY DEFINITION removes noise
+    if pt_background_cut > 0 or not noise:
+
+        if triplets:  # Keep all event data for posterity!
+            event = convert_triplet_graph(event)
+
+        else:
+            event = background_cut_event(event, pt_background_cut, pt_signal_cut)                
+    # Ensure PID definition is correct
+    event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+    event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
+    
+    if (input_cut is not None) and "scores" in event.keys:
+        score_mask = event.scores > input_cut
+        for edge_attr in ["edge_index", "y", "y_pid", "pid_signal", "scores"]:
+            event[edge_attr] = event[edge_attr][..., score_mask]            
+
+    return event
+
+def get_homo_data(pred_dict, *data_dicts):
+    return torch.cat([
+            torch.cat([pred_dict[key].view(1,-1)] + [d[key].view(1,-1) for d in data_dicts], dim=0) for key in pred_dict.keys()
+        ], dim=-1)
+
+def get_hetero_data(event, hparams):
+    data = PyGData(**event.to_dict())
+    node_type = torch.zeros_like(data.volume_id)
+    node_type_names = [] 
+    for idx, model in enumerate(hparams['model_ids']):
+        node_type[ torch.isin( data.volume_id , torch.tensor(model['volume_ids'])) ] = idx
+        node_type_names.append(get_region(model))
+
+    edge_type = torch.zeros_like(data.edge_index[0])
+    edge_type_names = []
+    for idx, edge_idx in enumerate(product(node_type.unique(), node_type.unique())):
+        edge_type[ (node_type[data.edge_index].T == torch.tensor(edge_idx)).all(1) ] = idx
+        edge_type_names.append( (get_region(hparams['model_ids'][int(edge_idx[0])]), 'connected_to', get_region(hparams['model_ids'][int(edge_idx[1])])))
+    
+    hetero_data = data.to_heterogeneous(node_type=node_type, node_type_names=node_type_names, edge_type=edge_type, edge_type_names=edge_type_names)
+    for idx, model in enumerate(hparams['model_ids']):
+        hetero_data[get_region(model)].x = hetero_data[get_region(model)].x[:, : model['num_features']]
+
+    return hetero_data 
+
+##########
 
 def background_cut_event(event, pt_background_cut=0, pt_signal_cut=0):
     edge_mask = ((event.pt[event.edge_index] > pt_background_cut) & (event.pid[event.edge_index] == event.pid[event.edge_index]) & (event.pid[event.edge_index] != 0)).any(0)
@@ -157,29 +211,31 @@ class LargeHeteroDataset(LargeDataset):
 
     def get(self, idx):
         event = torch.load(self.input_paths[idx], map_location=torch.device('cpu'))
+        event = process_hetero_data(event, self.hparams['input_backgroun_cut'], self.hparams['pt_signal_cut'], self.hparams['noise'], triplets=False, input_cut=None)
+        hetero_data = get_hetero_data(event, self.hparams)
 
-        # Process event with pt cuts
-        if self.hparams["pt_background_cut"] > 0:
-            event = background_cut_event(event, self.hparams["pt_background_cut"], self.hparams["pt_signal_cut"])
+        # # Process event with pt cuts
+        # if self.hparams["pt_background_cut"] > 0:
+        #     event = background_cut_event(event, self.hparams["pt_background_cut"], self.hparams["pt_signal_cut"])
         
-        # Ensure PID definition is correct
-        event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
-        event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
+        # # Ensure PID definition is correct
+        # event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
+        # event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
 
-        data = HeteroData()
-        for vol_id in event.volume_id.unique():
-            mask = event.volume_id==vol_id
-            for attr in ['x', 'cell_data', 'pid', 'hid', 'pt', 'primary', 'nhits', 'modules', 'volume_id']:
-                data[f'volume_{vol_id}'][attr] = event[attr][mask]
-        for id1, id2 in torch.combinations(event.volume_id.unique(), r=2, with_replacement=True):
-            mask = ((event.volume_id[event.edge_index[0]] == id1) & (event.volume_id[event.edge_index[1]] == id2)) | ((event.volume_id[event.edge_index[0]] == id2) & (event.volume_id[event.edge_index[1]] == 1))
-            data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].edge_index = event.edge_index.T[mask].T
-            data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].y = event.y[mask]
-            data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].y_pid = event.y_pid[mask]
-            for truth_edge in ['modulewise_true_edges', 'signal_true_edges']:
-                mask = ((event.volume_id[event[truth_edge][0]] == id1) & (event.volume_id[event[truth_edge][1]] == id2)) | ((event.volume_id[event[truth_edge][0]] == id2) & (event.volume_id[event[truth_edge][1]] == id1))
-                data[f'volume_{id1}', 'connected_to', f'volume_{id2}'][truth_edge] = event[truth_edge].T[mask].T
-        return data
+        # data = HeteroData()
+        # for vol_id in event.volume_id.unique():
+        #     mask = event.volume_id==vol_id
+        #     for attr in ['x', 'cell_data', 'pid', 'hid', 'pt', 'primary', 'nhits', 'modules', 'volume_id']:
+        #         data[f'volume_{vol_id}'][attr] = event[attr][mask]
+        # for id1, id2 in torch.combinations(event.volume_id.unique(), r=2, with_replacement=True):
+        #     mask = ((event.volume_id[event.edge_index[0]] == id1) & (event.volume_id[event.edge_index[1]] == id2)) | ((event.volume_id[event.edge_index[0]] == id2) & (event.volume_id[event.edge_index[1]] == 1))
+        #     data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].edge_index = event.edge_index.T[mask].T
+        #     data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].y = event.y[mask]
+        #     data[f'volume_{id1}', 'connected_to', f'volume_{id2}'].y_pid = event.y_pid[mask]
+        #     for truth_edge in ['modulewise_true_edges', 'signal_true_edges']:
+        #         mask = ((event.volume_id[event[truth_edge][0]] == id1) & (event.volume_id[event[truth_edge][1]] == id2)) | ((event.volume_id[event[truth_edge][0]] == id2) & (event.volume_id[event[truth_edge][1]] == id1))
+        #         data[f'volume_{id1}', 'connected_to', f'volume_{id2}'][truth_edge] = event[truth_edge].T[mask].T
+        return hetero_data
 
 
 
