@@ -87,7 +87,7 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise=False, triplets
 
 ########### utils for hetero GNN
 
-def process_hetero_data(event, pt_background_cut, pt_signal_cut, noise, triplets, input_cut):
+def process_hetero_data(event, pt_background_cut, pt_signal_cut, noise, triplets, input_cut, handle_directed=False):
     # Handle event in batched form
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
@@ -97,7 +97,15 @@ def process_hetero_data(event, pt_background_cut, pt_signal_cut, noise, triplets
             event = convert_triplet_graph(event)
 
         else:
-            event = background_cut_event(event, pt_background_cut, pt_signal_cut)                
+            event = background_cut_event(event, pt_background_cut, pt_signal_cut) 
+
+    event.sample_indices = torch.arange(event.edge_index.shape[1])
+    if handle_directed:
+        for edge_attr in ["edge_index", "modulewise_true_edges"]:
+            event[edge_attr] = torch.cat([event[edge_attr], event[edge_attr].flip(0)], dim=-1)
+        for edge_attr in ['y', 'sample_indices']:
+            event[edge_attr] = event[edge_attr].repeat(2)
+
     # Ensure PID definition is correct
     event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
     event.pid_signal = torch.isin(event.edge_index, event.signal_true_edges).all(0) & event.y_pid
@@ -129,9 +137,10 @@ def get_hetero_data(event, hparams):
         edge_type_names.append( (get_region(hparams['model_ids'][int(edge_idx[0])]), 'connected_to', get_region(hparams['model_ids'][int(edge_idx[1])])))
     
     hetero_data = data.to_heterogeneous(node_type=node_type, node_type_names=node_type_names, edge_type=edge_type, edge_type_names=edge_type_names)
-    for idx, model in enumerate(hparams['model_ids']):
-        hetero_data[get_region(model)].x = hetero_data[get_region(model)].x[:, : model['num_features']]
-
+    if hparams['hetero_level'] > 0:
+        for idx, model in enumerate(hparams['model_ids']):
+            hetero_data[get_region(model)].x = hetero_data[get_region(model)].x[:, : model['num_features']]
+        
     return hetero_data 
 
 ##########

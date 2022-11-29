@@ -12,6 +12,7 @@ import torch
 import numpy as np
 
 from .utils import load_dataset, purity_sample, LargeDataset, process_hetero_data, get_homo_data, get_hetero_data
+from .plot_utils import plot_score
 from .hetero_dataset import LargeHeteroDataset
 from sklearn.metrics import roc_auc_score
 from functools import partial
@@ -135,7 +136,7 @@ class HeteroGNNBase(LightningModule):
         else:
             edge_sample, truth_sample, sample_indices = batch.edge_index, truth, torch.arange(batch.edge_index.shape[1])
             
-        edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
+        # edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
 
         weight = (
             torch.tensor(self.hparams["weight"])
@@ -225,7 +226,7 @@ class HeteroGNNBase(LightningModule):
         else:
             edge_sample, truth_sample, sample_indices = batch.edge_index, truth, torch.arange(batch.edge_index.shape[1])
             
-        edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
+        # edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
 
         weight = (
             torch.tensor(self.hparams["weight"])
@@ -271,6 +272,8 @@ class HeteroGNNBase(LightningModule):
     def test_epoch_end(self, outputs):
 
         print("Epoch:", outputs)
+    
+
 
     def optimizer_step(
         self,
@@ -296,22 +299,24 @@ class HeteroGNNBase(LightningModule):
 
         # update params
         optimizer.step(closure=optimizer_closure)
-        # if batch_idx==1:
-        #     print('node encoder param grads')
-        #     for param in self.node_encoders.parameters():
-        #         print(param.grad.sum() if param.grad is not None else param.grad)
-        #     print('edge encoder param grads')
-        #     # for enc in :
-        #     for param in self.edge_encoders.parameters():
-        #         print(param.grad.sum() if param.grad is not None else param.grad)
-        #     print("convolution params grads")
-        #     for param in self.convs.parameters():
-        #         # for param in enc.parameters():
-        #         print(param.grad.sum() if param.grad is not None else param.grad)
-        #     print('edge classifiers param grads')
-        #     for param in self.edge_classifiers.parameters():
-        #         # for param in enc.parameters():
-        #         print(param.grad.sum() if param.grad is not None else param.grad)
+        if batch_idx==0 and self.hparams.get('debug'):
+            print('='*20 + 'node encoder param grads')
+            for param in self.node_encoders.parameters():
+                print(param.grad.sum() if param.grad is not None else param.grad)
+            print('='*20 +'edge encoder param grads')
+            # for enc in :
+            for param in self.edge_encoders.parameters():
+                print(param.grad.sum() if param.grad is not None else param.grad)
+            print('='*20 +"convolution params grads")
+            for param in self.conv.parameters():
+                # for param in enc.parameters():
+                print(param.grad.sum() if param.grad is not None else param.grad)
+            print('='*20 +'edge classifiers param grads')
+            for param in self.edge_classifiers.parameters():
+                # for param in enc.parameters():
+                print(param.grad.sum() if param.grad is not None else param.grad)
+            # for param in self.parameters():
+            #     print(param.grad.sum() if param.grad is not None else param.grad)
             
         optimizer.zero_grad()
 
@@ -329,47 +334,18 @@ class PyGHeteroGNNBase(HeteroGNNBase):
 
     def setup(self, stage='fit'):
         # Handle any subset of [train, val, test] data split, assuming that ordering
-
         if self.trainset is None:
-
             print("Setting up dataset")
-            if not self.hparams.get('parallel_dataloader'):
-                input_subdirs = [None, None, None]
-                input_subdirs[: len(self.hparams["datatype_names"])] = [
-                    os.path.join(self.hparams["input_dir"], datatype)
-                    for datatype in self.hparams["datatype_names"]
-                ]
-                
-
-                homo_data = [
-                    load_dataset(
-                        input_subdir=input_subdir,
-                        num_events=self.hparams["datatype_split"][i],
-                        **self.hparams
-                    )
-                    for i, input_subdir in enumerate(input_subdirs)
-                ]
-                self.trainset, self.valset, self.testset = [
-                    [get_hetero_data(
-                        event, 
-                        self.hparams
-                    ) 
-                    for event in dataset] 
-                    for dataset in homo_data
-                ]
-            else:
-                self.trainset, self.valset, self.testset = [
-                    LargeHeteroDataset(
-                        root=self.hparams['input_dir'],
-                        subdir=subdir,
-                        num_events=self.hparams["datatype_split"][i],
-                        process_function=None,
-                        hparams=self.hparams
-                    )
-                    for i, subdir in enumerate(self.hparams["datatype_names"])
-                ]
-            
-
+            self.trainset, self.valset, self.testset = [
+                LargeHeteroDataset(
+                    root=self.hparams['input_dir'],
+                    subdir=subdir,
+                    num_events=self.hparams["datatype_split"][i],
+                    process_function=None,
+                    hparams=self.hparams
+                )
+                for i, subdir in enumerate(self.hparams["datatype_names"])
+            ]
         if (
             (self.trainer)
             and ("logger" in self.trainer.__dict__.keys())
@@ -423,14 +399,15 @@ class PyGHeteroGNNBase(HeteroGNNBase):
     
     def training_step(self, batch, batch_idx, log=True):
 
-        output_dict = self(batch.x_dict, batch.edge_index_dict)
+        output_dict = self(batch)
         for key, o in output_dict.items():
             batch[key]['output'] = o
         batch = batch.to_homogeneous()
         # truth_dict = batch.collect(self.hparams['truth_key'])
         # output, truth = get_homo_data(output_dict, truth_dict)
 
-        truth, output = batch[self.hparams["truth_key"]], batch.output
+        truth = batch[self.hparams['truth_key']]
+        output = batch.output
         
         weight = (
             torch.tensor(self.hparams["weight"])
@@ -460,26 +437,18 @@ class PyGHeteroGNNBase(HeteroGNNBase):
 
     def shared_evaluation(self, batch, batch_idx, log=True):
 
-        truth_dict = batch.collect(self.hparams['truth_key'])
-        output_dict = self(batch.x_dict, batch.edge_index_dict)
+        output_dict = self(batch)
         for key, o in output_dict.items():
             batch[key]['output'] = o
         batch = batch.to_homogeneous()
-        truth, output = batch[self.hparams["truth_key"]], batch.output
-        # output, truth = get_homo_data(output_dict, truth_dict)
+        truth = batch[self.hparams["truth_key"]]
+        output = batch.output
 
         weight = (
             torch.tensor(self.hparams["weight"])
             if ("weight" in self.hparams)
             else ((~truth.bool()).sum() / truth.sum()).clone()
         )        
-        
-        # if self.hparams["mask_background"]:
-        #     output_subsample, truth_subsample = {}, {}
-        #     for key, output in output_dict.items():
-        #         y_subset = truth_dict[key] | ~batch.y_pid_dict[key].bool() # previously the y_pid is filtered by the sample_indices
-        #         output_subsample[key], truth_subsample[key] = output_dict[key][y_subset], truth_dict[key][y_subset]
-        #     output, truth = get_homo_data(output_subsample, truth_subsample)
 
         if self.hparams["mask_background"]:
             y_subset = truth | ~ batch.y_pid.bool()
@@ -496,8 +465,10 @@ class PyGHeteroGNNBase(HeteroGNNBase):
                 reduction='mean', 
                 pos_weight=weight
             )        
-
-        preds = self.log_metrics(output, truth, batch, loss, log, output_dict, truth_dict)
+        if log:
+            preds = self.log_metrics(output, truth, batch, loss, log, {}, {})
+        else:
+            preds = torch.sigmoid(output) > self.hparams['edge_cut']
         return {"loss": loss, "preds": preds, "score": torch.sigmoid(output).clone().detach().cpu(), "truth": truth.clone().detach().cpu().float()}
         
     def log_metrics(self, output, truth, homo_batch, loss, log, output_dict, truth_dict):
@@ -513,26 +484,16 @@ class PyGHeteroGNNBase(HeteroGNNBase):
 
         # Signal true & signal tp
         sig_truth = batch[self.hparams['truth_key']]
-        # sig_true = truth.sum().float() 
         sig_true = sig_truth.sum().float()
-        # sig_true_positive = ( truth.bool() & preds ).sum().float()  #
         sig_true_positive = (sig_truth.bool() & preds).sum().float()
         sig_auc = roc_auc_score(
             sig_truth.bool().cpu().detach(), 
-            # truth.bool().cpu().detach(),
             edge_score.cpu().detach()
         )
 
         # Total true & total tp
-        # output, truth, y_pid, y = get_homo_data(output_dict, truth_dict, batch.y_pid_dict, batch.y_dict)
-        # tot_truth = (y_pid.bool() | y.bool())
-        # tot_true = tot_truth.sum().float()
-        # tot_true_positive = (tot_truth.bool() & (torch.sigmoid(output) > self.hparams["edge_cut"] )).sum().float()
-        # tot_auc = roc_auc_score(
-        #     tot_truth.bool().cpu().detach(), torch.sigmoid(output).cpu().detach()
-        # )
 
-        tot_truth = (batch.y_pid.bool() | batch.y.bool()) #[sample_indices]
+        tot_truth = (batch.y_pid.bool() | batch.y.bool()) 
         tot_true = tot_truth.sum().float()
         tot_true_positive = (tot_truth.bool() & preds).sum().float()
         tot_auc = roc_auc_score(
@@ -577,27 +538,31 @@ class PyGHeteroGNNBase(HeteroGNNBase):
     def validation_step(self, batch, batch_idx):
         outputs = self.shared_evaluation(batch, batch_idx)
         return outputs
+    
+    def test_step(self, batch, batch_idx):
+        outputs = self.shared_evaluation(batch, batch_idx, log=False)
+        return outputs
 
     def log_plots(self, outputs, key, stage='val', *args, **kwargs):
         # plot score histogram for both classes
         if wandb.run is not None and self.current_epoch is not None and self.current_epoch % self.hparams.get('plot_every', 1) == 0:
             if 'score' in outputs[-1] and 'truth' in outputs[-1]:
-                _, self.ax = plt.subplots(1,1)
-                score = torch.cat([o['score'] for o in outputs]).detach().numpy()
-                truth = torch.cat([o['truth'] for o in outputs]).detach().numpy()
-                self.ax.hist(score[truth==0], label=f'{stage}_negative', **self.hparams.get('histplot_args', {}))
-                self.ax.hist(score[truth==1], label=f'{stage}_positive', **self.hparams.get('histplot_args', {}))
-                self.ax.set_xlabel('score')
-                self.ax.legend()
-                if kwargs.get('title'): self.ax.set_title(kwargs['title'])
-                plt.tight_layout()
+                plot_score(outputs, stage, **kwargs)
                 wandb.run.log({key: wandb.Image(plt)})
                 plt.close()
     
     def validation_epoch_end(self, outputs) -> None:
-        self.log_plots(outputs, stage='val', key='val_score_hist', title='Validation score histogram')
-
-
+        self.log_plots(outputs, stage='val', key='val_score_hist', title='Validation score histogram', **self.hparams)
+    
+    def test_epoch_end(self, outputs, **kwargs):
+        if 'score' in outputs[-1] and 'truth' in outputs[-1]:
+            fig, ax = plot_score(outputs, stage='test', title="Test score histogram", **self.hparams)
+            if kwargs.get('save_score_hist'):
+                plt.savefig(kwargs['save_score_hist'])
+            return fig, ax
+        
+    def on_train_start(self):
+        self.trainer.strategy.optimizers = [self.trainer.lr_scheduler_configs[0].scheduler.optimizer]
         
 class LargeGNNBase(HeteroGNNBase):
 
