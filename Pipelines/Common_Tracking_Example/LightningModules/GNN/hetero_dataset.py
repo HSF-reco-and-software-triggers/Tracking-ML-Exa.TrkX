@@ -33,7 +33,13 @@ class LargeHeteroDataset(Dataset):
 
     def get(self, idx):
         event = torch.load(self.input_paths[idx], map_location=torch.device('cpu'))
-        event = process_hetero_data(event, self.hparams['pt_background_cut'], self.hparams['pt_signal_cut'], self.hparams['noise'], triplets=False, input_cut=None, handle_directed=self.hparams.get('handle_directed', False))
-        hetero_data = get_hetero_data(event, self.hparams)
+        event = process_hetero_data(event, 
+            self.hparams['pt_background_cut'], 
+            self.hparams['pt_signal_cut'], 
+            self.hparams['noise'], 
+            triplets=False, input_cut=None, 
+            bidirectional=self.hparams.get('handle_directed', True),
+            directed=self.hparams.get('directed', False)
+        )
         
-        return hetero_data
+        return get_hetero_data(event, self.hparams)

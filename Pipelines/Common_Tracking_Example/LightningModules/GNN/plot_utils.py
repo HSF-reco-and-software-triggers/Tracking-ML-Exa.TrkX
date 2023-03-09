@@ -12,6 +12,8 @@ def plot_score(outputs, stage='val', **kwargs):
     hist1 = hep.histplot(np.histogram(score[truth==0], bins=50, range=(0,1)), label=f'{stage}_negative', ax=ax, color='c', **kwargs.get('histplot_args', {}))
     hist2 = hep.histplot(np.histogram(score[truth==1], bins=50, range=(0,1)), label=f'{stage}_positive', ax=ax2, color='m', **kwargs.get('histplot_args', {}))
     ax.set_xlabel('score')
+    ax.set_ylim((0, kwargs.get('negative_ylim', 7e6)))
+    ax2.set_ylim((0, kwargs.get('positive_ylim', 2e5)))
     ax.legend(loc='upper left')
     ax2.legend(loc='upper right')
     if kwargs.get('title'): ax.set_title(kwargs['title'])

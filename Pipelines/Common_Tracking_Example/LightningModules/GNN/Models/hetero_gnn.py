@@ -1,18 +1,19 @@
 import sys
+from webbrowser import get
 
 import torch.nn as nn
 from torch.nn import Linear
 import torch
 from torch_scatter import scatter_add, scatter_mean, scatter_max
 from torch.utils.checkpoint import checkpoint
-from itertools import product
+from itertools import combinations_with_replacement, product
 
 from ..hetero_gnn_base import LargeGNNBase, PyGHeteroGNNBase
 from ..utils import make_mlp, get_region
 
 from .submodels.edge_decoders import HomoDecoder, HeteroDecoder
-from .submodels.convolutions import HomoConv, HeteroConv, InteractionHeteroConv, InteractionMessagePassing
-from .submodels.encoders import HeteroEdgeEncoder, HomoEncoder, HeteroEncoder, HeteroNodeEncoder, HeteroEdgeConv, EdgeEncoder, EdgeClassifier
+from .submodels.convolutions import HomoConv, HeteroConv, InteractionHeteroConv, InteractionMessagePassing, PyGInteractionHeteroConv
+from .submodels.encoders import HeteroEdgeEncoder, HomoEncoder, HeteroEncoder, HeteroNodeEncoder, HeteroEdgeConv, EdgeEncoder, EdgeClassifier, EdgeUpdater
 
 class HeteroGNN(LargeGNNBase):
 
@@ -109,74 +110,104 @@ class PyGHeteroGNN(PyGHeteroGNNBase):
         )
 
         self.node_encoders = HeteroNodeEncoder(self.hparams)
-        # self.edge_encoders = HeteroEdgeConv({
-        #     (get_region(model0), 'connected_to', get_region(model1)): EdgeEncoder(self.hparams)
-        #     for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
-        # })
         self.edge_encoders = HeteroEdgeEncoder(self.hparams)
 
-        # self.convs = torch.nn.ModuleList([
+        self.convs = torch.nn.ModuleList([])
+        self.edge_updaters = torch.nn.ModuleList([])
 
-        # ])
-
-        # conv = InteractionHeteroConv({
-        #         (get_region(model0), 'connected_to', get_region(model1)): InteractionMessagePassing(hparams=self.hparams)
-        #         for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
-        #     }, aggr=self.hparams.get('modulewise_aggregation', 'mean'))
-        # for _ in range(self.hparams['n_graph_iters']):
-        #     if self.hparams.get('recurrent'): self.convs.append(conv)
-        #     else: 
-        #         conv = InteractionHeteroConv({
-        #             (get_region(model0), 'connected_to', get_region(model1)): InteractionMessagePassing(hparams=self.hparams)
-        #             for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
-        #         }, aggr=self.hparams.get('modulewise_aggregation', 'mean'))
-        #         self.convs.append(conv)
-
-        if not self.hparams.get("recurrent"):
-            self.conv = nn.ModuleList([InteractionHeteroConv(hparams)]*self.hparams["n_graph_iters"])
-        else:
-            self.conv = nn.ModuleList([InteractionHeteroConv(hparams) for _ in range(self.hparams["n_graph_iters"])])
+        conv = PyGInteractionHeteroConv({
+                (get_region(model0), 'connected_to', get_region(model1)): InteractionMessagePassing(hparams=self.hparams)
+                for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+            }, aggr=self.hparams.get('modulewise_aggregation', 'mean'))
+        edge_updater = HeteroEdgeConv({
+                (get_region(model0), 'connected_to', get_region(model1)): EdgeUpdater(hparams=self.hparams)
+                for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+            }, aggr=self.hparams.get('modulewise_aggregation', 'mean'))
+        for _ in range(self.hparams['n_graph_iters']):
+            if self.hparams.get('recurrent'): 
+                self.convs.append(conv)
+                self.edge_updaters.append(edge_updater)
+            else: 
+                conv = PyGInteractionHeteroConv({
+                    (get_region(model0), 'connected_to', get_region(model1)): InteractionMessagePassing(hparams=self.hparams)
+                    for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+                }, aggr=self.hparams.get('modulewise_aggregation', 'mean'))
+                edge_updater = HeteroEdgeConv({
+                    (get_region(model0), 'connected_to', get_region(model1)): EdgeUpdater(hparams=self.hparams)
+                    for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+                }, aggr=self.hparams.get('modulewise_aggregation', 'mean'))
+                self.convs.append(conv)
+                self.edge_updaters.append(edge_updater)
 
         self.edge_classifiers = HeteroEdgeConv({
             (get_region(model0), 'connected_to', get_region(model1)): EdgeClassifier(self.hparams)
             for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
         })
 
-        # self.decoder = HeteroDecoder(hparams)
+    def forward(self, batch):
+        x_dict, edge_index_dict= batch.x_dict, batch.edge_index_dict
+        
+        x_dict = self.node_encoders(x_dict)
+        edge_dict = self.edge_encoders(x_dict, edge_index_dict)
+
+        for conv, edge_updater in zip(self.convs, self.edge_updaters):
+            x_dict = conv(x_dict, edge_index_dict, edge_dict)
+            edge_dict = edge_updater(x_dict, edge_index_dict, edge_dict)
+        
+        return self.edge_classifiers(x_dict, edge_index_dict, edge_dict)
+
+class HybridHeteroGNN(PyGHeteroGNNBase):
+
+    def __init__(self, hparams):
+
+        super().__init__(hparams)
+        """
+        Initialise the Lightning Module that can scan over different GNN training regimes
+        """
+
+        hparams["batchnorm"] = (
+            False if "batchnorm" not in hparams else hparams["batchnorm"]
+        )
+        hparams["output_activation"] = (
+            None if "output_activation" not in hparams else hparams["output_activation"]
+        )
+
+        self.node_encoders = HeteroNodeEncoder(self.hparams)
+        self.edge_encoders = HeteroEdgeEncoder(self.hparams)
+
+        if not self.hparams.get("recurrent"):
+            self.conv = nn.ModuleList([InteractionHeteroConv(hparams)]*self.hparams["n_graph_iters"])
+        else:
+            self.conv = nn.ModuleList([InteractionHeteroConv(hparams) for _ in range(self.hparams["n_graph_iters"])])
+
+        if self.hparams['hetero_level'] < 4:
+            edge_classifier = EdgeClassifier(self.hparams)
+            self.edge_classifiers = HeteroEdgeConv({
+                (get_region(model0), 'connected_to', get_region(model1)): edge_classifier
+                for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+            })
+        else:
+            if self.hparams.get('hetero_reduce'):
+                convs = {}
+                for model0, model1 in combinations_with_replacement(self.hparams['model_ids'], r=2):
+                    edge_classifier = EdgeClassifier(self.hparams)
+                    convs[ (get_region(model0), 'connected_to', get_region(model1))] = edge_classifier
+                    convs[ (get_region(model1), 'connected_to', get_region(model0))] = edge_classifier 
+                self.edge_classifiers = HeteroEdgeConv(convs)
+            else:
+                self.edge_classifiers = HeteroEdgeConv({
+                    (get_region(model0), 'connected_to', get_region(model1)): EdgeClassifier(self.hparams)
+                    for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+                })
 
     def forward(self, batch):
         x_dict, edge_index_dict= batch.x_dict, batch.edge_index_dict
         
-        # for region in x_dict: x_dict[region].require_grad = True
         x_dict = self.node_encoders(x_dict)
-        edge_dict = self.edge_encoders(x_dict, edge_index_dict)
-        # for node_type in x_dict:
-        #     batch[node_type].x = x_dict[node_type]
-        # for edge_type in edge_dict:
-        #     batch[edge_type].edge = edge_dict[edge_type]
+        edge_dict = self.edge_encoders(x_dict, edge_index_dict)  
 
-        # batch = batch.to_homogeneous()
-
-        # x_dict = checkpoint(self.node_encoders, x_dict) 
-        # edge_dict = checkpoint(self.edge_encoders, x_dict, edge_index_dict)      
-
-        for step, conv in enumerate(self.conv):
-            # x_dict = checkpoint(conv, x_dict, edge_index_dict, edge_dict)
-            # edge_dict = checkpoint(conv.edge_forward, x_dict, edge_index_dict, edge_dict)
+        for _, conv in enumerate(self.conv):
 
             x_dict, edge_dict = conv(x_dict, edge_index_dict, edge_dict)
-            # edge_dict = conv.edge_forward(x_dict, edge_index_dict, edge_dict=edge_dict)
-        
-        # batch = batch.to_heterogeneous(
-        #     node_type=batch.node_type,
-        #     edge_type=batch.edge_type,
-        #     node_type_names=[ get_region(model) for model in self.hparams['model_ids'] ],
-        #     edge_type_names=[(get_region(model0), 'connected_to', get_region(model1)) for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])]
-        # )
-        # print(batch.x, batch.edge_index, batch.edge, batch.volume_id)
-        # return self.decoder(batch.x, batch.edge_index, batch.edge, batch.volume_id ).squeeze()  
+
         return self.edge_classifiers(x_dict, edge_index_dict, edge_dict)
-        # return checkpoint(self.edge_classifiers, x_dict, edge_index_dict, edge_dict)
-        # return self.node_encoders(x_dict)
-
-

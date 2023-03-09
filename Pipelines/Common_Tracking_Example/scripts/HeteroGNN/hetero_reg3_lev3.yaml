@@ -19,7 +19,7 @@ noise: True
 
 # Model parameters
 edge_cut: 0.5
-hidden: 64
+hidden: 128
 spatial_channels: 3
 n_graph_iters: 8
 nb_node_layer: 3

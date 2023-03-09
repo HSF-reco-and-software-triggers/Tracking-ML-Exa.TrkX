@@ -87,7 +87,7 @@ def process_data(events, pt_background_cut, pt_signal_cut, noise=False, triplets
 
 ########### utils for hetero GNN
 
-def process_hetero_data(event, pt_background_cut, pt_signal_cut, noise, triplets, input_cut, handle_directed=False):
+def process_hetero_data(event, pt_background_cut, pt_signal_cut, noise, triplets, input_cut, bidirectional=True, directed=False):
     # Handle event in batched form
 
     # NOTE: Cutting background by pT BY DEFINITION removes noise
@@ -99,12 +99,24 @@ def process_hetero_data(event, pt_background_cut, pt_signal_cut, noise, triplets
         else:
             event = background_cut_event(event, pt_background_cut, pt_signal_cut) 
 
+    # compute cartesian distance for each hit
+    r, phi, z = event['x'].T[:3]
+    event.R = torch.sqrt( torch.square(r) + torch.square(z) )
+
     event.sample_indices = torch.arange(event.edge_index.shape[1])
-    if handle_directed:
+    if bidirectional:
         for edge_attr in ["edge_index", "modulewise_true_edges"]:
             event[edge_attr] = torch.cat([event[edge_attr], event[edge_attr].flip(0)], dim=-1)
         for edge_attr in ['y', 'sample_indices']:
             event[edge_attr] = event[edge_attr].repeat(2)
+    
+    # select edges in the direction of increasing R
+    if directed:
+        mask = event.R[event.edge_index[0]] < event.R[event.edge_index[1]]
+        event.edge_index = event.edge_index.T[mask].T
+        event.y = event.y[mask]
+        mask = event.R[event.modulewise_true_edges[0]] < event.R[event.modulewise_true_edges[1]]
+        event.modulewise_true_edges = event.modulewise_true_edges.T[mask].T
 
     # Ensure PID definition is correct
     event.y_pid = (event.pid[event.edge_index[0]] == event.pid[event.edge_index[1]]) & event.pid[event.edge_index[0]].bool()
@@ -137,9 +149,11 @@ def get_hetero_data(event, hparams):
         edge_type_names.append( (get_region(hparams['model_ids'][int(edge_idx[0])]), 'connected_to', get_region(hparams['model_ids'][int(edge_idx[1])])))
     
     hetero_data = data.to_heterogeneous(node_type=node_type, node_type_names=node_type_names, edge_type=edge_type, edge_type_names=edge_type_names)
-    if hparams['hetero_level'] > 0:
-        for idx, model in enumerate(hparams['model_ids']):
-            hetero_data[get_region(model)].x = hetero_data[get_region(model)].x[:, : model['num_features']]
+    # if hparams['hetero_level'] > 0:
+    for idx, model in enumerate(hparams['model_ids']):
+        hetero_data[get_region(model)].x = hetero_data[get_region(model)].x[:, model.get('start', 0): model.get('start', 0) + model['num_features']]
+        if hparams.get('cell_data'):
+            hetero_data[get_region(model)].x = torch.cat([ hetero_data[get_region(model)].x, hetero_data[get_region(model)].cell_data ], dim=1)
         
     return hetero_data 
 

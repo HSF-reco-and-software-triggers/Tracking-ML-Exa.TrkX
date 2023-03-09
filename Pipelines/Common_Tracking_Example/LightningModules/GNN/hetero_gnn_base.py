@@ -136,7 +136,7 @@ class HeteroGNNBase(LightningModule):
         else:
             edge_sample, truth_sample, sample_indices = batch.edge_index, truth, torch.arange(batch.edge_index.shape[1])
             
-        # edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
+        edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
 
         weight = (
             torch.tensor(self.hparams["weight"])
@@ -226,7 +226,7 @@ class HeteroGNNBase(LightningModule):
         else:
             edge_sample, truth_sample, sample_indices = batch.edge_index, truth, torch.arange(batch.edge_index.shape[1])
             
-        # edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
+        edge_sample, truth_sample, sample_indices = self.handle_directed(batch, edge_sample, truth_sample, sample_indices)
 
         weight = (
             torch.tensor(self.hparams["weight"])
@@ -301,20 +301,32 @@ class HeteroGNNBase(LightningModule):
         optimizer.step(closure=optimizer_closure)
         if batch_idx==0 and self.hparams.get('debug'):
             print('='*20 + 'node encoder param grads')
+            # print(self.node_encoders.parameters())
+            # print('='*20 + 'node encoder param grads')
+            # print(self.edge_encoders.parameters())
             for param in self.node_encoders.parameters():
-                print(param.grad.sum() if param.grad is not None else param.grad)
+                if not param.get_device() == 0: continue
+                # print(param.grad.sum() if param.grad is not None else param.grad)
+                print(param[0])
+            
             print('='*20 +'edge encoder param grads')
-            # for enc in :
+            # # for enc in :
             for param in self.edge_encoders.parameters():
-                print(param.grad.sum() if param.grad is not None else param.grad)
-            print('='*20 +"convolution params grads")
-            for param in self.conv.parameters():
-                # for param in enc.parameters():
-                print(param.grad.sum() if param.grad is not None else param.grad)
-            print('='*20 +'edge classifiers param grads')
-            for param in self.edge_classifiers.parameters():
-                # for param in enc.parameters():
-                print(param.grad.sum() if param.grad is not None else param.grad)
+                # print(param.grad.sum() if param.grad is not None else param.grad)
+                if not param.get_device() == 0: continue
+                print(param[0])
+            # print('='*20 +"convolution params grads")
+            # for param in self.convs.parameters():
+            #     # for param in enc.parameters():
+            #     print(param.grad.sum() if param.grad is not None else param.grad)
+            # print('='*20 +"updater params grads")
+            # for param in self.edge_updaters.parameters():
+            #     # for param in enc.parameters():
+            #     print(param.grad.sum() if param.grad is not None else param.grad)
+            # print('='*20 +'edge classifiers param grads')
+            # for param in self.edge_classifiers.parameters():
+            #     # for param in enc.parameters():
+            #     print(param.grad.sum() if param.grad is not None else param.grad)
             # for param in self.parameters():
             #     print(param.grad.sum() if param.grad is not None else param.grad)
             
@@ -326,11 +338,6 @@ class PyGHeteroGNNBase(HeteroGNNBase):
         """
         Initialise the Lightning Module that can scan over different GNN training regimes
         """
-        # self.automatic_optimization=False
-
-        # Assign hyperparameters
-        # self.save_hyperparameters(hparams)
-        # self.trainset, self.valset, self.testset = None, None, None
 
     def setup(self, stage='fit'):
         # Handle any subset of [train, val, test] data split, assuming that ordering
@@ -383,55 +390,94 @@ class PyGHeteroGNNBase(HeteroGNNBase):
             )  # , pin_memory=True, persistent_workers=True)
         else:
             return None
-
-    def handle_directed(self, batch, edge_sample, truth_sample, sample_indices):
-
-        edge_sample = torch.cat([edge_sample, edge_sample.flip(0)], dim=-1)
-        truth_sample = truth_sample.repeat(2)
-        sample_indices = sample_indices.repeat(2)
-
-        if ("directed" in self.hparams.keys()) and self.hparams["directed"]:
-            direction_mask = batch.x[edge_sample[0], 0] < batch.x[edge_sample[1], 0]
-            edge_sample = edge_sample[:, direction_mask]
-            truth_sample = truth_sample[direction_mask]
-
-        return edge_sample, truth_sample, sample_indices
     
     def training_step(self, batch, batch_idx, log=True):
 
         output_dict = self(batch)
+
+        truth_dict = batch.collect(self.hparams['truth_key'])
+        y_pid_dict = batch.collect('y_pid')
+        losses = {}
         for key, o in output_dict.items():
-            batch[key]['output'] = o
-        batch = batch.to_homogeneous()
-        # truth_dict = batch.collect(self.hparams['truth_key'])
-        # output, truth = get_homo_data(output_dict, truth_dict)
+            truth = truth_dict[key]
+            y_pid = y_pid_dict[key]
+            if self.hparams["mask_background"]:
+                y_subset = truth | ~ y_pid.bool()
+                o, truth = o[y_subset], truth[y_subset]
+            weight = (
+                torch.tensor(self.hparams["weight"])
+                if ("weight" in self.hparams)
+                else ((~truth.bool()).sum() / truth.sum()).clone() #torch.tensor((~truth.bool()).sum() / truth.sum())
+            )
+            key = "train_loss_" + key[0].replace('volume_', "") + '__' + key[2].replace('volume_', "" ) 
+            losses[key] = F.binary_cross_entropy_with_logits(
+                o,
+                truth.float(),
+                reduction='none', 
+                pos_weight=weight
+            )    
+        if self.hparams.get('edge_weight'):
+            loss = sum( [  torch.mean(l)  for l in losses.values()] ) / len(losses)
+        else:
+            loss = torch.mean( torch.cat(list(losses.values())) )
 
-        truth = batch[self.hparams['truth_key']]
-        output = batch.output
-        
-        weight = (
-            torch.tensor(self.hparams["weight"])
-            if ("weight" in self.hparams)
-            else ((~truth.bool()).sum() / truth.sum()).clone() #torch.tensor((~truth.bool()).sum() / truth.sum())
-        )
 
-        if self.hparams["mask_background"]:
-            y_subset = truth | ~ batch.y_pid.bool()
-            output, truth = output[y_subset], truth[y_subset]
+        # if self.hparams.get('edge_weight'):
+        #     truth_dict = batch.collect(self.hparams['truth_key'])
+        #     y_pid_dict = batch.collect('y_pid')
+        #     losses = []
+        #     for key, o in output_dict.items():
 
-            # for key, output in output_dict.items():
-            #     y_subset = truth_dict[key] | ~batch.y_pid.bool() # previously the y_pid is filtered by the sample_indices
-            #     output_dict[key], truth_dict[key] = output_dict[key][y_subset], truth_dict[key][y_subset]
-            # output, truth = get_homo_data(output_dict, truth_dict)
-        
-        loss = F.binary_cross_entropy_with_logits(
-            output,
-            truth.to(torch.float32),
-            reduction='mean', 
-            pos_weight=weight
-        )        
+        #         truth = truth_dict[key]
+        #         y_pid = y_pid_dict[key]
+        #         if self.hparams["mask_background"]:
+        #             y_subset = truth | ~ y_pid.bool()
+        #             o, truth = o[y_subset], truth[y_subset]
+        #         weight = (
+        #             torch.tensor(self.hparams["weight"])
+        #             if ("weight" in self.hparams)
+        #             else ((~truth.bool()).sum() / truth.sum()).clone() #torch.tensor((~truth.bool()).sum() / truth.sum())
+        #         )
+        #         losses.append(
+        #             F.binary_cross_entropy_with_logits(
+        #                 o,
+        #                 truth.to(torch.float32),
+        #                 reduction='mean', 
+        #                 pos_weight=weight
+        #             )        
+        #         )
+        #     loss = sum(losses) / len(losses)
+        # else:
+        #     for key, o in output_dict.items():
+        #         batch[key]['output'] = o
+        #     batch = batch.to_homogeneous()
+
+        #     truth = batch[self.hparams['truth_key']]
+        #     output = batch.output
+            
+        #     weight = (
+        #         torch.tensor(self.hparams["weight"])
+        #         if ("weight" in self.hparams)
+        #         else ((~truth.bool()).sum() / truth.sum()).clone() 
+        #     )
+
+        #     if self.hparams["mask_background"]:
+        #         y_subset = truth | ~ batch.y_pid.bool()
+        #         output, truth = output[y_subset], truth[y_subset]
+            
+        #     loss = F.binary_cross_entropy_with_logits(
+        #         output,
+        #         truth.to(torch.float32),
+        #         reduction='mean', 
+        #         pos_weight=weight
+        #     )        
         if log:
-            self.log("train_loss", loss, on_step=False, on_epoch=True, batch_size=10000)
+            self.log("train_loss", loss, on_step=False, on_epoch=True, batch_size=1, sync_dist=True)
+            if len(losses) > 1:
+                self.log_dict(
+                    {key: val.clone().detach().mean() for key, val in losses.items()},
+                    on_epoch=True, on_step=False, batch_size=1, sync_dist=True
+                )
             
         return {'loss': loss}
 
@@ -440,33 +486,69 @@ class PyGHeteroGNNBase(HeteroGNNBase):
         output_dict = self(batch)
         for key, o in output_dict.items():
             batch[key]['output'] = o
-        batch = batch.to_homogeneous()
-        truth = batch[self.hparams["truth_key"]]
-        output = batch.output
 
-        weight = (
-            torch.tensor(self.hparams["weight"])
-            if ("weight" in self.hparams)
-            else ((~truth.bool()).sum() / truth.sum()).clone()
-        )        
-
-        if self.hparams["mask_background"]:
-            y_subset = truth | ~ batch.y_pid.bool()
-            loss = F.binary_cross_entropy_with_logits(
-                output[y_subset], 
-                truth[y_subset].to(torch.float32),
-                reduction='mean', 
-                pos_weight=weight
-            ) 
-        else:       
-            loss = F.binary_cross_entropy_with_logits(
-                output, 
+        truth_dict = batch.collect(self.hparams['truth_key'])
+        y_pid_dict = batch.collect('y_pid')
+        losses = {}
+        for key, o in output_dict.items():
+            truth = truth_dict[key]
+            y_pid = y_pid_dict[key]
+            if self.hparams["mask_background"]:
+                y_subset = truth | ~ y_pid.bool()
+                o, truth = o[y_subset], truth[y_subset]
+            weight = (
+                torch.tensor(self.hparams["weight"])
+                if ("weight" in self.hparams)
+                else ((~truth.bool()).sum() / truth.sum()).clone() #torch.tensor((~truth.bool()).sum() / truth.sum())
+            )
+            key = "val_loss_" + key[0].replace('volume_', "") + '__' + key[2].replace('volume_', "" ) 
+            losses[key] = F.binary_cross_entropy_with_logits(
+                o,
                 truth.to(torch.float32),
-                reduction='mean', 
+                reduction='none', 
                 pos_weight=weight
-            )        
+            )
+        if self.hparams.get('edge_weight'):
+            loss = sum( [  torch.mean(l)  for l in losses.values()] ) / len(losses)
+        else:
+            loss = torch.mean( torch.cat(list(losses.values())) )    
+                
+        batch = batch.to_homogeneous()
+        truth = batch[self.hparams['truth_key']]
+        output = batch.output
+        # else:
+        #     batch = batch.to_homogeneous()
+        #     truth = batch[self.hparams["truth_key"]]
+        #     output = batch.output
+
+        #     weight = (
+        #         torch.tensor(self.hparams["weight"])
+        #         if ("weight" in self.hparams)
+        #         else ((~truth.bool()).sum() / truth.sum()).clone()
+        #     )        
+
+        #     if self.hparams["mask_background"]:
+        #         y_subset = truth | ~ batch.y_pid.bool()
+        #         loss = F.binary_cross_entropy_with_logits(
+        #             output[y_subset], 
+        #             truth[y_subset].to(torch.float32),
+        #             reduction='mean', 
+        #             pos_weight=weight
+        #         ) 
+        #     else:       
+        #         loss = F.binary_cross_entropy_with_logits(
+        #             output, 
+        #             truth.to(torch.float32),
+        #             reduction='mean', 
+        #             pos_weight=weight
+        #         )        
         if log:
             preds = self.log_metrics(output, truth, batch, loss, log, {}, {})
+            if len(losses) > 1:
+                self.log_dict(
+                    {key: val.mean() for key, val in losses.items()},
+                    on_epoch=True, on_step=False, batch_size=1, sync_dist=True
+                )
         else:
             preds = torch.sigmoid(output) > self.hparams['edge_cut']
         return {"loss": loss, "preds": preds, "score": torch.sigmoid(output).clone().detach().cpu(), "truth": truth.clone().detach().cpu().float()}
@@ -528,7 +610,7 @@ class PyGHeteroGNNBase(HeteroGNNBase):
                 "sig_fake_ratio": sig_fake_ratio,
             },
             sync_dist=True,
-            batch_size=10000,
+            batch_size=1,
             on_step=False,
             on_epoch=True
         )
@@ -552,7 +634,7 @@ class PyGHeteroGNNBase(HeteroGNNBase):
                 plt.close()
     
     def validation_epoch_end(self, outputs) -> None:
-        self.log_plots(outputs, stage='val', key='val_score_hist', title='Validation score histogram', **self.hparams)
+        self.log_plots(outputs, stage='val', key='val_score_hist', title=f'Validation score histogram {self.current_epoch}', **self.hparams)
     
     def test_epoch_end(self, outputs, **kwargs):
         if 'score' in outputs[-1] and 'truth' in outputs[-1]:
