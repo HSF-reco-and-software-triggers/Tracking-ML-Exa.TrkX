@@ -1,5 +1,5 @@
 module load python 
-conda activate extrkx_hsf_clone
+conda activate py38torch113pyg22
 if [ $NERSC_HOST = cori ]; then
     module load cgpu
 fi

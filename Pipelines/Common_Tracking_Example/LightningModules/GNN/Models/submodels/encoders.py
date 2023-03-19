@@ -170,13 +170,15 @@ class HeteroNodeEncoder(torch.nn.Module):
         if self.hparams.get('cell_data'):
             input_dim += hparams.get('cell_channels', 0)
 
+        hidden_dim = self.hparams.get('node_encoder_hidden',  self.hparams['hidden'] )
         encoder = make_mlp(
             input_dim,
-            [hparams["hidden"]] * hparams["nb_node_layer"],
+            [hidden_dim] * (hparams["nb_node_layer"]-1) + [self.hparams['hidden']],
             output_activation=hparams["output_activation"],
             hidden_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
             batch_norm=hparams["batchnorm"],
+            dropout=hparams.get('node_encoder_dropout', 0)
         )
         for model in self.hparams['model_ids']:
             region = get_region(model)
@@ -189,11 +191,12 @@ class HeteroNodeEncoder(torch.nn.Module):
             else:
                 self.encoders[region] = make_mlp(
                     input_dim,
-                    [hparams["hidden"]] * hparams["nb_node_layer"],
+                    [hidden_dim] * (hparams["nb_node_layer"]-1) + [self.hparams['hidden']],
                     output_activation=hparams["output_activation"],
                     hidden_activation=hparams["hidden_activation"],
                     layer_norm=hparams["layernorm"],
                     batch_norm=hparams["batchnorm"],
+                    dropout=hparams.get('node_encoder_dropout', 0)
                 )
         
     def forward(self, x_dict):        
@@ -206,9 +209,11 @@ class EdgeEncoder(torch.nn.Module):
         super().__init__()
         self.hparams = hparams
 
+        hidden_dim = self.hparams.get('edge_encoder_hidden', self.hparams['hidden'])
+
         self.network = make_mlp(
-            2 * hparams['hidden'],
-            [hparams["hidden"]] * hparams["nb_node_layer"],
+            2 * self.hparams['hidden'],
+            [hidden_dim] * (hparams["nb_node_layer"]-1) + [self.hparams['hidden']],
             output_activation=hparams["output_activation"],
             hidden_activation=hparams["hidden_activation"],
             layer_norm=hparams["layernorm"],
@@ -232,15 +237,16 @@ class HeteroEdgeEncoder(torch.nn.Module):
     def __init__(self, hparams) -> None:
         super().__init__()
         self.hparams = hparams
-
+        hidden_dim = self.hparams.get('edge_encoder_hidden', self.hparams['hidden'])
         if self.hparams['hetero_level'] < 2:
             encoder = make_mlp(
-                2 * hparams['hidden'],
-                [hparams["hidden"]] * hparams["nb_node_layer"],
+                2 * self.hparams['hidden'],
+                [hidden_dim] * (hparams["nb_node_layer"]-1) + [self.hparams['hidden']],
                 output_activation=hparams["output_activation"],
                 hidden_activation=hparams["hidden_activation"],
                 layer_norm=hparams["layernorm"],
                 batch_norm=hparams["batchnorm"],
+                dropout=self.hparams.get('edge_encoder_dropout', 0)
             )
             self.encoders = self.encoders = torch.nn.ModuleDict({
                 '__'.join([ get_region(model0), 'connected_to', get_region(model1) ]): encoder
@@ -250,12 +256,13 @@ class HeteroEdgeEncoder(torch.nn.Module):
             encoders = {}
             for model0, model1 in combinations_with_replacement(self.hparams['model_ids'], r=2):
                 encoder = make_mlp(
-                    2 * hparams['hidden'],
-                    [hparams["hidden"]] * hparams["nb_node_layer"],
+                    2 * self.hparams['hidden'],
+                    [hidden_dim] * (hparams["nb_node_layer"]-1) + [self.hparams['hidden']],
                     output_activation=hparams["output_activation"],
                     hidden_activation=hparams["hidden_activation"],
                     layer_norm=hparams["layernorm"],
                     batch_norm=hparams["batchnorm"],
+                    dropout=self.hparams.get('edge_encoder_dropout', 0)
                 )
                 encoders[ '__'.join([ get_region(model0), 'connected_to', get_region(model1) ]) ] = encoder
                 encoders[ '__'.join([ get_region(model1), 'connected_to', get_region(model0) ]) ] = encoder
@@ -264,13 +271,14 @@ class HeteroEdgeEncoder(torch.nn.Module):
             
         else:
             self.encoders = torch.nn.ModuleDict({
-                '__'.join([ get_region(model0), 'connected_to', get_region(model1) ]): make_mlp(
-                    2 * hparams['hidden'],
-                    [hparams["hidden"]] * hparams["nb_node_layer"],
+                    '__'.join([ get_region(model0), 'connected_to', get_region(model1) ]): make_mlp(
+                    2 * self.hparams['hidden'],
+                    [hidden_dim] * (hparams["nb_node_layer"]-1) + [self.hparams['hidden']],
                     output_activation=hparams["output_activation"],
                     hidden_activation=hparams["hidden_activation"],
                     layer_norm=hparams["layernorm"],
                     batch_norm=hparams["batchnorm"],
+                    dropout=self.hparams.get('edge_encoder_dropout', 0)
                 )
                 for model0, model1 in product( self.hparams['model_ids'], self.hparams['model_ids'] )
             })
@@ -373,25 +381,3 @@ class EdgeUpdater(torch.nn.Module):
         else:
             return edge + self.network(x_input)
 
-class EdgeClassifier(torch.nn.Module):
-
-    def __init__(self, hparams):
-        super().__init__()
-
-        self.network = make_mlp(
-            3 * hparams["hidden"],
-            [hparams["hidden"]] * hparams["nb_edge_layer"] + [1],
-            layer_norm=hparams["layernorm"],
-            batch_norm=hparams["batchnorm"],
-            output_activation=None,
-            hidden_activation=hparams["hidden_activation"],
-        )
-
-    def forward(self, x, edge_index, edge, *args, **kwargs):
-        src, dst = edge_index
-        if isinstance(x, tuple):
-            x1, x2 = x
-            classifier_input = torch.cat([x1[src], x2[dst], edge], dim=-1)
-        else:
-            classifier_input = torch.cat([x[src], x[dst], edge], dim=-1)
-        return self.network(classifier_input).squeeze()

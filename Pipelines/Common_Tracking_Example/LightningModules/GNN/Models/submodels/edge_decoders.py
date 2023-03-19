@@ -91,3 +91,28 @@ class HeteroDecoder(torch.nn.Module):
             features_to_fill[vol_edge_mask] = decoder(features_to_decode)
 
         return features_to_fill
+
+class EdgeClassifier(torch.nn.Module):
+
+    def __init__(self, hparams):
+        super().__init__()
+
+        hidden_dim = hparams.get('edge_classifier_dim', hparams['hidden'])
+        self.network = make_mlp(
+            3 * hparams["hidden"],
+            [hidden_dim] * hparams["nb_edge_layer"] + [1],
+            layer_norm=hparams["layernorm"],
+            batch_norm=hparams["batchnorm"],
+            output_activation=None,
+            hidden_activation=hparams["hidden_activation"],
+            dropout=hparams.get('edge_classifier_dropout', 0)
+        )
+
+    def forward(self, x, edge_index, edge, *args, **kwargs):
+        src, dst = edge_index
+        if isinstance(x, tuple):
+            x1, x2 = x
+            classifier_input = torch.cat([x1[src], x2[dst], edge], dim=-1)
+        else:
+            classifier_input = torch.cat([x[src], x[dst], edge], dim=-1)
+        return self.network(classifier_input).squeeze()

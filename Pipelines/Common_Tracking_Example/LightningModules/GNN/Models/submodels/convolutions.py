@@ -305,64 +305,56 @@ class InteractionHeteroConv(torch.nn.Module):
         edge_dict = self.update_edge(x_dict, edge_index_dict, edge_dict)
         return x_dict, edge_dict
 
+class NodeOnlyHeteroConv(InteractionHeteroConv):
+    def __init__(self, hparams) -> None:
+        super().__init__(hparams)
+
+        concatenation_factor = (
+            3 if (self.hparams["aggregation"] in ["sum_max", "mean_max", "mean_sum"]) else 2
+        )
+
+        # Make module list
+        if self.hparams['hetero_level'] < 3:
+            node_encoder = make_mlp(
+                concatenation_factor * self.hparams["hidden"],
+                [hparams["hidden"]] * hparams["nb_node_layer"],
+                output_activation=hparams["output_activation"],
+                hidden_activation=hparams["hidden_activation"],
+                layer_norm=hparams["layernorm"],
+                batch_norm=hparams["batchnorm"],
+            )
+            self.node_encoders = nn.ModuleDict({
+                get_region(model): node_encoder for model in hparams["model_ids"]
+            })
+
+        else:
+            self.node_encoders = nn.ModuleDict({
+                get_region(model): make_mlp(
+                    concatenation_factor * self.hparams["hidden"],
+                    [hparams["hidden"]] * hparams["nb_node_layer"],
+                    output_activation=hparams["output_activation"],
+                    hidden_activation=hparams["hidden_activation"],
+                    layer_norm=hparams["layernorm"],
+                    batch_norm=hparams["batchnorm"],
+                ) for model in hparams["model_ids"]
+            })
+            
+        edge_encoder = make_mlp(
+            concatenation_factor * self.hparams["hidden"],
+            [hparams["hidden"]] * self.hparams["nb_edge_layer"],
+            layer_norm=hparams["layernorm"],
+            batch_norm=hparams["batchnorm"],
+            output_activation=hparams["output_activation"],
+            hidden_activation=hparams["hidden_activation"],
+        )
+        self.edge_encoders = nn.ModuleDict({
+            '__'.join([get_region(model0), "connected_to", get_region(model1)]): edge_encoder for model0, model1 in product(self.hparams['model_ids'], self.hparams['model_ids'])
+        })
+
+
 class PyGInteractionHeteroConv(torch_geometric.nn.HeteroConv):
     def __init__(self, convs, aggr: Optional[str] = "sum"):
         super().__init__(convs, aggr)
-
-    # def edge_forward(self,x_dict: Dict[NodeType, Tensor],
-    #     edge_index_dict: Dict[EdgeType, Adj],
-    #     edge_dict,
-    #     *args_dict,
-    #     **kwargs_dict,
-    # ) -> Dict[NodeType, Tensor]:
-
-    #     out_dict = {}
-    #     for edge_type, edge_index in edge_index_dict.items():
-    #         src, rel, dst = edge_type
-
-    #         str_edge_type = '__'.join(edge_type)
-    #         if str_edge_type not in self.convs:
-    #             continue
-
-    #         args = []
-    #         for value_dict in args_dict:
-    #             if edge_type in value_dict:
-    #                 args.append(value_dict[edge_type])
-    #             elif src == dst and src in value_dict:
-    #                 args.append(value_dict[src])
-    #             elif src in value_dict or dst in value_dict:
-    #                 args.append(
-    #                     (value_dict.get(src, None), value_dict.get(dst, None)))
-
-    #         kwargs = {}
-    #         for arg, value_dict in kwargs_dict.items():
-    #             arg = arg[:-5]  # `{*}_dict`
-    #             if edge_type in value_dict:
-    #                 kwargs[arg] = value_dict[edge_type]
-    #             elif src == dst and src in value_dict:
-    #                 kwargs[arg] = value_dict[src]
-    #             elif src in value_dict or dst in value_dict:
-    #                 kwargs[arg] = (value_dict.get(src, None),
-    #                             value_dict.get(dst, None))
-
-    #         # if self.checkpoint:
-    #         #     conv = partial(checkpoint, self.convs[str_edge_type].edge_update)
-    #         # else:
-    #         conv = self.convs[str_edge_type].edge_update
-
-    #         edge = edge_dict[edge_type]
-
-    #         out = conv((x_dict[src], x_dict[dst]), edge, edge_index, *args, **kwargs)
-
-    #         # if src == dst:
-    #         #     out = conv.edge_updater(x_dict[src], edge_index, *args, **kwargs)
-    #         # else:
-    #         #     out = conv.edge_update((x_dict[src], x_dict[dst]), edge_index, *args,
-    #         #             **kwargs)
-
-    #         out_dict[edge_type] = out
-        
-    #         return out_dict
 
     def forward(
         self,
