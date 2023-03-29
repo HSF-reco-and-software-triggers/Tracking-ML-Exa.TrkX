@@ -134,7 +134,7 @@ class GNNBase(LightningModule):
             output, truth_sample.float(), weight=manual_weights, pos_weight=weight
         )
 
-        self.log("train_loss", loss, on_epoch=True, on_step=False, batch_size=10000)
+        self.log("train_loss", loss, on_epoch=True, on_step=False, batch_size=1)
 
         return loss
 
@@ -159,7 +159,7 @@ class GNNBase(LightningModule):
                 "eff": eff,
                 "pur": pur,
                 "current_lr": current_lr,
-            }, on_epoch=True, on_step=False, batch_size=10000
+            }, on_epoch=True, on_step=False, batch_size=1
         )
 
     def shared_evaluation(self, batch, batch_idx, log=False):

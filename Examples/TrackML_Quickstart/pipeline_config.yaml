@@ -6,8 +6,8 @@ common_configs:
 
 metric_learning_configs:
   # Dataset parameters
-  input_dir: datasets/quickstart_example_1GeV
-  output_dir: datasets/quickstart_metric_learning_processed
+  input_dir: /global/cfs/cdirs/m3443/www/dtmurnane/TrackML_Example/quickstart_example_1GeV
+  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/metric_learning_processed
   pt_signal_cut: 1.
   pt_background_cut: 1.
   train_split: [80, 10, 10] # Number of [training, validation, testing] examples
@@ -37,8 +37,8 @@ metric_learning_configs:
 
 gnn_configs:
   # Dataset parameters
-  input_dir: datasets/quickstart_metric_learning_processed
-  output_dir: datasets/quickstart_gnn_processed
+  input_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_metric_learning_processed
+  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_gnn_processed
   edge_cut: 0.5
   pt_signal_min: 1.
   pt_background_min: 1.
@@ -68,10 +68,10 @@ gnn_configs:
 
 track_building_configs:
   score_cut: 0.9
-  output_dir: datasets/quickstart_track_building_processed
+  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_track_building_processed
 
 evaluation_configs:
-  output_dir: datasets/quickstart_evaluation
+  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_evaluation
   min_pt: 1
   max_eta: 4
   min_track_length: 3

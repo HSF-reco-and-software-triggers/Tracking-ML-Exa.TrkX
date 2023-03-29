@@ -8,17 +8,17 @@ channels:
     - conda-forge
 
 dependencies:
+    - python=3.9
     - pip
-    - numpy
+    - numpy<=1.22
     - pandas
     - scipy
+    - ipython
     - matplotlib
-    - cupy
-    - cudatoolkit=11.3
-    - pytorch==1.10.2
-    - pytorch-lightning
-    - pyg
+    - cudf=22.08
+    - cugraph=22.08
+    - cudatoolkit=11.6
+    - pytorch=1.12.1
+    - pytorch-lightning=1.9.2
+    - pyg=2.2
     - faiss-gpu
-    - cudf=21.12
-    - cugraph=21.12
-    
