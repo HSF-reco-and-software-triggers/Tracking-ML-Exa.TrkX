@@ -17,9 +17,7 @@ output_notebook()
 from sklearn.metrics import roc_auc_score  
 from matplotlib import pyplot as plt
 
-# sys.path.append("../../../../")
-# sys.path.append("../../../")
-# sys.path.append("../../")
+sys.path.append("../../")
 from Pipelines.TrackML_Example.LightningModules.Embedding.Models.layerless_embedding import LayerlessEmbedding
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
