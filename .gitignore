@@ -92,3 +92,5 @@ src/Pipelines/Examples/notebooks/*.png
 # dataset and outputs
 *datasets*
 *artifacts*
+*_dev
+**_dev
