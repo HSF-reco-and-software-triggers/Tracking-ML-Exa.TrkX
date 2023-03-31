@@ -1,6 +1,6 @@
 common_configs:
   experiment_name: trackml_quickstart_1
-  artifact_directory: artifacts
+  artifact_directory: /pscratch/sd/d/danieltm/TrackML_Quickstart/artifacts
   gpus: 1
   clear_directories: True
 
@@ -33,12 +33,12 @@ metric_learning_configs:
   factor: 0.7
   patience: 4
   regime: [rp, hnm, norm]
-  max_epochs: 20
+  max_epochs: 30
 
 gnn_configs:
   # Dataset parameters
-  input_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_metric_learning_processed
-  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_gnn_processed
+  input_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/metric_learning_processed
+  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/gnn_processed
   edge_cut: 0.5
   pt_signal_min: 1.
   pt_background_min: 1.
@@ -68,10 +68,10 @@ gnn_configs:
 
 track_building_configs:
   score_cut: 0.9
-  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_track_building_processed
+  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/track_building_processed
 
 evaluation_configs:
-  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/quickstart_evaluation
+  output_dir: /pscratch/sd/d/danieltm/TrackML_Quickstart/evaluation
   min_pt: 1
   max_eta: 4
   min_track_length: 3
