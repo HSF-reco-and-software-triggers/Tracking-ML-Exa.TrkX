@@ -261,7 +261,7 @@ class EmbeddingBase(LightningModule):
 
         loss = negative_loss + self.hparams["weight"] * positive_loss
 
-        self.log("train_loss", loss, on_epoch=True, on_step=False)
+        self.log("train_loss", loss, on_epoch=True, on_step=False, batch_size=1)
 
         return loss
 
@@ -301,7 +301,8 @@ class EmbeddingBase(LightningModule):
             self.log_dict(
                 {"val_loss": loss, "eff": eff, "pur": pur, "current_lr": current_lr},
                 on_epoch=True,
-                on_step=False
+                on_step=False,
+                batch_size=1
             )
 
         if verbose:

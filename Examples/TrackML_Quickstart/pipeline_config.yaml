@@ -33,7 +33,7 @@ metric_learning_configs:
   factor: 0.7
   patience: 4
   regime: [rp, hnm, norm]
-  max_epochs: 20
+  max_epochs: 30
 
 gnn_configs:
   # Dataset parameters
