@@ -94,3 +94,5 @@ src/Pipelines/Examples/notebooks/*.png
 *artifacts*
 *_dev*
 **_dev**
+*.png
+**.png
