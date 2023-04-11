@@ -9,6 +9,8 @@ import logging
 import torch
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 
 from tqdm import tqdm
 from utils.convenience_utils import headline
