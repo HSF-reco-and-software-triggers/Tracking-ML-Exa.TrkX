@@ -10,8 +10,6 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 import itertools
 
-
-
 fontsize=16
 minor_size=14
 pt_min, pt_max = 1, 20

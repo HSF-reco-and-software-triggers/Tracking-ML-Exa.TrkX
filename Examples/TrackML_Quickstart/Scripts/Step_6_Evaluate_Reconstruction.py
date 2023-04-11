@@ -2,7 +2,6 @@
 This script runs step 6 of the TrackML Quickstart example: Evaluating the track reconstruction performance.
 """
 
-import sys
 import os
 import yaml
 import argparse
@@ -10,12 +9,8 @@ import logging
 import torch
 import numpy as np
 import pandas as pd
-import scipy.sparse as sps
-import matplotlib.pyplot as plt
 
-from tqdm.contrib.concurrent import process_map
 from tqdm import tqdm
-from functools import partial
 from utils.convenience_utils import headline
 from utils.plotting_utils import plot_pt_eff
 
