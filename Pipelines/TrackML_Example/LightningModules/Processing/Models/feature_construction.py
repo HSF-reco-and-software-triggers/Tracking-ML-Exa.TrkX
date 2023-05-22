@@ -39,13 +39,13 @@ class TrackMLFeatureStore(FeatureStoreBase):
         cell_features = [
             "cell_count",
             "cell_val",
-            "leta",
-            "lphi",
-            "lx",
-            "ly",
-            "lz",
-            "geta",
-            "gphi",
+            "direction_u_max",
+            "direction_u_min",
+            "direction_v_max",
+            "direction_v_min",
+            "pitch_u",
+            "pitch_v",
+            "thickness",
         ]
         detector_orig, detector_proc = load_detector(self.detector_path)
 

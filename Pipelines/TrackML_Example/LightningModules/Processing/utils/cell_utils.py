@@ -114,6 +114,14 @@ def get_all_local_angles(hits, cells, detector):
     nb_u = direction_count_u["max"] - direction_count_u["min"] + 1
     nb_v = direction_count_v["max"] - direction_count_v["min"] + 1
 
+    ret_1 = direction_count_u["max"]
+    
+    ret_2 = direction_count_u["min"]
+
+    ret_3 =  direction_count_v["max"]
+
+    ret_4 = direction_count_v["min"]
+    
     vols = hits["volume_id"].values
     layers = hits["layer_id"].values
     modules = hits["module_id"].values
@@ -123,49 +131,37 @@ def get_all_local_angles(hits, cells, detector):
 
     pitch_cells = pitch[vols, layers, modules]
     thickness_cells = thickness[vols, layers, modules]
+    
+    ret_5 = pitch_cells[:, 0]
+    
+    ret_6 = pitch_cells[:, 1]
 
-    l_u = nb_u * pitch_cells[:, 0]
-    l_v = nb_v * pitch_cells[:, 1]
-    l_w = 2 * thickness_cells
-    return l_u, l_v, l_w
+    ret_7 = thickness_cells
+   
+    return ret_1, ret_2, ret_3, ret_4, ret_5, ret_6, ret_7
 
 
-def get_all_rotated(hits, detector, l_u, l_v, l_w):
+def get_all_rotated(hits, detector):
     vols = hits["volume_id"].values
     layers = hits["layer_id"].values
     modules = hits["module_id"].values
     rotations = detector["rotations"]
     rotations_hits = rotations[vols, layers, modules]
-    u = l_u.values.reshape(-1, 1)
-    v = l_v.values.reshape(-1, 1)
-    w = l_w.reshape(-1, 1)
-    dirs = np.concatenate((u, v, w), axis=1)
-
-    dirs = np.expand_dims(dirs, axis=2)
-    vecRot = np.matmul(rotations_hits, dirs).squeeze(2)
-    return vecRot
+   
+    return rotations_hits
 
 
 def extract_dir_new(hits, cells, detector):
-    l_u, l_v, l_w = get_all_local_angles(hits, cells, detector)
-    g_matrix_all = get_all_rotated(hits, detector, l_u, l_v, l_w)
+    d_u_max, d_u_min, d_v_max, d_v_min, p0, p1, th = get_all_local_angles(hits, cells, detector)
+    
     hit_ids, cell_counts, cell_vals = (
         hits["hit_id"].to_numpy(),
         hits["cell_count"].to_numpy(),
         hits["cell_val"].to_numpy(),
     )
 
-    l_u, l_v = l_u.to_numpy(), l_v.to_numpy()
-
-    _, g_theta, g_phi = np.vstack(cartesion_to_spherical(*list(g_matrix_all.T)))
-    logging.info("G calc")
-    _, l_theta, l_phi = cartesion_to_spherical(l_u, l_v, l_w)
-    logging.info("L calc")
-    l_eta = theta_to_eta(l_theta)
-    g_eta = theta_to_eta(g_theta)
-
     angles = np.vstack(
-        [hit_ids, cell_counts, cell_vals, l_eta, l_phi, l_u, l_v, l_w, g_eta, g_phi]
+        [hit_ids, cell_counts, cell_vals, d_u_max, d_u_min, d_v_max, d_v_min, p0, p1, th]
     ).T
     logging.info("Concated")
     df_angles = pd.DataFrame(
@@ -174,15 +170,34 @@ def extract_dir_new(hits, cells, detector):
             "hit_id",
             "cell_count",
             "cell_val",
-            "leta",
-            "lphi",
-            "lx",
-            "ly",
-            "lz",
-            "geta",
-            "gphi",
+            "direction_u_max",
+            "direction_u_min",
+            "direction_v_max",
+            "direction_v_min",
+            "pitch_u",
+            "pitch_v",
+            "thickness",
         ],
     )
+    
+    df_angles["cell_count"] = ((df_angles["cell_count"] - df_angles["cell_count"].min()) / (df_angles["cell_count"].max() - df_angles["cell_count"].min()))
+    
+    df_angles["cell_val"] = ((df_angles["cell_val"] - df_angles["cell_val"].min()) / (df_angles["cell_val"].max() - df_angles["cell_val"].min()))
+    
+    df_angles["direction_u_max"] = ((df_angles["direction_u_max"] - df_angles["direction_u_max"].min()) / (df_angles["direction_u_max"].max() - df_angles["direction_u_max"].min()))
+    
+    df_angles["direction_u_min"] = ((df_angles["direction_u_min"] - df_angles["direction_u_min"].min()) / (df_angles["direction_u_min"].max() - df_angles["direction_u_min"].min()))
+    
+    df_angles["direction_v_max"] = ((df_angles["direction_v_max"] - df_angles["direction_v_max"].min()) / (df_angles["direction_v_max"].max() - df_angles["direction_v_max"].min()))
+
+    df_angles["direction_v_min"] = ((df_angles["direction_v_min"] - df_angles["direction_v_min"].min()) / (df_angles["direction_v_min"].max() - df_angles["direction_v_min"].min()))
+    
+    df_angles["pitch_u"] = ((df_angles["pitch_u"] - df_angles["pitch_u"].min()) / (df_angles["pitch_u"].max() - df_angles["pitch_u"].min()))
+    
+    df_angles["pitch_v"] = ((df_angles["pitch_v"] - df_angles["pitch_v"].min()) / (df_angles["pitch_v"].max() - df_angles["pitch_v"].min()))
+
+    df_angles["thickness"] = ((df_angles["thickness"] - df_angles["thickness"].min()) / (df_angles["thickness"].max() - df_angles["thickness"].min()))
+    
     logging.info("DF constructed")
 
     return df_angles
